@@ -21,7 +21,10 @@ They are NEVER authoritative — the flat store is. If they conflict with
 ## How to run
 
 ```bash
-# From any directory — wrapper resolves paths relative to itself:
+# Canonical invocation via the porcelain CLI (preferred):
+python3 scripts/ld.py reindex
+
+# Or via the shell wrapper (resolves paths relative to itself):
 .claude/skills/reindex/reindex.sh [docs_dir]
 
 # Or call the shared script directly from the repo root:
@@ -106,9 +109,10 @@ Format:
 - **Not hand-editable**: the comment `<!-- Generated ... do not hand-edit -->` in
   `hierarchy.md` signals this. Any manual edits will be overwritten on next run.
 - **Not authoritative**: `cascade-check` (and any verification) should call
-  `python3 scripts/edges.py --json` to get fresh forward/reverse maps rather than
-  reading `dependents.json` directly, to avoid stale-cache bugs.
-  `dependents.json` is provided as a convenience for humans and other tools.
+  `python3 scripts/ld.py neighbors <id> --json` (or `ld edges --json` for the
+  full map) to get fresh data rather than reading `dependents.json` directly,
+  to avoid stale-cache bugs. `dependents.json` is provided as a convenience for
+  humans and other tools.
 - **Safe to commit**: since they are generated from the flat store, committing them
   alongside doc changes gives reviewers a pre-computed view of the graph without
   requiring them to run the script.

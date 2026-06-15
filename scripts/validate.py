@@ -11,24 +11,26 @@ Exits 0 if no errors, 1 if any errors found.
 Stdlib only. No external dependencies.
 
 Checks performed:
-  1. Required baseline fields present
-  2. Valid enum values (type, status, level, state)
-  3. id == filename
-  4. depends_on references resolve to existing docs (cascade graph)
-  4b. references ids resolve to existing docs (navigation/provenance only)
-  5. Reference doc extras (kind, source, imported)
-  6. Provenance rule (warning: level > incidental but no depends_on AND no references AND no source)
+  1. Required baseline fields present (including slug)
+  2. slug: present, kebab-case (^[a-z0-9]+(-[a-z0-9]+)*$), UNIQUE across store
+  3. Valid enum values (type, status, level, state)
+  4. id == filename
+  5. depends_on references resolve to existing docs (cascade graph)
+  5b. references ids resolve to existing docs (navigation/provenance only)
+  6. Reference doc extras (kind, source, imported)
+  7. Provenance rule (warning: level > incidental but no depends_on AND no references AND no source)
 
 Note: empty history: [] is VALID and does NOT trigger an error.
 """
 
+import re
 import sys
 from pathlib import Path
 
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import DOCS_DIR, load_all, dangling_edges, dangling_references
+from livedocs import DOCS_DIR, load_all, dangling_edges, dangling_references, SLUG_RE
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +47,7 @@ VALID_STATES = {"actual", "target"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
 REQUIRED_BASELINE_FIELDS = {
-    "id", "title", "type", "status", "level", "state",
+    "id", "title", "slug", "type", "status", "level", "state",
     "depends_on", "tags", "created", "history",
 }
 
@@ -75,7 +77,17 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     if "type" not in doc:
         return errors, warnings
 
-    # 2. Valid enum values
+    # 2. Slug validation: present, kebab-case, unique (uniqueness checked in main)
+    slug = doc.get("slug", "")
+    if not slug:
+        errors.append(f"{doc_id}  missing or empty `slug`")
+    elif not SLUG_RE.match(slug):
+        errors.append(
+            f"{doc_id}  invalid `slug` value {slug!r} — "
+            f"must match ^[a-z0-9]+(-[a-z0-9]+)*$"
+        )
+
+    # 3. Valid enum values
     doc_type = doc.get("type", "")
     if doc_type not in VALID_TYPES:
         errors.append(f"{doc_id}  invalid `type` value `{doc_type}`")
@@ -92,13 +104,13 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     if state and state not in VALID_STATES:
         errors.append(f"{doc_id}  invalid `state` value `{state}`")
 
-    # 3. id == filename (parse_doc sets id from filename; check against frontmatter)
+    # 4. id == filename (parse_doc sets id from filename; check against frontmatter)
     # (livedocs.parse_doc sets doc["id"] from filename, but we check consistency
     # by re-reading: actually parse_doc already overrides id from filename, so
     # we can't detect a mismatch here the same way. Instead we trust the loader.)
     # The id field in the returned doc IS the filename stem (authoritative).
 
-    # 4. depends_on resolution (cascade graph — errors are blocking)
+    # 5. depends_on resolution (cascade graph — errors are blocking)
     depends_on = doc.get("depends_on", [])
     if isinstance(depends_on, list):
         for dep_id in depends_on:
@@ -107,7 +119,7 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     elif depends_on:
         errors.append(f"{doc_id}  depends_on is not a list")
 
-    # 4b. references resolution (navigation/provenance — absent field is [] and is fine)
+    # 5b. references resolution (navigation/provenance — absent field is [] and is fine)
     references = doc.get("references", [])
     if isinstance(references, list):
         for ref_id in references:
@@ -116,7 +128,7 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     elif references:
         errors.append(f"{doc_id}  references is not a list")
 
-    # 5. Reference doc extras
+    # 6. Reference doc extras
     if doc_type == "reference":
         kind = doc.get("kind", "")
         if not kind:
@@ -128,7 +140,7 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
         if "imported" not in doc:
             errors.append(f"{doc_id}  reference doc missing `imported`")
 
-    # 6. Provenance rule (warning only)
+    # 7. Provenance rule (warning only)
     # A non-empty references list satisfies provenance, same as depends_on or source.
     # Docs with level: incidental are never flagged.
     if doc_type != "reference":
@@ -175,6 +187,18 @@ def main() -> int:
         errs, warns = check_doc(doc, all_ids)
         all_errors.extend(errs)
         all_warnings.extend(warns)
+
+    # Slug uniqueness check (cross-doc — must be done after all docs loaded)
+    slug_to_ids: dict[str, list] = {}
+    for doc in doc_files_sorted:
+        slug = doc.get("slug", "")
+        if slug:
+            slug_to_ids.setdefault(slug, []).append(doc["id"])
+    for slug, ids in sorted(slug_to_ids.items()):
+        if len(ids) > 1:
+            all_errors.append(
+                f"slug `{slug}` is not unique — used by: {', '.join(sorted(ids))}"
+            )
 
     if not all_errors and not all_warnings:
         print("All checks passed.")

@@ -1,6 +1,7 @@
 ---
 id: PLACEHOLDER
 title: "PLACEHOLDER"
+slug: "PLACEHOLDER"
 type: requirement
 status: living
 level: incidental

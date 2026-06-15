@@ -1,6 +1,7 @@
 ---
 id: PLACEHOLDER
 title: "PLACEHOLDER"
+slug: "PLACEHOLDER"
 type: component
 status: living
 level: incidental

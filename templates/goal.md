@@ -1,6 +1,7 @@
 ---
 id: PLACEHOLDER
 title: "PLACEHOLDER"
+slug: "PLACEHOLDER"
 type: goal
 status: living
 level: incidental

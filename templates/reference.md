@@ -1,6 +1,7 @@
 ---
 id: PLACEHOLDER
 title: "PLACEHOLDER"
+slug: "PLACEHOLDER"
 type: reference
 kind: clipping
 source: "PLACEHOLDER"

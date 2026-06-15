@@ -1,8 +1,13 @@
 # orphans — docs with no graph edges
-# Generated: 2026-06-15T22:03:23Z
+# Generated: 2026-06-15T23:08:04Z
 # These docs are disconnected from the dependency graph.
 # Consider: add depends_on edges, or retire to status: historical.
 #
-# Count: 1
+# Count: 6
 
-20260615220250
+20260615203646
+20260615203839
+20260615203858
+20260615203928
+20260615204018
+20260615204138

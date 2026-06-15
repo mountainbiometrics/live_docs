@@ -37,7 +37,7 @@ or "pasted". If the source is ambiguous, ask before proceeding.
 ## Step 2 — Create the RAW reference doc (immutable clipping)
 
 ```bash
-python scripts/ingest_raw.py \
+python3 scripts/ld.py ingest-raw \
   --from-file <path>           # OR: --body "<raw content>" OR: --body -
   --source "<where it came from>" \
   --title "Clipping: <descriptive title>"   # optional but recommended
@@ -67,7 +67,7 @@ Determine `kind`:
 - `clipping` — only if none of the above fit.
 
 ```bash
-python scripts/new_doc.py \
+python3 scripts/ld.py new \
   --type reference \
   --kind <kind> \
   --status living \
@@ -109,9 +109,9 @@ For each extracted unit:
 
 1. Draft a single-sentence summary: "This doc changes when X." If X covers more
    than one concern, split further.
-2. Create with `python scripts/new_doc.py`:
+2. Create with `ld new`:
    ```bash
-   python scripts/new_doc.py \
+   python3 scripts/ld.py new \
      --type <type> \
      --title "<precise, single-responsibility title>" \
      --level <incidental|trial|preference|requirement> \
@@ -125,8 +125,11 @@ For each extracted unit:
    Use `--depends-on` for genuine structural dependencies (e.g. a decision that
    logically depends on a principle), added separately when they exist.
 3. If the extracted idea DUPLICATES or STRENGTHENS an EXISTING doc: do not create
-   a new doc. Instead, add NORM_ID to the existing doc's `references` list (not
-   `depends_on`).
+   a new doc. Instead, link NORM_ID to the existing doc's `references` list (not
+   `depends_on`):
+   ```bash
+   python3 scripts/ld.py link <existing-id> --references <NORM_ID>
+   ```
 
 ---
 

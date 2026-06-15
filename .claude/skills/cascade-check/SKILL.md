@@ -19,26 +19,36 @@ description: >
 - **Change description** (optional but strongly preferred) — a plain-language
   summary of what changed and why. Richer context produces more reliable verdicts.
 
-## Step 1 — Build the reverse-edge map (fresh, every time)
+## Step 1 — Collect neighbors for each changed doc (fresh, every time)
 
-Run the shared CLI to get fresh, authoritative forward and reverse maps:
+For each changed doc id, retrieve its full neighbor set using:
 
 ```bash
-python3 scripts/edges.py --json
+python3 scripts/ld.py neighbors <id> --json
 ```
 
-This outputs a JSON object with keys `forward`, `reverse`, `titles`, and
-`dangling`. Parse it to obtain:
+This returns `{depends_on, references, dependents, referenced_by}` — all
+resolved to `{id, slug, label}` entries. Use `depends_on` (upstream) and
+`dependents` (downstream) for the cascade walk.
 
-```
-forward[id]  = list of ids this doc depends on
-reverse[id]  = list of ids that depend on this doc
+Do not read from `docs/.index/dependents.json` — always call `ld neighbors`
+for fresh data. At this scale a full scan takes milliseconds and avoids
+stale-cache errors.
+
+If you need the full two-hop picture before starting, use:
+
+```bash
+python3 scripts/ld.py graph <id> --depth 2 --direction both --json
 ```
 
-Do not read from `docs/.index/dependents.json` — always call `edges.py --json`
-for fresh maps. At this scale a full scan takes milliseconds and avoids
-stale-cache errors. If any `dangling` edges are reported, surface them to the
-user before proceeding.
+To surface dangling edges across the whole store before proceeding, run:
+
+```bash
+python3 scripts/ld.py edges --json
+```
+
+and check the `dangling` key. Surface any reported dangling edges to the user
+before proceeding.
 
 ## Step 2 — Initialize the cascade session
 
@@ -61,7 +71,8 @@ For each id popped from queue:
 
 1. If already in `session["visited"]`, skip (loop guard).
 2. Add to `session["visited"]`.
-3. Collect neighbors: `forward[id]` ∪ `reverse[id]`.
+3. Collect neighbors via `ld neighbors <id> --json`; use `depends_on` entries
+   (upstream) and `dependents` entries (downstream).
 4. For each neighbor `n`:
    - If `n` is already in `session["visited"]`, check the verdict: if it would be
      `cascade`, that is a **loop** — emit `incompatible` and HALT that branch.
@@ -101,32 +112,32 @@ this doc for something that has now changed.
 
 When the verdict is `cascade`:
 
-1. Read `docs/<n>.md`.
-2. Make the minimum change needed to restore consistency. Edit the body and/or
-   frontmatter field(s) that are now stale. Do not refactor or rewrite beyond
-   what the cascade requires.
-3. Append a `history` entry to the doc (this is a genuine change, not a creation):
-   ```yaml
-   - at: "<ISO 8601 UTC timestamp>"
-     summary: "cascade-check: updated because <source-id> changed — <one sentence why>"
+1. Load the doc to understand its current content:
+   ```bash
+   python3 scripts/ld.py show <n>
    ```
-   If `history:` is currently `history: []`, replace it with a block-sequence
-   form:
-   ```yaml
-   history:
-     - at: "<ISO 8601 UTC timestamp>"
-       summary: "cascade-check: updated because <source-id> changed — <one sentence why>"
+2. Make the minimum change needed to restore consistency. Use `ld set` for
+   scalar frontmatter fields, `ld link`/`ld unlink` for edge changes, and
+   direct file editing only for body-text changes that have no `ld` verb:
+   ```bash
+   # scalar field update
+   python3 scripts/ld.py set <n> --status historical
+   # edge update
+   python3 scripts/ld.py link <n> --depends-on <new-dep-id>
    ```
-4. Write the file back.
+   Do not refactor or rewrite beyond what the cascade requires.
+3. Record the cascade history entry:
+   ```bash
+   python3 scripts/ld.py history <n> --add "cascade-check: updated because <source-id> changed — <one sentence why>"
+   ```
 
 ## Step 6 — Update the originating doc's history
 
-After the walk completes, append a `history` entry to EACH originally-changed doc
+After the walk completes, record a history entry on EACH originally-changed doc
 summarizing the cascade session outcome:
 
-```yaml
-- at: "<timestamp>"
-  summary: "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
+```bash
+python3 scripts/ld.py history <changed-id> --add "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
 ```
 
 ## Step 7 — Surface results to the user
@@ -159,22 +170,22 @@ If total cascaded docs > 3 from a single routine edit, emit this warning:
 **Scenario**: `20260615090003.md` (Type: decision) is edited — its "Cascade
 Behavior" section is updated to say cascade should also examine `goal` docs.
 
-**Forward edges of 20260615090003**: `depends_on: []` (none)
-**Reverse edges** (who depends on 20260615090003): suppose `20260615100010.md`
-(a decision doc) lists `20260615090003` in its `depends_on`.
+**Neighbors of 20260615090003** (from `ld neighbors 20260615090003 --json`):
+`depends_on: []` (none upstream), `dependents: [{id: "20260615100010", ...}]`
+(one downstream — a decision doc that lists 20260615090003 in its `depends_on`).
 
 **Walk**:
 
 1. Start: queue = [20260615090003]
-2. Pop 20260615090003, mark visited. Neighbors: none forward, one reverse
-   (20260615100010).
-3. Evaluate 20260615100010 (downstream):
+2. Pop 20260615090003, mark visited. Call `ld neighbors 20260615090003 --json`.
+   Upstream empty, one downstream: 20260615100010.
+3. Evaluate 20260615100010 (downstream). Load it with `ld show 20260615100010`:
    - Read it. Its content references the decision type's cascade rules.
    - The change adds `goal` to the cascade list. Does 20260615100010 enumerate
      cascade targets? If yes — the list is now stale → **cascade**.
    - If no, it just cites the doc as context → **inconsequential**.
 4. Suppose verdict: **inconsequential**. Record it. Stop.
-5. Walk complete. Update 20260615090003 history. Surface table.
+5. Walk complete. Record history: `ld history 20260615090003 --add "cascade-check ran: 1 neighbor evaluated — 20260615100010: inconsequential"`. Surface table.
 6. Total cascaded: 0 → no wide-cascade warning.
 
 **Same scenario but 5 dependents all reference the cascade list**: cascade fires

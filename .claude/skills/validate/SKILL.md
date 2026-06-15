@@ -20,7 +20,10 @@ any file. For fixes, use `garden consistency`.
 ## How to run
 
 ```bash
-# From any directory — wrapper resolves paths relative to itself:
+# Canonical invocation via the porcelain CLI (preferred):
+python3 scripts/ld.py validate
+
+# Or via the shell wrapper (resolves paths relative to itself):
 .claude/skills/validate/validate.sh [docs_dir]
 
 # Or call the shared script directly from the repo root:

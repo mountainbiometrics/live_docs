@@ -30,7 +30,11 @@ independent; run them in any order.
 
 **Goal**: find docs bundling multiple responsibilities and propose concrete splits.
 
-1. Scan every `docs/<id>.md`. For each doc, read title, type, body, and history.
+1. List all docs and load each one:
+   ```bash
+   python3 scripts/ld.py ls --json          # full id list
+   python3 scripts/ld.py show <id>          # title, type, edges, history, body
+   ```
 2. Ask: "Can this doc change for more than one reason?" Signals that a doc is a
    split candidate:
    - Body has multiple `##` sections that address distinct concerns (not just
@@ -49,16 +53,27 @@ independent; run them in any order.
    - The `depends_on` of A and B (provenance: they likely both depend on whatever
      the original depended on, unless that too should be split).
 4. Present the full proposal to the user. On confirmation:
-   - Create each new doc with `python scripts/new_doc.py` using the appropriate
-     type, title, level, state, and `--depends-on`.
-   - Update the original doc: set `status: historical`, add a history entry
-     citing the new doc ids. Do NOT delete it.
+   - Create each new doc:
+     ```bash
+     python3 scripts/ld.py new --type <type> --title "<title>" \
+       --level <level> --state <state> --depends-on <dep-ids>
+     ```
+   - Retire the original doc:
+     ```bash
+     python3 scripts/ld.py set <original-id> --status historical
+     python3 scripts/ld.py history <original-id> --add "split into <A-id> and <B-id>"
+     ```
    - Update any docs that pointed to the original and now should point to A or B:
-     edit their `depends_on` fields and add a history entry.
+     ```bash
+     python3 scripts/ld.py unlink <pointing-doc> --depends-on <original-id>
+     python3 scripts/ld.py link   <pointing-doc> --depends-on <A-id>
+     python3 scripts/ld.py history <pointing-doc> --add "rewired depends_on from <original-id> to <A-id> after split"
+     ```
 5. After splits, run `cascade-check` on each new doc to confirm consistency.
 
-**Hot-file heuristic**: sort docs by `len(history)` descending. Docs in the top
-10% with > 3 history entries AND mixed-topic summaries are prime candidates.
+**Hot-file heuristic**: sort docs by history length descending — `ld get <id>
+--json` includes the `history` array; count entries. Docs in the top 10% with
+> 3 history entries AND mixed-topic summaries are prime candidates.
 
 ---
 
@@ -67,9 +82,13 @@ independent; run them in any order.
 **Goal**: find docs whose dependencies were updated more recently than the doc
 itself — potential stale dependents.
 
-1. For each doc D, note its most recent history `at` timestamp.
-2. For each id in D's `depends_on`, note that dependency's most recent history
-   `at` timestamp.
+1. For each doc D, load its history and note the most recent `at` timestamp:
+   ```bash
+   python3 scripts/ld.py get <id> --json   # includes history array
+   ```
+2. For each id in D's `depends_on` (from `ld neighbors <id> --kind depends_on
+   --json`), load the dependency's history and note its most recent `at`
+   timestamp.
 3. If any dependency was updated AFTER D's last update, D is a **staleness flag**.
 4. Emit a report:
    ```
@@ -87,20 +106,30 @@ itself — potential stale dependents.
 **Goal**: structural integrity — orphans, broken edges, missing required fields.
 (Overlaps `validate` but garden PROPOSES fixes rather than just reporting.)
 
-1. **Broken depends_on references**: for each doc, check every id in `depends_on`
-   resolves to an existing `docs/<id>.md`. Report broken refs and propose removing
-   or correcting them.
-2. **Orphans**: docs with no outbound (`depends_on`) AND no inbound (nothing lists
-   them in `depends_on`) edges. Exempt root index/type docs (they are by design
-   anchors). For genuine orphans, propose: add edges or retire to `historical`.
-3. **Missing required fields**: any doc missing `id`, `title`, `type`, `status`,
-   `level`, `state`, `depends_on`, `tags`, `created`, or `history`. Propose the
-   missing field's value.
-4. **id != filename**: if frontmatter `id` doesn't match the filename (without
-   `.md`), flag it. Propose correcting the frontmatter (do NOT rename the file).
+Start with an automated scan:
+```bash
+python3 scripts/ld.py validate
+```
+This surfaces broken `depends_on` references and missing/invalid fields.
+Then complement with graph-level checks:
 
-Present all proposals together. On user confirmation, apply them, adding history
-entries to each modified doc.
+1. **Broken depends_on references**: flagged by `ld validate`. For each broken
+   ref, propose removing or correcting via `ld unlink <id> --depends-on <bad-id>`.
+2. **Orphans**: docs with no outbound AND no inbound edges. Find them:
+   ```bash
+   python3 scripts/ld.py edges --json   # inspect docs with empty forward+reverse
+   ```
+   Or read `docs/.index/orphans.txt` (from the last reindex). Exempt `type: index`
+   and `type: type` docs. For genuine orphans, propose: add edges via `ld link`
+   or retire with `ld set <id> --status historical`.
+3. **Missing required fields**: surfaced by `ld validate`. Propose the missing
+   field's value; apply with `ld set <id> --<field> <value>`.
+4. **id != filename**: surfaced by `ld validate`. Propose correcting the
+   frontmatter (do NOT rename the file); apply with `ld set <id> --...` or direct
+   frontmatter edit.
+
+Present all proposals together. On user confirmation, apply them, recording history
+entries with `ld history <id> --add "..."` for each modified doc.
 
 ---
 
@@ -131,12 +160,20 @@ Default alias map (extend as the schema evolves):
 ```
 
 Procedure:
-1. For each doc, scan frontmatter for any key matching a `field_aliases` entry.
-   Rename the key to the canonical name.
-2. For each canonical field with an enum, scan its value against `value_aliases`.
-   Replace non-canonical values with canonical ones.
-3. Changes are applied **non-destructively**: add a history entry noting the
-   normalization; do not change any semantic content.
+1. List all docs via `ld ls --json`. For each, load frontmatter with `ld get <id>
+   --json` and scan for keys matching a `field_aliases` entry or values matching
+   `value_aliases`. Rename/replace as needed via direct frontmatter edit (no `ld`
+   verb exists for arbitrary key rename).
+2. For canonical-field enum corrections (e.g. `status`, `level`, `state`), use:
+   ```bash
+   python3 scripts/ld.py set <id> --status living   # example
+   ```
+3. Changes are applied **non-destructively**: record a history entry noting the
+   normalization:
+   ```bash
+   python3 scripts/ld.py history <id> --add "field-aliases normalization: renamed <old> → <new>"
+   ```
+   Do not change any semantic content.
 4. Report how many docs were normalized and which fields were affected.
 
 ---
