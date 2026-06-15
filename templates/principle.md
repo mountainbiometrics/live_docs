@@ -1,7 +1,7 @@
 ---
 id: PLACEHOLDER
 title: "PLACEHOLDER"
-slug: "PLACEHOLDER"
+label: "PLACEHOLDER"
 type: principle
 status: living
 level: incidental

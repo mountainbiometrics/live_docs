@@ -1,7 +1,7 @@
 ---
 id: PLACEHOLDER
 title: "PLACEHOLDER"
-slug: "PLACEHOLDER"
+label: "PLACEHOLDER"
 type: constraint
 status: living
 level: incidental

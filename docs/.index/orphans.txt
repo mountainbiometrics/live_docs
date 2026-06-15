@@ -1,13 +1,14 @@
 # orphans — docs with no graph edges
-# Generated: 2026-06-15T23:08:04Z
+# Generated: 2026-06-15T23:24:05Z
 # These docs are disconnected from the dependency graph.
 # Consider: add depends_on edges, or retire to status: historical.
+# Format: <id> [<label>] "<Type>: <Title>"
 #
 # Count: 6
 
-20260615203646
-20260615203839
-20260615203858
-20260615203928
-20260615204018
-20260615204138
+20260615203646 [original-idea-dump] "Reference: live_docs original idea dump"
+20260615203839 [domain-tag] "Decision: domain: tag defines business-domain grouping; vocabulary is open"
+20260615203858 [relevance-axis-deferred] "Decision: Relevance/generalizedness is deferred; level field is the current proxy"
+20260615203928 [hot-file-signal] "Decision: History length is the primary hot-file signal; hot files are decomposition candidates"
+20260615204018 [imported-timestamp] "Decision: Reference docs carry an imported: timestamp separate from created:"
+20260615204138 [index-summaries-v1] "Decision: Index docs do not carry aggregated content summaries in v1"
