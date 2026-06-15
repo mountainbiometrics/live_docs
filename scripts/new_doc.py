@@ -66,6 +66,8 @@ def build_frontmatter(args, doc_id: str, created: str) -> str:
     """
     depends_on_ids = [s.strip() for s in args.depends_on.split(",") if s.strip()] \
         if args.depends_on else []
+    references_ids = [s.strip() for s in args.references.split(",") if s.strip()] \
+        if args.references else []
     domain_tags = [s.strip() for s in args.tags_domain.split(",") if s.strip()] \
         if args.tags_domain else []
     scope_tags = [s.strip() for s in args.tags_scope.split(",") if s.strip()] \
@@ -80,6 +82,7 @@ def build_frontmatter(args, doc_id: str, created: str) -> str:
         f"level: {args.level}",
         f"state: {args.state}",
         f"depends_on: {yaml_list(depends_on_ids)}",
+        f"references: {yaml_list(references_ids)}",
         "tags:",
         f"  domain: {yaml_list(domain_tags)}",
         f"  scope: {yaml_list(scope_tags)}",
@@ -195,7 +198,9 @@ Examples:
 
     # Relationships & tags
     parser.add_argument("--depends-on", default="",
-                        help="Comma-separated list of doc ids this doc depends on.")
+                        help="Comma-separated list of doc ids this doc structurally depends on (cascade graph).")
+    parser.add_argument("--references", default="",
+                        help="Comma-separated list of doc ids this doc is informed by / derived from (provenance only, NOT cascade edges).")
     parser.add_argument("--tags-domain", default="",
                         help="Comma-separated domain tags.")
     parser.add_argument("--tags-scope", default="",

@@ -8,9 +8,10 @@ Usage:
 docs_dir defaults to DOCS_DIR from livedocs (repo root / docs).
 
 Generates:
-    docs/.index/dependents.json   — reverse-dependency map
-    docs/.index/hierarchy.md      — index doc children rollup
-    docs/.index/orphans.txt       — disconnected docs
+    docs/.index/dependents.json    — reverse-dependency map (depends_on only; CASCADE INPUT)
+    docs/.index/referenced_by.json — reverse-references map (references only; NAVIGATION ONLY, NOT cascade)
+    docs/.index/hierarchy.md       — index doc children rollup
+    docs/.index/orphans.txt        — disconnected docs
 
 Stdlib only. No external dependencies.
 These files are DERIVED. Never hand-edit them; rerun this script instead.
@@ -24,7 +25,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import DOCS_DIR, load_all, forward_edges, reverse_edges
+from livedocs import DOCS_DIR, load_all, forward_edges, reverse_edges, referenced_by
 
 
 # ---------------------------------------------------------------------------
@@ -35,13 +36,36 @@ ORPHAN_EXEMPT_TYPES = {"index", "type"}
 
 
 # ---------------------------------------------------------------------------
-# Generate dependents.json
+# Generate dependents.json (CASCADE INPUT — depends_on edges only)
 # ---------------------------------------------------------------------------
 
 def write_dependents_json(rev: dict, index_dir: Path) -> None:
-    """Write reverse-dependency map to dependents.json."""
+    """
+    Write reverse-dependency map to dependents.json.
+
+    This is the CASCADE INPUT — derived from depends_on edges only.
+    Never includes references edges.
+    """
     output = {k: sorted(v) for k, v in sorted(rev.items())}
     out_path = index_dir / "dependents.json"
+    out_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    print(f"  wrote {out_path}")
+
+
+# ---------------------------------------------------------------------------
+# Generate referenced_by.json (NAVIGATION ONLY — references edges, NOT cascade)
+# ---------------------------------------------------------------------------
+
+def write_referenced_by_json(ref_by: dict, index_dir: Path) -> None:
+    """
+    Write reverse-references map to referenced_by.json.
+
+    NAVIGATION ARTIFACT ONLY — derived from the `references` frontmatter field.
+    This is provenance / "informed by" data.
+    MUST NOT be used as cascade input. Use dependents.json for cascade.
+    """
+    output = {k: sorted(v) for k, v in sorted(ref_by.items())}
+    out_path = index_dir / "referenced_by.json"
     out_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     print(f"  wrote {out_path}")
 
@@ -153,8 +177,10 @@ def main() -> int:
 
     fwd = forward_edges(docs)
     rev = reverse_edges(docs)
+    ref_by = referenced_by(docs)
 
     write_dependents_json(rev, index_dir)
+    write_referenced_by_json(ref_by, index_dir)
     write_hierarchy_md(docs, fwd, index_dir)
     write_orphans_txt(docs, fwd, rev, index_dir)
 

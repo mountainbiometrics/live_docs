@@ -116,23 +116,26 @@ For each extracted unit:
      --title "<precise, single-responsibility title>" \
      --level <incidental|trial|preference|requirement> \
      --state <actual|target> \
-     --depends-on "<NORM_ID>" \
+     --references "<NORM_ID>" \
      --tags-scope "<scope tags, e.g. live_docs,sinai>" \
      --body "<the extracted content>"
    ```
-   The `--depends-on NORM_ID` establishes provenance: this doc derives from that
-   reference. This is the **provenance rule**.
+   The `--references NORM_ID` establishes provenance: this doc was extracted from /
+   informed by that reference. This is the **provenance rule**.
+   Use `--depends-on` for genuine structural dependencies (e.g. a decision that
+   logically depends on a principle), added separately when they exist.
 3. If the extracted idea DUPLICATES or STRENGTHENS an EXISTING doc: do not create
-   a new doc. Instead, add NORM_ID to the existing doc's `depends_on` list and
-   append a history entry: `"ingest-reference: added provenance from <NORM_ID>"`.
+   a new doc. Instead, add NORM_ID to the existing doc's `references` list (not
+   `depends_on`).
 
 ---
 
 ## Step 5 — Provenance rule check
 
-After decomposition, every extracted doc MUST have at least one `depends_on` entry
-pointing to NORM_ID (or directly to RAW_ID if there's no normalized layer). A
-floating extracted doc with no provenance edge is a violation — add the edge.
+After decomposition, every extracted doc MUST have at least one `references` entry
+pointing to NORM_ID (or directly to the source if there's no normalized layer). A
+floating extracted doc with neither `references` nor `source` nor `depends_on` is a
+provenance violation — add the `references` edge.
 
 ---
 
@@ -162,7 +165,7 @@ Next: consider running cascade-check if any existing docs were modified.
 ## Atomicity checklist before finishing
 
 - [ ] Every extracted doc has exactly one responsibility (single-reason-to-change test).
-- [ ] Every extracted doc has provenance: `depends_on` includes NORM_ID (not RAW_ID — raw is not a graph node).
+- [ ] Every extracted doc has provenance: `references` includes NORM_ID (not RAW_ID — raw is not a graph node).
 - [ ] `raw/<RAW_ID>.md` body is the verbatim, unedited original (raw tier, outside docs/).
 - [ ] NORM_ID lives in `docs/` with `source: "raw/<RAW_ID>.md"` pointing back to the raw tier.
 - [ ] NORM_ID body is a cleaned summary, not the extraction outputs.

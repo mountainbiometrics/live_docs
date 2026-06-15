@@ -231,6 +231,14 @@ def parse_doc(path: Path) -> dict:
         fm["depends_on"] = [dep] if dep else []
     # else: already a list
 
+    # Normalize references to always be a list (absent field → [], not an error)
+    ref = fm.get("references")
+    if ref is None:
+        fm["references"] = []
+    elif isinstance(ref, str):
+        fm["references"] = [ref] if ref else []
+    # else: already a list
+
     # Normalize history to always be a list
     hist = fm.get("history")
     if hist is None:
@@ -309,6 +317,8 @@ def reverse_edges(docs: dict) -> dict:
 def dangling_edges(docs: dict) -> list:
     """
     Return list of (from_id, dep_id) tuples where dep_id does not exist in docs.
+
+    Covers depends_on ONLY — this is the cascade graph.
     """
     all_ids = set(docs.keys())
     dangling = []
@@ -316,6 +326,57 @@ def dangling_edges(docs: dict) -> list:
         for dep_id in doc.get("depends_on", []):
             if dep_id not in all_ids:
                 dangling.append((doc_id, dep_id))
+    return dangling
+
+
+# ---------------------------------------------------------------------------
+# References graph helpers — provenance/navigation ONLY, never cascade edges
+# ---------------------------------------------------------------------------
+
+def reference_edges(docs: dict) -> dict:
+    """
+    Build forward reference map: {id: [ids this doc references]}.
+
+    This is a NAVIGATION artifact — provenance / "informed by" links.
+    It must NEVER be used as cascade input; use forward_edges for that.
+    Only includes entries where the referenced id exists in docs (no dangling).
+    """
+    all_ids = set(docs.keys())
+    fwd = {}
+    for doc_id, doc in docs.items():
+        refs = [r for r in doc.get("references", []) if r in all_ids]
+        fwd[doc_id] = refs
+    return fwd
+
+
+def referenced_by(docs: dict) -> dict:
+    """
+    Build reverse reference map: {id: [ids that reference this id]}.
+
+    This is a NAVIGATION artifact — reverse provenance lookup.
+    It must NEVER be used as cascade input; use reverse_edges for that.
+    """
+    all_ids = set(docs.keys())
+    rev: dict = {doc_id: [] for doc_id in all_ids}
+    for doc_id, doc in docs.items():
+        for ref_id in doc.get("references", []):
+            if ref_id in rev:
+                rev[ref_id].append(doc_id)
+    return rev
+
+
+def dangling_references(docs: dict) -> list:
+    """
+    Return list of (from_id, ref_id) tuples where ref_id does not exist in docs.
+
+    Covers references ONLY — NOT depends_on (use dangling_edges for that).
+    """
+    all_ids = set(docs.keys())
+    dangling = []
+    for doc_id, doc in docs.items():
+        for ref_id in doc.get("references", []):
+            if ref_id not in all_ids:
+                dangling.append((doc_id, ref_id))
     return dangling
 
 

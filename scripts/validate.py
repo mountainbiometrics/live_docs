@@ -14,9 +14,10 @@ Checks performed:
   1. Required baseline fields present
   2. Valid enum values (type, status, level, state)
   3. id == filename
-  4. depends_on references resolve to existing docs
+  4. depends_on references resolve to existing docs (cascade graph)
+  4b. references ids resolve to existing docs (navigation/provenance only)
   5. Reference doc extras (kind, source, imported)
-  6. Provenance rule (warning: level > incidental but no depends_on)
+  6. Provenance rule (warning: level > incidental but no depends_on AND no references AND no source)
 
 Note: empty history: [] is VALID and does NOT trigger an error.
 """
@@ -27,7 +28,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import DOCS_DIR, load_all, dangling_edges
+from livedocs import DOCS_DIR, load_all, dangling_edges, dangling_references
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +98,7 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     # we can't detect a mismatch here the same way. Instead we trust the loader.)
     # The id field in the returned doc IS the filename stem (authoritative).
 
-    # 4. depends_on resolution
+    # 4. depends_on resolution (cascade graph — errors are blocking)
     depends_on = doc.get("depends_on", [])
     if isinstance(depends_on, list):
         for dep_id in depends_on:
@@ -105,6 +106,15 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
                 errors.append(f"{doc_id}  broken depends_on `{dep_id}` (no such doc)")
     elif depends_on:
         errors.append(f"{doc_id}  depends_on is not a list")
+
+    # 4b. references resolution (navigation/provenance — absent field is [] and is fine)
+    references = doc.get("references", [])
+    if isinstance(references, list):
+        for ref_id in references:
+            if ref_id and ref_id not in all_ids:
+                errors.append(f"{doc_id}  broken references `{ref_id}` (no such doc)")
+    elif references:
+        errors.append(f"{doc_id}  references is not a list")
 
     # 5. Reference doc extras
     if doc_type == "reference":
@@ -119,12 +129,16 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
             errors.append(f"{doc_id}  reference doc missing `imported`")
 
     # 6. Provenance rule (warning only)
+    # A non-empty references list satisfies provenance, same as depends_on or source.
+    # Docs with level: incidental are never flagged.
     if doc_type != "reference":
         empty_depends = not depends_on
-        if empty_depends and level in PROVENANCE_REQUIRED_LEVELS:
+        empty_references = not references
+        has_source = bool(doc.get("source"))
+        if empty_depends and empty_references and not has_source and level in PROVENANCE_REQUIRED_LEVELS:
             warnings.append(
-                f"{doc_id}  level `{level}` but depends_on is empty "
-                f"(no provenance — consider adding supporting doc edge)"
+                f"{doc_id}  level `{level}` but depends_on, references, and source are all empty "
+                f"(no provenance — consider adding a references or depends_on edge)"
             )
 
     # NOTE: empty history: [] is valid; no check here.
