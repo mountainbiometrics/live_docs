@@ -24,27 +24,27 @@ description: >
 For each changed doc id, retrieve its full neighbor set using:
 
 ```bash
-python3 scripts/ld.py neighbors <id> --json
+python3 scripts/ldoc.py neighbors <id> --json
 ```
 
 This returns `{depends_on, references, dependents, referenced_by}` — all
 resolved to `{id, label, display}` entries. Use `depends_on` (upstream) and
 `dependents` (downstream) for the cascade walk.
 
-Do not read from `docs/.index/dependents.json` — always call `ld neighbors`
+Do not read from `docs/.index/dependents.json` — always call `ldoc neighbors`
 for fresh data. At this scale a full scan takes milliseconds and avoids
 stale-cache errors.
 
 If you need the full two-hop picture before starting, use:
 
 ```bash
-python3 scripts/ld.py graph <id> --depth 2 --direction both --json
+python3 scripts/ldoc.py graph <id> --depth 2 --direction both --json
 ```
 
 To surface dangling edges across the whole store before proceeding, run:
 
 ```bash
-python3 scripts/ld.py edges --json
+python3 scripts/ldoc.py edges --json
 ```
 
 and check the `dangling` key. Surface any reported dangling edges to the user
@@ -71,7 +71,7 @@ For each id popped from queue:
 
 1. If already in `session["visited"]`, skip (loop guard).
 2. Add to `session["visited"]`.
-3. Collect neighbors via `ld neighbors <id> --json`; use `depends_on` entries
+3. Collect neighbors via `ldoc neighbors <id> --json`; use `depends_on` entries
    (upstream) and `dependents` entries (downstream).
 4. For each neighbor `n`:
    - If `n` is already in `session["visited"]`, check the verdict: if it would be
@@ -114,21 +114,21 @@ When the verdict is `cascade`:
 
 1. Load the doc to understand its current content:
    ```bash
-   python3 scripts/ld.py show <n>
+   python3 scripts/ldoc.py show <n>
    ```
-2. Make the minimum change needed to restore consistency. Use `ld set` for
-   scalar frontmatter fields, `ld link`/`ld unlink` for edge changes, and
-   direct file editing only for body-text changes that have no `ld` verb:
+2. Make the minimum change needed to restore consistency. Use `ldoc set` for
+   scalar frontmatter fields, `ldoc link`/`ldoc unlink` for edge changes, and
+   direct file editing only for body-text changes that have no `ldoc` verb:
    ```bash
    # scalar field update
-   python3 scripts/ld.py set <n> --status historical
+   python3 scripts/ldoc.py set <n> --status historical
    # edge update
-   python3 scripts/ld.py link <n> --depends-on <new-dep-id>
+   python3 scripts/ldoc.py link <n> --depends-on <new-dep-id>
    ```
    Do not refactor or rewrite beyond what the cascade requires.
 3. Record the cascade history entry:
    ```bash
-   python3 scripts/ld.py history <n> --add "cascade-check: updated because <source-id> changed — <one sentence why>"
+   python3 scripts/ldoc.py history <n> --add "cascade-check: updated because <source-id> changed — <one sentence why>"
    ```
 
 ## Step 6 — Update the originating doc's history
@@ -137,7 +137,7 @@ After the walk completes, record a history entry on EACH originally-changed doc
 summarizing the cascade session outcome:
 
 ```bash
-python3 scripts/ld.py history <changed-id> --add "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
+python3 scripts/ldoc.py history <changed-id> --add "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
 ```
 
 ## Step 7 — Surface results to the user
@@ -170,22 +170,22 @@ If total cascaded docs > 3 from a single routine edit, emit this warning:
 **Scenario**: `20260615090003.md` (Type: decision) is edited — its "Cascade
 Behavior" section is updated to say cascade should also examine `goal` docs.
 
-**Neighbors of 20260615090003** (from `ld neighbors 20260615090003 --json`):
+**Neighbors of 20260615090003** (from `ldoc neighbors 20260615090003 --json`):
 `depends_on: []` (none upstream), `dependents: [{id: "20260615100010", ...}]`
 (one downstream — a decision doc that lists 20260615090003 in its `depends_on`).
 
 **Walk**:
 
 1. Start: queue = [20260615090003]
-2. Pop 20260615090003, mark visited. Call `ld neighbors 20260615090003 --json`.
+2. Pop 20260615090003, mark visited. Call `ldoc neighbors 20260615090003 --json`.
    Upstream empty, one downstream: 20260615100010.
-3. Evaluate 20260615100010 (downstream). Load it with `ld show 20260615100010`:
+3. Evaluate 20260615100010 (downstream). Load it with `ldoc show 20260615100010`:
    - Read it. Its content references the decision type's cascade rules.
    - The change adds `goal` to the cascade list. Does 20260615100010 enumerate
      cascade targets? If yes — the list is now stale → **cascade**.
    - If no, it just cites the doc as context → **inconsequential**.
 4. Suppose verdict: **inconsequential**. Record it. Stop.
-5. Walk complete. Record history: `ld history 20260615090003 --add "cascade-check ran: 1 neighbor evaluated — 20260615100010: inconsequential"`. Surface table.
+5. Walk complete. Record history: `ldoc history 20260615090003 --add "cascade-check ran: 1 neighbor evaluated — 20260615100010: inconsequential"`. Surface table.
 6. Total cascaded: 0 → no wide-cascade warning.
 
 **Same scenario but 5 dependents all reference the cascade list**: cascade fires

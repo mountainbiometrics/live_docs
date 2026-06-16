@@ -21,7 +21,7 @@ any file. For fixes, use `garden consistency`.
 
 ```bash
 # Canonical invocation via the porcelain CLI (preferred):
-python3 scripts/ld.py validate
+python3 scripts/ldoc.py validate
 
 # Or via the shell wrapper (resolves paths relative to itself):
 .claude/skills/validate/validate.sh [docs_dir]

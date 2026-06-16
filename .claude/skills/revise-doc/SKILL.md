@@ -29,16 +29,16 @@ a history entry, and a cascade-check pass.
 1. The caller supplies either the doc **id** (e.g. `20260615090003`) or a
    **title fragment**. If a title fragment is given, resolve it:
    ```bash
-   python3 scripts/ld.py resolve "title fragment"
+   python3 scripts/ldoc.py resolve "title fragment"
    ```
-   If more than one id matches, `ld resolve` will error listing candidates — ask
-   the caller to confirm. If the fragment is ambiguous, use `ld find`:
+   If more than one id matches, `ldoc resolve` will error listing candidates — ask
+   the caller to confirm. If the fragment is ambiguous, use `ldoc find`:
    ```bash
-   python3 scripts/ld.py find "title fragment" --json
+   python3 scripts/ldoc.py find "title fragment" --json
    ```
 2. Load the full doc — frontmatter, edges, and body:
    ```bash
-   python3 scripts/ld.py show <id>
+   python3 scripts/ldoc.py show <id>
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
@@ -52,21 +52,21 @@ contradiction.
 
 **2a. Build the graph context:**
 ```bash
-python3 scripts/ld.py neighbors <id> --json
+python3 scripts/ldoc.py neighbors <id> --json
 ```
 Note the `depends_on` entries (upstream) and `dependents` entries (downstream).
-To check for dangling edges across the store, run `ld edges --json` and inspect
+To check for dangling edges across the store, run `ldoc edges --json` and inspect
 the `dangling` key — surface any to the user before proceeding.
 
 **2b. Read candidate docs** — the docs most likely to overlap with the revision:
-- All upstream neighbors (things this doc depends on): from `ld neighbors` output.
-- All downstream neighbors (things that depend on this doc): from `ld neighbors` output.
+- All upstream neighbors (things this doc depends on): from `ldoc neighbors` output.
+- All downstream neighbors (things that depend on this doc): from `ldoc neighbors` output.
 - All docs of the same `type`:
   ```bash
-  python3 scripts/ld.py ls --type <type> --json
+  python3 scripts/ldoc.py ls --type <type> --json
   ```
   Read any whose title or scope suggests overlap with the proposed change via
-  `ld show <candidate-id>`.
+  `ldoc show <candidate-id>`.
 
 **2c. Evaluate for:**
 - **Duplication** — does the proposed new content already live, in substance, in
@@ -86,20 +86,20 @@ If neither duplication nor conflict is found, proceed.
 
 ## Step 3 — Apply the edit
 
-Make the minimum change that satisfies the caller's intent. Prefer `ld` verbs
+Make the minimum change that satisfies the caller's intent. Prefer `ldoc` verbs
 for all mutations; fall back to direct file editing only for body-text changes:
 
 ```bash
 # scalar frontmatter fields
-python3 scripts/ld.py set <id> --title "New title"
-python3 scripts/ld.py set <id> --level preference --state target
+python3 scripts/ldoc.py set <id> --title "New title"
+python3 scripts/ldoc.py set <id> --level preference --state target
 
 # edge additions / removals
-python3 scripts/ld.py link <id> --depends-on <dep-id>
-python3 scripts/ld.py unlink <id> --depends-on <old-dep-id>
-python3 scripts/ld.py link <id> --references <norm-id>
+python3 scripts/ldoc.py link <id> --depends-on <dep-id>
+python3 scripts/ldoc.py unlink <id> --depends-on <old-dep-id>
+python3 scripts/ldoc.py link <id> --references <norm-id>
 
-# body-text changes: edit docs/<id>.md directly (no ld verb for body in-place)
+# body-text changes: edit docs/<id>.md directly (no ldoc verb for body in-place)
 ```
 
 No gratuitous reformatting, no refactoring beyond scope.
@@ -127,7 +127,7 @@ removed, or reordered). No other frontmatter field and no body content changed.
   ingested source or a newly relevant reference, this IS a change.
   - Record a history entry:
     ```bash
-    python3 scripts/ld.py history <id> --add "added reference: <label>"
+    python3 scripts/ldoc.py history <id> --add "added reference: <label>"
     ```
   - Do NOT run cascade-check (reference links are never cascade edges).
 
@@ -142,7 +142,7 @@ removed, or reordered). No other frontmatter field and no body content changed.
 **Action — history entry first:**
 
 ```bash
-python3 scripts/ld.py history <id> --add "<concise description of what changed and why>"
+python3 scripts/ldoc.py history <id> --add "<concise description of what changed and why>"
 ```
 
 **Action — cascade-check next:**
@@ -150,11 +150,11 @@ python3 scripts/ld.py history <id> --add "<concise description of what changed a
 Invoke the `cascade-check` skill starting from this doc's id. Provide the change
 description as context. The skill will:
 - Walk both upstream (`depends_on`) and downstream (`dependents`) neighbors via
-  `ld neighbors`.
+  `ldoc neighbors`.
 - Emit a verdict (`inconsequential`, `cascade`, `incompatible`, or
   `context-request`) for each neighbor.
-- Update any neighbors that receive a `cascade` verdict using `ld set`/`ld link`
-  and `ld history`.
+- Update any neighbors that receive a `cascade` verdict using `ldoc set`/`ldoc link`
+  and `ldoc history`.
 - Halt and surface `incompatible` branches to the user.
 
 Do not skip cascade-check for substantive changes, even if the change seems
@@ -168,12 +168,12 @@ After writing all changes (including any cascade updates), confirm the store is
 structurally sound:
 
 ```bash
-python3 scripts/ld.py validate
+python3 scripts/ldoc.py validate
 ```
 
 If `depends_on` edges were added or removed, also verify the edge map:
 ```bash
-python3 scripts/ld.py edges
+python3 scripts/ldoc.py edges
 ```
 
 Address any ERRORs before finishing. Surface WARNINGs to the user for review.

@@ -19,10 +19,21 @@ Every document lives as `docs/<id>.md` — a flat store with no subfolders. File
 
 The type taxonomy (what each document type means, its required fields, and its cascade behaviour) is defined by the 11 type documents listed in the root index.
 
+## CLI setup (`ldoc`)
+
+This repo uses [mise](https://mise.jdx.dev/) to put `ldoc` on your `PATH` while you're inside the tree.
+
+```bash
+mise trust          # once per machine, when you first enter this repo
+ldoc --help
+```
+
+Without mise, invoke the script directly: `python3 scripts/ldoc.py …`
+
 ## How to create a document
 
 ```bash
-python scripts/ld.py new --type <type> --title "<title>" [options]
+ldoc new --type <type> --title "<title>" [options]
 ```
 
 Common options:
@@ -40,7 +51,7 @@ Common options:
 | `--kind` | `clipping` | reference subtype: brainstorm \| plan \| clipping \| external |
 | `--source` | | for reference docs: where it came from |
 
-The command prints the new doc's `id` and `path`. All other flags are described in `python scripts/ld.py new --help`.
+The command prints the new doc's `id` and `path`. All other flags are described in `ldoc new --help`.
 
 ## Directory layout
 
@@ -48,9 +59,12 @@ The command prints the new doc's `id` and `path`. All other flags are described 
 docs/              # flat store — every doc is docs/<id>.md
   .index/          # generated artifacts (do not hand-edit)
 templates/         # one markdown template per type
+bin/
+  ldoc             # symlink → scripts/ldoc.py (on PATH via mise)
 scripts/
-  ld.py            # unified porcelain CLI — create/query/mutate docs (stdlib only)
-  livedocs.py      # shared KB layer (all logic lives here)
+  ldoc.py          # unified porcelain CLI — create/query/mutate docs (stdlib only)
+  livedocs/        # shared KB layer (all logic lives here)
+mise.toml          # adds bin/ to PATH in this tree
 .claude/skills/    # Claude Code skills for cascade-check, validate, reindex, ingest-reference, garden
 ```
 

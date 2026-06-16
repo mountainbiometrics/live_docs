@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ld.py — Unified porcelain CLI for the live_docs store.
+ldoc.py — Unified porcelain CLI for the live_docs store.
 
 Usage:
-    ld <subcommand> [args...]
+    ldoc <subcommand> [args...]
 
 All ref arguments accept: id | label | title (exact or unique substring).
 Stdlib only. No external dependencies.
@@ -461,7 +461,7 @@ def cmd_reindex(kb: KB, args) -> int:
 
 
 def cmd_review(kb: KB, args) -> int:
-    """Dispatch ld review <subverb> commands over the reviews/ ledger."""
+    """Dispatch ldoc review <subverb> commands over the reviews/ ledger."""
     ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
     verb = args.review_verb
 
@@ -596,7 +596,7 @@ REFERENCE_KIND_CHOICES = sorted(VALID_REFERENCE_KINDS) + [""]
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ld",
+        prog="ldoc",
         description="live_docs porcelain CLI — query and mutate the KB.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

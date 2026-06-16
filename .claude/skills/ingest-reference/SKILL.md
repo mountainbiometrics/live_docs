@@ -37,7 +37,7 @@ or "pasted". If the source is ambiguous, ask before proceeding.
 ## Step 2 — Create the RAW reference doc (immutable clipping)
 
 ```bash
-python3 scripts/ld.py ingest-raw \
+python3 scripts/ldoc.py ingest-raw \
   --from-file <path>           # OR: --body "<raw content>" OR: --body -
   --source "<where it came from>" \
   --title "Clipping: <descriptive title>"   # optional but recommended
@@ -67,7 +67,7 @@ Determine `kind`:
 - `clipping` — only if none of the above fit.
 
 ```bash
-python3 scripts/ld.py new \
+python3 scripts/ldoc.py new \
   --type reference \
   --kind <kind> \
   --status living \
@@ -109,9 +109,9 @@ For each extracted unit:
 
 1. Draft a single-sentence summary: "This doc changes when X." If X covers more
    than one concern, split further.
-2. Create with `ld new`:
+2. Create with `ldoc new`:
    ```bash
-   python3 scripts/ld.py new \
+   python3 scripts/ldoc.py new \
      --type <type> \
      --title "<precise, single-responsibility title>" \
      --level <incidental|trial|preference|requirement> \
@@ -128,7 +128,7 @@ For each extracted unit:
    a new doc. Instead, link NORM_ID to the existing doc's `references` list (not
    `depends_on`):
    ```bash
-   python3 scripts/ld.py link <existing-id> --references <NORM_ID>
+   python3 scripts/ldoc.py link <existing-id> --references <NORM_ID>
    ```
 
 ---

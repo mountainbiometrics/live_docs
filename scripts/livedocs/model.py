@@ -42,7 +42,7 @@ LABEL_RE = re.compile(r'^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$')
 
 
 # ---------------------------------------------------------------------------
-# Collision-safe ID generation (shared by ld new and ingest_raw.py)
+# Collision-safe ID generation (shared by ldoc new and ingest_raw.py)
 # ---------------------------------------------------------------------------
 
 def generate_id(target_dir: Path) -> str:

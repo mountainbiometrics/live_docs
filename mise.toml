@@ -1,0 +1,5 @@
+# Project-local tooling. Requires mise shell integration (`mise activate zsh`).
+# First visit: `mise trust` (once per machine).
+
+[env]
+_.path = ["{{ config_root }}/bin"]
