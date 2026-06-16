@@ -21,7 +21,8 @@ Record format (reviews/<id>.md):
     ---
 
     ## Additions
-    - [<Type>: <Title>](<id>.md) — <one-line intent>
+    - [<Type>: <Title>](<id>.md)
+      <Context or Overview section, indented>
     ## Revisions
     - [<Type>: <Title>](<id>.md) — <what changed>
     ## Minor Alterations
@@ -36,6 +37,64 @@ from typing import Any
 
 from .model import REVIEWS_DIR, generate_id, DOCS_DIR, ref_link
 from .serialize import _yaml_str, _yaml_list, _parse_frontmatter_text
+
+
+# ---------------------------------------------------------------------------
+# Body section extraction for review summaries
+# ---------------------------------------------------------------------------
+
+def _section_heading_match(line: str, names: tuple[str, ...]) -> bool:
+    """True when line is a ## heading whose name matches one of `names`."""
+    if not line.startswith("## "):
+        return False
+    heading = line[3:].strip()
+    return any(
+        heading == name
+        or heading.startswith(f"{name} ")
+        or heading.startswith(f"{name}/")
+        for name in names
+    )
+
+
+def _extract_body_section(body: str, headings: tuple[str, ...]) -> str:
+    """
+    Return trimmed content of the first matching ## section in `body`.
+
+    Matches exact headings and variants like "## Context / Origin".
+    """
+    if not body:
+        return ""
+
+    lines = body.splitlines()
+    in_section = False
+    collected: list[str] = []
+
+    for line in lines:
+        if line.startswith("## "):
+            if in_section:
+                break
+            if _section_heading_match(line, headings):
+                in_section = True
+            continue
+        if in_section:
+            collected.append(line)
+
+    while collected and not collected[0].strip():
+        collected.pop(0)
+    while collected and not collected[-1].strip():
+        collected.pop()
+
+    return "\n".join(collected)
+
+
+def _format_addition_entry(link: str, doc: dict) -> list[str]:
+    """Render one Additions list item with nested Context/Overview content."""
+    section = _extract_body_section(doc.get("body", "") or "", ("Context", "Overview"))
+    lines = [f"- {link}"]
+    if section:
+        for line in section.splitlines():
+            lines.append(f"  {line}")
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -286,20 +345,7 @@ class ReviewLedger:
         lines.append("## Additions")
         if additions:
             for doc_id in additions:
-                doc = docs[doc_id]
-                link = ref_link(doc)
-                # Use the first body line as intent hint if available
-                body_first = (doc.get("body", "") or "").strip().splitlines()
-                intent = ""
-                for bl in body_first:
-                    bl = bl.strip()
-                    if bl and not bl.startswith("#"):
-                        intent = bl[:100]
-                        break
-                if intent:
-                    lines.append(f"- {link} — {intent}")
-                else:
-                    lines.append(f"- {link}")
+                lines.extend(_format_addition_entry(ref_link(docs[doc_id]), docs[doc_id]))
         else:
             lines.append("(none)")
 
@@ -337,7 +383,7 @@ class ReviewLedger:
         if touched:
             for doc_id in touched:
                 if doc_id in docs:
-                    lines.append(f"- {ref_link(docs[doc_id])}")
+                    lines.extend(_format_addition_entry(ref_link(docs[doc_id]), docs[doc_id]))
         else:
             lines.append("(none)")
 
