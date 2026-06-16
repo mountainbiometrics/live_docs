@@ -40,6 +40,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATES, VALID_STATUSES, VALID_REFERENCE_KINDS
+from livedocs import ReviewLedger, REVIEWS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -459,6 +460,118 @@ def cmd_reindex(kb: KB, args) -> int:
     return result.returncode
 
 
+def cmd_review(kb: KB, args) -> int:
+    """Dispatch ld review <subverb> commands over the reviews/ ledger."""
+    ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
+    verb = args.review_verb
+
+    if verb == "new":
+        return _review_new(ledger, args)
+    elif verb == "list":
+        return _review_list(ledger, args)
+    elif verb == "show":
+        return _review_show(ledger, args)
+    elif verb == "sign":
+        return _review_sign(ledger, args)
+    else:
+        _err(f"Unknown review subcommand: {verb!r}")
+        return 1
+
+
+def _review_new(ledger: ReviewLedger, args) -> int:
+    since = args.since or ""
+    touched_refs = None
+    body = ""
+
+    if args.touched:
+        touched_refs = [r.strip() for r in args.touched.split(",") if r.strip()]
+
+    if args.summary == "-":
+        body = sys.stdin.read()
+    elif args.summary:
+        body = args.summary
+
+    if not since and touched_refs is None and not body:
+        _err("Provide --since <ISO8601>, --touched <refs>, or --summary <text|->, or a combination.")
+        return 1
+
+    try:
+        review_id, path = ledger.new(since=since, touched_refs=touched_refs, body=body)
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    print(f"id:   {review_id}")
+    print(f"path: {path}")
+    return 0
+
+
+def _review_list(ledger: ReviewLedger, args) -> int:
+    unsigned_by = args.unsigned_by or ""
+    try:
+        records = ledger.list_reviews(unsigned_by=unsigned_by)
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    if not records:
+        print("(no review records)")
+        return 0
+
+    for r in records:
+        signer_str = ", ".join(r["signers"]) if r["signers"] else "(unsigned)"
+        print(f"{r['id']}  created={r['created']}  touched={r['touched_count']}  signers=[{signer_str}]")
+
+    return 0
+
+
+def _review_show(ledger: ReviewLedger, args) -> int:
+    try:
+        rec = ledger.show(args.ref)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+
+    print(f"{'='*60}")
+    print(f"  Review: {rec['id']}")
+    print(f"  created:  {rec.get('created', '')}")
+    print(f"  touched:  {len(rec.get('touched', []))} docs  {rec.get('touched', [])}")
+    print(f"{'='*60}")
+    print()
+
+    signoffs = rec.get("signoffs", [])
+    if signoffs:
+        print("SIGNOFFS:")
+        for s in signoffs:
+            print(f"  {s.get('at', '')}  {s.get('who', '')}")
+        print()
+    else:
+        print("SIGNOFFS: (none)")
+        print()
+
+    body = rec.get("body", "").strip()
+    if body:
+        print("SUMMARY:")
+        print(body)
+
+    return 0
+
+
+def _review_sign(ledger: ReviewLedger, args) -> int:
+    if not args.as_who:
+        _err("--as <who> is required.")
+        return 1
+
+    try:
+        at = ledger.sign(args.ref, args.as_who)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+
+    print(f"Signed {args.ref!r} as {args.as_who!r} at {at}")
+    return 0
+
+
 def cmd_edges(kb: KB, args) -> int:
     """Delegate to edges.py."""
     import subprocess
@@ -612,6 +725,35 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("edges", help="Print forward/reverse edge maps.")
     p.add_argument("--json", action="store_true")
 
+    # --- review ---
+    p_rev = sub.add_parser("review", help="Manage review summaries in the reviews/ ledger.")
+    rev_sub = p_rev.add_subparsers(dest="review_verb", metavar="verb")
+    rev_sub.required = True
+
+    # review new
+    p_rn = rev_sub.add_parser("new", help="Create a new review summary record.")
+    p_rn.add_argument("--since", default="",
+                      help="ISO 8601 UTC timestamp; scan docs/ for changes since this time.")
+    p_rn.add_argument("--touched", default="",
+                      help="Comma-separated doc ids/refs to include explicitly.")
+    p_rn.add_argument("--summary", default="",
+                      help="Summary body text, or '-' to read from stdin.")
+
+    # review list
+    p_rl = rev_sub.add_parser("list", help="List review records.")
+    p_rl.add_argument("--unsigned-by", default="", dest="unsigned_by",
+                      help="Show only records NOT signed by this name.")
+
+    # review show
+    p_rs = rev_sub.add_parser("show", help="Show a review record.")
+    p_rs.add_argument("ref", help="Review record id (or unique prefix/substring).")
+
+    # review sign
+    p_rsg = rev_sub.add_parser("sign", help="Sign a review record.")
+    p_rsg.add_argument("ref", help="Review record id (or unique prefix/substring).")
+    p_rsg.add_argument("--as", dest="as_who", required=True,
+                       help="Your name (free-text signature).")
+
     return parser
 
 
@@ -638,6 +780,7 @@ COMMANDS = {
     "validate": cmd_validate,
     "reindex": cmd_reindex,
     "edges": cmd_edges,
+    "review": cmd_review,
 }
 
 

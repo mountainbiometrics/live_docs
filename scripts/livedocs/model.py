@@ -20,6 +20,7 @@ REPO_ROOT: Path = _SCRIPTS_DIR.parent
 DOCS_DIR: Path = REPO_ROOT / "docs"
 RAW_DIR: Path = REPO_ROOT / "raw"
 TEMPLATES_DIR: Path = REPO_ROOT / "templates"
+REVIEWS_DIR: Path = REPO_ROOT / "reviews"
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,18 @@ def display_label(doc: dict) -> str:
     t = doc.get("type", "?")
     title = doc.get("title", doc.get("id", "?"))
     return f"{t.capitalize()}: {title}"
+
+
+def ref_link(doc: dict) -> str:
+    """
+    Render a doc as a typed wiki-link: '[<Type>: <Title>](<id>.md)'.
+
+    Example: '[Decision: review-is-post-hoc](20260616181719.md)'
+
+    This is the canonical ref format used in review summaries.
+    """
+    doc_id = doc.get("id", "?")
+    return f"[{display_label(doc)}]({doc_id}.md)"
 
 
 def doc_prefix(doc: dict) -> str:
