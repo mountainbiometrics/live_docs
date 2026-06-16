@@ -35,21 +35,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import (
     DOCS_DIR, load_all, dangling_edges, dangling_references, LABEL_RE, doc_prefix,
+    VALID_TYPES, VALID_STATUSES, VALID_LEVELS, VALID_STATES, VALID_REFERENCE_KINDS,
 )
 
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-VALID_TYPES = {
-    "type", "principle", "goal", "decision", "constraint",
-    "requirement", "use-case", "guide", "component", "reference", "index",
-}
-VALID_STATUSES = {"living", "historical"}
-VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
-VALID_STATES = {"actual", "target"}
-VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
 REQUIRED_BASELINE_FIELDS = {
     "id", "title", "label", "type", "status", "level", "state",

@@ -39,7 +39,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import KB, DOCS_DIR, LABEL_RE
+from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATES, VALID_STATUSES, VALID_REFERENCE_KINDS
 
 
 # ---------------------------------------------------------------------------
@@ -474,14 +474,11 @@ def cmd_edges(kb: KB, args) -> int:
 # Argument parser
 # ---------------------------------------------------------------------------
 
-VALID_TYPES = [
-    "type", "principle", "goal", "decision", "constraint",
-    "requirement", "use-case", "guide", "component", "reference", "index",
-]
-VALID_LEVELS = ["incidental", "trial", "preference", "requirement"]
-VALID_STATES = ["actual", "target"]
-VALID_STATUSES = ["living", "historical"]
-REFERENCE_KIND_CHOICES = ["brainstorm", "plan", "clipping", "external"]
+VALID_TYPES = sorted(VALID_TYPES)
+VALID_LEVELS = sorted(VALID_LEVELS)
+VALID_STATES = sorted(VALID_STATES)
+VALID_STATUSES = sorted(VALID_STATUSES)
+REFERENCE_KIND_CHOICES = sorted(VALID_REFERENCE_KINDS) + [""]
 
 
 def build_parser() -> argparse.ArgumentParser:
