@@ -25,7 +25,9 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import DOCS_DIR, load_all, forward_edges, reverse_edges, referenced_by
+from livedocs import (
+    DOCS_DIR, load_all, forward_edges, reverse_edges, referenced_by, doc_prefix,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -98,14 +100,15 @@ def write_hierarchy_md(docs: dict, fwd: dict, index_dir: Path) -> None:
         children.sort(key=lambda d: d["id"])
 
         if children:
-            lines.append("| id | title | type | status |")
-            lines.append("|----|-------|------|--------|")
+            lines.append("| id | label | title | type | status |")
+            lines.append("|----|-------|-------|------|--------|")
             for child in children:
                 c_id = child["id"]
+                c_label = child.get("label", "")
                 c_title = child.get("title", c_id)
                 c_type = child.get("type", "")
                 c_status = child.get("status", "")
-                lines.append(f"| {c_id} | {c_title} | {c_type} | {c_status} |")
+                lines.append(f"| {c_id} | {c_label} | {c_title} | {c_type} | {c_status} |")
         else:
             lines.append("_(no children)_")
 
@@ -126,7 +129,7 @@ def write_orphans_txt(docs: dict, fwd: dict, rev: dict, index_dir: Path) -> None
     """Write disconnected doc ids to orphans.txt."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    orphan_ids = []
+    orphans = []
     for doc in docs.values():
         doc_id = doc["id"]
         doc_type = doc.get("type", "")
@@ -135,18 +138,22 @@ def write_orphans_txt(docs: dict, fwd: dict, rev: dict, index_dir: Path) -> None
         has_outbound = bool(fwd.get(doc_id))
         has_inbound = bool(rev.get(doc_id))
         if not has_outbound and not has_inbound:
-            orphan_ids.append(doc_id)
+            orphans.append(doc)
+
+    orphans.sort(key=lambda d: d["id"])
 
     lines = [
         "# orphans — docs with no graph edges",
         f"# Generated: {now}",
         "# These docs are disconnected from the dependency graph.",
         "# Consider: add depends_on edges, or retire to status: historical.",
+        "# Format: <id> [<label>] \"<Type>: <Title>\"",
         "#",
-        f"# Count: {len(orphan_ids)}",
+        f"# Count: {len(orphans)}",
         "",
     ]
-    lines.extend(sorted(orphan_ids))
+    for doc in orphans:
+        lines.append(doc_prefix(doc))
 
     out_path = index_dir / "orphans.txt"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -22,7 +22,7 @@ The type taxonomy (what each document type means, its required fields, and its c
 ## How to create a document
 
 ```bash
-python scripts/new_doc.py --type <type> --title "<title>" [options]
+python scripts/ld.py new --type <type> --title "<title>" [options]
 ```
 
 Common options:
@@ -40,7 +40,7 @@ Common options:
 | `--kind` | `clipping` | reference subtype: brainstorm \| plan \| clipping \| external |
 | `--source` | | for reference docs: where it came from |
 
-The script prints the new doc's `id` and `path`. All other flags are described in `python scripts/new_doc.py --help`.
+The command prints the new doc's `id` and `path`. All other flags are described in `python scripts/ld.py new --help`.
 
 ## Directory layout
 
@@ -49,7 +49,8 @@ docs/              # flat store — every doc is docs/<id>.md
   .index/          # generated artifacts (do not hand-edit)
 templates/         # one markdown template per type
 scripts/
-  new_doc.py       # doc creation script (stdlib only)
+  ld.py            # unified porcelain CLI — create/query/mutate docs (stdlib only)
+  livedocs.py      # shared KB layer (all logic lives here)
 .claude/skills/    # Claude Code skills for cascade-check, validate, reindex, ingest-reference, garden
 ```
 

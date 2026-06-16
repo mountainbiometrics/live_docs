@@ -34,7 +34,7 @@ TEMPLATES_DIR: Path = REPO_ROOT / "templates"
 
 # Canonical order for ALL doc types (baseline)
 CANONICAL_FIELD_ORDER = [
-    "id", "title", "slug", "type", "status", "level", "state",
+    "id", "title", "label", "type", "status", "level", "state",
     "depends_on", "references", "tags", "created", "history",
 ]
 
@@ -51,12 +51,13 @@ VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
 VALID_STATES = {"actual", "target"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
-# Slug validation pattern
-SLUG_RE = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
+# Label validation pattern: letters/digits, with single spaces or hyphens
+# between tokens (whitespace IS allowed; kebab-case remains valid).
+LABEL_RE = re.compile(r'^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$')
 
 
 # ---------------------------------------------------------------------------
-# Collision-safe ID generation (shared by new_doc.py and ingest_raw.py)
+# Collision-safe ID generation (shared by ld new and ingest_raw.py)
 # ---------------------------------------------------------------------------
 
 def generate_id(target_dir: Path) -> str:
@@ -228,7 +229,7 @@ def _parse_frontmatter_text(fm_text: str) -> dict:
 def parse_doc(path: Path) -> dict:
     """
     Parse a live_docs markdown file and return a dict with:
-      id, title, slug, type, status, level, state
+      id, title, label, type, status, level, state
       depends_on  — list of id strings (may be empty)
       references  — list of id strings (may be empty)
       tags        — dict with keys 'domain' and 'scope' (each a list)
@@ -493,7 +494,7 @@ def dump_doc(frontmatter: dict, body: str) -> str:
     """
     Serialize a doc back to its on-disk format.
 
-    Emits frontmatter fields in canonical order (id, title, slug, type, status,
+    Emits frontmatter fields in canonical order (id, title, label, type, status,
     level, state, depends_on, references, tags, created, history), then appends
     reference-type extras (kind, source, imported) if present.
 
@@ -540,42 +541,72 @@ def dump_doc(frontmatter: dict, body: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Slug generation utilities
+# Label generation utilities
 # ---------------------------------------------------------------------------
 
-def title_to_slug(title: str) -> str:
+def title_to_label(title: str) -> str:
     """
-    Convert a title to a kebab-case slug.
+    Derive a label from a title by taking whole words up to ~24 chars.
 
     Rules:
-    - Lowercase everything
-    - Replace non-alphanumeric runs with a single hyphen
-    - Strip leading/trailing hyphens
-    - Truncate to 60 chars at a word boundary
+    - Break on word boundaries — never truncate mid-word.
+    - Accumulate whole words while the running length stays within ~24 chars.
+      Always keep at least the first word, even if it alone exceeds the budget.
+    - Lowercase the result and strip trailing punctuation.
+    - Does NOT kebab-case: whitespace between words is preserved.
     """
-    s = title.lower()
-    # Remove common leading patterns like "Type: " or "Reference: "
-    s = re.sub(r'^type:\s*', 'type-', s)
-    s = re.sub(r'^reference:\s*', '', s)
-    # Replace non-alphanumeric with hyphens
-    s = re.sub(r'[^a-z0-9]+', '-', s)
-    # Strip leading/trailing hyphens
-    s = s.strip('-')
-    # Truncate at ~60 chars at a word boundary (hyphen)
-    if len(s) > 60:
-        s = s[:61].rsplit('-', 1)[0]
-    s = s.strip('-')
-    return s
+    MAX_LEN = 24
+    words = title.split()
+    if not words:
+        return ""
+
+    chosen: list[str] = [words[0]]
+    length = len(words[0])
+    for w in words[1:]:
+        # +1 accounts for the joining space
+        if length + 1 + len(w) > MAX_LEN:
+            break
+        chosen.append(w)
+        length += 1 + len(w)
+
+    label = " ".join(chosen).lower()
+    # Strip trailing punctuation (anything that's not a letter/digit) per word end
+    label = re.sub(r'[^A-Za-z0-9]+$', '', label)
+    return label
 
 
-def unique_slug(base: str, existing_slugs: set[str]) -> str:
-    """Return base slug, appending -2, -3, etc. until unique."""
-    slug = base
+def unique_label(base: str, existing_labels) -> str:
+    """
+    Return base label, appending ' 2', ' 3', etc. until unique.
+
+    `existing_labels` is any iterable of labels; uniqueness is case-insensitive.
+    """
+    existing_lower = {e.lower() for e in existing_labels}
+    label = base
     n = 2
-    while slug in existing_slugs:
-        slug = f"{base}-{n}"
+    while label.lower() in existing_lower:
+        label = f"{base} {n}"
         n += 1
-    return slug
+    return label
+
+
+# ---------------------------------------------------------------------------
+# Human-readable rendering — single source of truth for the dict-based tools.
+# Human output must always carry the label so a line is never a bare id.
+# ---------------------------------------------------------------------------
+
+def display_label(doc: dict) -> str:
+    """Return the '<Type>: <Title>' display string for a doc dict."""
+    t = doc.get("type", "?")
+    title = doc.get("title", doc.get("id", "?"))
+    return f"{t.capitalize()}: {title}"
+
+
+def doc_prefix(doc: dict) -> str:
+    """Return the '<id> [<label>] "<Type>: <Title>"' human prefix for a doc dict."""
+    doc_id = doc.get("id", "<unknown>")
+    label = doc.get("label", "") or "(no label)"
+    return f'{doc_id} [{label}] "{display_label(doc)}"'
 
 
 # ---------------------------------------------------------------------------
@@ -586,8 +617,9 @@ class KB:
     """
     Unified query/mutation layer over the live_docs store.
 
-    All ref arguments accept: doc id, slug, exact title, or unique case-insensitive
-    title substring. Resolution order: id → slug → exact title → unique substring.
+    All ref arguments accept: doc id, label, exact title, or unique case-insensitive
+    substring of title or label. Resolution order: id → exact label (case-insensitive)
+    → exact title → unique case-insensitive substring of title or label.
 
     Mutators are DUMB: they write what you tell them; no cascade judgment here.
     Skills handle cascade decisions.
@@ -607,13 +639,16 @@ class KB:
 
     def resolve(self, ref: str) -> str:
         """
-        Resolve a ref (id, slug, exact title, or unique title substring) to an id.
+        Resolve a ref to an id.
+
+        A ref may be: an id, a label, an exact title, or a unique
+        case-insensitive substring of a title or label.
 
         Resolution order:
           1. Exact id match
-          2. Exact slug match
+          2. Exact label match (case-insensitive)
           3. Exact title match (case-insensitive)
-          4. Unique case-insensitive title substring
+          4. Unique case-insensitive substring of title OR label
 
         Raises ValueError if ambiguous or not found.
         """
@@ -624,10 +659,19 @@ class KB:
         if ref in docs:
             return ref
 
-        # 2. Exact slug
-        for doc_id, doc in docs.items():
-            if doc.get("slug", "") == ref:
-                return doc_id
+        # 2. Exact label (case-insensitive)
+        label_matches = [
+            doc_id for doc_id, doc in docs.items()
+            if doc.get("label", "").lower() == ref_lower
+        ]
+        if len(label_matches) == 1:
+            return label_matches[0]
+        if len(label_matches) > 1:
+            candidates = [f"{d} ({docs[d].get('title','')})" for d in label_matches]
+            raise ValueError(
+                f"Ambiguous ref {ref!r} — multiple exact label matches:\n" +
+                "\n".join(f"  {c}" for c in candidates)
+            )
 
         # 3. Exact title (case-insensitive)
         exact = [
@@ -643,38 +687,41 @@ class KB:
                 "\n".join(f"  {c}" for c in candidates)
             )
 
-        # 4. Unique case-insensitive substring
+        # 4. Unique case-insensitive substring of title OR label
         partial = [
             doc_id for doc_id, doc in docs.items()
             if ref_lower in doc.get("title", "").lower()
+            or ref_lower in doc.get("label", "").lower()
         ]
         if len(partial) == 1:
             return partial[0]
         if len(partial) > 1:
             candidates = [f"{d} ({docs[d].get('title','')})" for d in partial]
             raise ValueError(
-                f"Ambiguous ref {ref!r} — multiple title substring matches:\n" +
+                f"Ambiguous ref {ref!r} — multiple title/label substring matches:\n" +
                 "\n".join(f"  {c}" for c in candidates)
             )
 
         raise ValueError(f"No doc found for ref: {ref!r}")
 
-    def label(self, doc_id: str) -> str:
-        """Return '<Type>: <Title>' label for a doc id."""
-        doc = self._docs.get(doc_id, {})
-        t = doc.get("type", "?")
-        title = doc.get("title", doc_id)
-        return f"{t.capitalize()}: {title}"
+    def display_label(self, doc_id: str) -> str:
+        """Return '<Type>: <Title>' display string for a doc id."""
+        return display_label(self._docs.get(doc_id, {"id": doc_id}))
 
     def _edge_list(self, ids: list[str]) -> list[dict]:
-        """Convert a list of ids to [{id, slug, label}] dicts."""
+        """
+        Convert a list of ids to [{id, label, display}] dicts.
+
+        `label` is the doc's frontmatter label; `display` is the
+        '<Type>: <Title>' string used for human-readable rendering.
+        """
         result = []
         for eid in ids:
             doc = self._docs.get(eid, {})
             result.append({
                 "id": eid,
-                "slug": doc.get("slug", ""),
-                "label": self.label(eid) if eid in self._docs else f"(missing) {eid}",
+                "label": doc.get("label", ""),
+                "display": self.display_label(eid) if eid in self._docs else f"(missing) {eid}",
             })
         return result
 
@@ -684,15 +731,15 @@ class KB:
 
     def get(self, ref: str) -> dict:
         """
-        Return {id, label, slug, frontmatter, body} for the resolved doc.
+        Return {id, label, display, frontmatter, body} for the resolved doc.
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
         fm = {k: v for k, v in doc.items() if k != "body"}
         return {
             "id": doc_id,
-            "label": self.label(doc_id),
-            "slug": doc.get("slug", ""),
+            "label": doc.get("label", ""),
+            "display": self.display_label(doc_id),
             "frontmatter": fm,
             "body": doc.get("body", ""),
         }
@@ -707,7 +754,7 @@ class KB:
         Return full doc info including resolved edges.
 
         depends_on, references, dependents, referenced_by each rendered as
-        [{id, slug, label}] rather than bare id lists.
+        [{id, label, display}] rather than bare id lists.
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
@@ -719,8 +766,8 @@ class KB:
 
         return {
             "id": doc_id,
-            "label": self.label(doc_id),
-            "slug": doc.get("slug", ""),
+            "label": doc.get("label", ""),
+            "display": self.display_label(doc_id),
             "frontmatter": fm,
             "body": doc.get("body", ""),
             "depends_on": self._edge_list(doc.get("depends_on", [])),
@@ -740,9 +787,9 @@ class KB:
         domain: str = None,
     ) -> list[dict]:
         """
-        Search docs with optional filters. Returns [{id, slug, label, snippet}].
+        Search docs with optional filters. Returns [{id, label, display, snippet}].
 
-        query matches title + slug + body (case-insensitive).
+        query matches title + label + body (case-insensitive).
         All other args filter by frontmatter field values.
         """
         results = []
@@ -771,9 +818,9 @@ class KB:
             snippet = ""
             if q:
                 title = doc.get("title", "").lower()
-                slug = doc.get("slug", "").lower()
+                label = doc.get("label", "").lower()
                 body = doc.get("body", "").lower()
-                if q in title or q in slug or q in body:
+                if q in title or q in label or q in body:
                     # Build snippet from first matching body line
                     for line in doc.get("body", "").splitlines():
                         if q in line.lower():
@@ -786,23 +833,23 @@ class KB:
 
             results.append({
                 "id": doc_id,
-                "slug": doc.get("slug", ""),
-                "label": self.label(doc_id),
+                "label": doc.get("label", ""),
+                "display": self.display_label(doc_id),
                 "snippet": snippet,
             })
 
         return results
 
     def ls(self, type: str = None) -> list[dict]:
-        """List all docs. Returns [{id, slug, label}]."""
+        """List all docs. Returns [{id, label, display}]."""
         results = []
         for doc_id, doc in sorted(self._docs.items()):
             if type and doc.get("type") != type:
                 continue
             results.append({
                 "id": doc_id,
-                "slug": doc.get("slug", ""),
-                "label": self.label(doc_id),
+                "label": doc.get("label", ""),
+                "display": self.display_label(doc_id),
             })
         return results
 
@@ -815,7 +862,7 @@ class KB:
         Return neighbor edge lists for ref.
 
         kind: 'depends_on' | 'references' | 'dependents' | 'referenced_by' | 'all'
-        Returns dict with requested edge lists as [{id, slug, label}].
+        Returns dict with requested edge lists as [{id, label, display}].
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
@@ -840,7 +887,7 @@ class KB:
         BFS traversal over depends_on edges only (references are NOT graph edges).
 
         direction: 'up' (follow depends_on), 'down' (follow dependents), 'both'
-        Returns {nodes: [{id, slug, label, depth}], edges: [[from_id, to_id], ...]}
+        Returns {nodes: [{id, label, display, depth}], edges: [[from_id, to_id], ...]}
         """
         root_id = self.resolve(ref)
         fwd = forward_edges(self._docs)
@@ -874,8 +921,8 @@ class KB:
         nodes = [
             {
                 "id": nid,
-                "slug": self._docs.get(nid, {}).get("slug", ""),
-                "label": self.label(nid) if nid in self._docs else f"(missing) {nid}",
+                "label": self._docs.get(nid, {}).get("label", ""),
+                "display": self.display_label(nid) if nid in self._docs else f"(missing) {nid}",
                 "depth": d,
             }
             for nid, d in sorted(visited.items(), key=lambda x: (x[1], x[0]))
@@ -904,7 +951,7 @@ class KB:
         self,
         type: str,
         title: str,
-        slug: str = "",
+        label: str = "",
         level: str = "incidental",
         state: str = "actual",
         status: str = "living",
@@ -920,7 +967,7 @@ class KB:
         """
         Create a new doc. Returns the new doc id.
 
-        depends_on and references accept ids, slugs, or titles — resolved via resolve().
+        depends_on and references accept ids, labels, or titles — resolved via resolve().
         """
         from datetime import datetime, timezone
 
@@ -931,15 +978,15 @@ class KB:
         dep_ids = [self.resolve(r) for r in (depends_on or [])]
         ref_ids = [self.resolve(r) for r in (references or [])]
 
-        # Generate slug if not provided
-        if not slug:
-            existing = {d.get("slug", "") for d in self._docs.values()}
-            slug = unique_slug(title_to_slug(title), existing)
+        # Generate label if not provided (word-boundary, never kebab)
+        if not label:
+            existing = (d.get("label", "") for d in self._docs.values())
+            label = unique_label(title_to_label(title), existing)
 
         fm: dict[str, Any] = {
             "id": doc_id,
             "title": title,
-            "slug": slug,
+            "label": label,
             "type": type,
             "status": status,
             "level": level,
@@ -966,11 +1013,11 @@ class KB:
 
     def set(self, ref: str, **fields) -> None:
         """
-        Update scalar frontmatter fields: title, slug, level, state, status, type.
+        Update scalar frontmatter fields: title, label, level, state, status, type.
 
         Resolves ref, loads doc, updates fields, writes back.
         """
-        allowed = {"title", "slug", "level", "state", "status", "type"}
+        allowed = {"title", "label", "level", "state", "status", "type"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -1043,7 +1090,7 @@ class KB:
         body: str = "",
         from_file: str = "",
         title: str = "",
-        slug: str = "",
+        label: str = "",
     ) -> str:
         """
         Write verbatim content into raw/ tier. Returns the raw id.

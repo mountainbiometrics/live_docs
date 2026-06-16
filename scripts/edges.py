@@ -47,30 +47,35 @@ def main() -> int:
         print(json.dumps(output, indent=2))
         return 1 if dangling else 0
 
-    # Human-readable output
+    # Human-readable output — every node carries its label (id alongside is fine).
+    labels = {doc_id: doc.get("label", "") for doc_id, doc in docs.items()}
+
+    def _node(doc_id: str) -> str:
+        lbl = labels.get(doc_id, "")
+        return f"{doc_id} [{lbl}]" if lbl else doc_id
+
+    def _node_list(ids) -> str:
+        return ", ".join(_node(i) for i in ids) if ids else "(none)"
+
     print(f"edges — {DOCS_DIR}")
     print(f"Docs: {len(docs)}")
     print()
 
-    print("FORWARD EDGES (id → depends_on)")
+    print("FORWARD EDGES (doc → depends_on)")
     for doc_id in sorted(fwd):
-        deps = fwd[doc_id]
-        dep_str = ", ".join(deps) if deps else "(none)"
-        print(f"  {doc_id}  →  {dep_str}")
+        print(f"  {_node(doc_id)}  →  {_node_list(fwd[doc_id])}")
     print()
 
-    print("REVERSE EDGES (id → dependents)")
+    print("REVERSE EDGES (doc → dependents)")
     for doc_id in sorted(rev):
-        dependents = rev[doc_id]
-        dep_str = ", ".join(sorted(dependents)) if dependents else "(none)"
-        print(f"  {doc_id}  ←  {dep_str}")
+        print(f"  {_node(doc_id)}  ←  {_node_list(sorted(rev[doc_id]))}")
     print()
 
     if dangling:
         print("DANGLING EDGES (depends_on targets that do not exist):")
         for from_id, missing_id in sorted(dangling):
             from_title = titles.get(from_id, from_id)
-            print(f"  [DANGLING] {from_id} ({from_title!r}) → {missing_id} (missing)")
+            print(f"  [DANGLING] {_node(from_id)} ({from_title!r}) → {missing_id} (missing)")
         print()
         print(f"Summary: {len(docs)} docs, {len(dangling)} dangling edge(s)")
         return 1

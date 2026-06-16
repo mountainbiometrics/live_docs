@@ -1,5 +1,5 @@
 # orphans — docs with no graph edges
-# Generated: 2026-06-15T23:24:05Z
+# Generated: 2026-06-16T00:08:28Z
 # These docs are disconnected from the dependency graph.
 # Consider: add depends_on edges, or retire to status: historical.
 # Format: <id> [<label>] "<Type>: <Title>"

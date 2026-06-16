@@ -28,7 +28,7 @@ python3 scripts/ld.py neighbors <id> --json
 ```
 
 This returns `{depends_on, references, dependents, referenced_by}` — all
-resolved to `{id, slug, label}` entries. Use `depends_on` (upstream) and
+resolved to `{id, label, display}` entries. Use `depends_on` (upstream) and
 `dependents` (downstream) for the cascade walk.
 
 Do not read from `docs/.index/dependents.json` — always call `ld neighbors`

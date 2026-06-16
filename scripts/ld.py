@@ -5,7 +5,7 @@ ld.py — Unified porcelain CLI for the live_docs store.
 Usage:
     ld <subcommand> [args...]
 
-All ref arguments accept: id | slug | title (exact or unique substring).
+All ref arguments accept: id | label | title (exact or unique substring).
 Stdlib only. No external dependencies.
 
 Subcommands:
@@ -18,14 +18,14 @@ Subcommands:
     label <ref>
     neighbors <ref> [--kind depends_on|references|dependents|referenced_by|all] [--json]
     graph <ref> [--depth N] [--direction up|down|both] [--json]
-    new --type T --title T [--slug S] [--level L] [--state S] [--status S]
+    new --type T --title T [--label L] [--level L] [--state S] [--status S]
         [--depends-on a,b] [--references c,d] [--tags-domain d] [--tags-scope s]
         [--kind K] [--source S] [--body T|-]
-    set <ref> [--title] [--slug] [--level] [--state] [--status] [--type]
+    set <ref> [--title] [--label] [--level] [--state] [--status] [--type]
     link <ref> [--depends-on a,b] [--references c,d]
     unlink <ref> [--depends-on a,b] [--references c,d]
     history <ref> --add "summary"
-    ingest-raw (--from-file P | --body T|-) --source S [--title T] [--slug S]
+    ingest-raw (--from-file P | --body T|-) --source S [--title T] [--label L]
     validate
     reindex
     edges [--json]
@@ -39,7 +39,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import KB, DOCS_DIR, SLUG_RE
+from livedocs import KB, DOCS_DIR, LABEL_RE
 
 
 # ---------------------------------------------------------------------------
@@ -55,13 +55,13 @@ def _err(msg: str) -> None:
 
 
 def _fmt_edge_list(edges: list[dict]) -> str:
-    """Format [{id, slug, label}] for human display."""
+    """Format [{id, label, display}] for human display (always carries the label)."""
     if not edges:
         return "  (none)"
     lines = []
     for e in edges:
-        slug_part = f" [{e['slug']}]" if e.get("slug") else ""
-        lines.append(f"  {e['id']}{slug_part}  {e['label']}")
+        label_part = f" [{e['label']}]" if e.get("label") else ""
+        lines.append(f"  {e['id']}{label_part}  {e.get('display', '')}")
     return "\n".join(lines)
 
 
@@ -82,8 +82,8 @@ def cmd_get(kb: KB, args) -> int:
 
     fm = result["frontmatter"]
     print(f"id:     {result['id']}")
-    print(f"slug:   {result['slug']}")
     print(f"label:  {result['label']}")
+    print(f"title:  {result['display']}")
     print(f"type:   {fm.get('type', '')}")
     print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}  state: {fm.get('state', '')}")
     print(f"created: {fm.get('created', '')}")
@@ -117,9 +117,9 @@ def cmd_show(kb: KB, args) -> int:
 
     fm = result["frontmatter"]
     print(f"{'='*60}")
-    print(f"  {result['label']}")
+    print(f"  {result['display']}")
     print(f"  id:     {result['id']}")
-    print(f"  slug:   {result['slug']}")
+    print(f"  label:  {result['label']}")
     print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
           f"level: {fm.get('level','')}  state: {fm.get('state','')}")
     tags = fm.get("tags", {})
@@ -180,8 +180,8 @@ def cmd_find(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        slug_part = f" [{r['slug']}]" if r.get("slug") else ""
-        print(f"{r['id']}{slug_part}  {r['label']}")
+        label_part = f" [{r['label']}]" if r.get("label") else ""
+        print(f"{r['id']}{label_part}  {r.get('display', '')}")
         if r.get("snippet"):
             print(f"  {r['snippet']}")
 
@@ -200,8 +200,8 @@ def cmd_ls(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        slug_part = f" [{r['slug']}]" if r.get("slug") else ""
-        print(f"{r['id']}{slug_part}  {r['label']}")
+        label_part = f" [{r['label']}]" if r.get("label") else ""
+        print(f"{r['id']}{label_part}  {r.get('display', '')}")
 
     return 0
 
@@ -219,7 +219,7 @@ def cmd_resolve(kb: KB, args) -> int:
 def cmd_label(kb: KB, args) -> int:
     try:
         doc_id = kb.resolve(args.ref)
-        print(kb.label(doc_id))
+        print(kb.display_label(doc_id))
     except ValueError as e:
         _err(str(e))
         return 1
@@ -260,8 +260,8 @@ def cmd_graph(kb: KB, args) -> int:
     print()
     print("NODES:")
     for n in result["nodes"]:
-        slug_part = f" [{n['slug']}]" if n.get("slug") else ""
-        print(f"  depth={n['depth']}  {n['id']}{slug_part}  {n['label']}")
+        label_part = f" [{n['label']}]" if n.get("label") else ""
+        print(f"  depth={n['depth']}  {n['id']}{label_part}  {n.get('display', '')}")
     print()
     print("EDGES (from → to):")
     for edge in result["edges"]:
@@ -301,7 +301,7 @@ def cmd_new(kb: KB, args) -> int:
         doc_id = kb.new(
             type=args.type,
             title=args.title,
-            slug=args.slug or "",
+            label=args.label or "",
             level=args.level,
             state=args.state,
             status=args.status,
@@ -326,11 +326,13 @@ def cmd_set(kb: KB, args) -> int:
     fields = {}
     if args.title is not None:
         fields["title"] = args.title
-    if args.slug is not None:
-        if not SLUG_RE.match(args.slug):
-            _err(f"Invalid slug: {args.slug!r}. Must match ^[a-z0-9]+(-[a-z0-9]+)*$")
+    if args.label is not None:
+        label = args.label.strip()
+        if not LABEL_RE.match(label):
+            _err(f"Invalid label: {args.label!r}. Must match "
+                 f"^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$ (letters/digits, single spaces or hyphens).")
             return 1
-        fields["slug"] = args.slug
+        fields["label"] = label
     if args.level is not None:
         fields["level"] = args.level
     if args.state is not None:
@@ -341,7 +343,7 @@ def cmd_set(kb: KB, args) -> int:
         fields["type"] = args.type
 
     if not fields:
-        _err("No fields specified. Use --title, --slug, --level, --state, --status, --type.")
+        _err("No fields specified. Use --title, --label, --level, --state, --status, --type.")
         return 1
 
     try:
@@ -429,7 +431,7 @@ def cmd_ingest_raw(kb: KB, args) -> int:
             body=body,
             from_file=from_file,
             title=args.title or "",
-            slug=args.slug or "",
+            label=args.label or "",
         )
     except Exception as e:
         _err(str(e))
@@ -493,21 +495,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- get ---
     p = sub.add_parser("get", help="Show frontmatter summary for a doc.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--json", action="store_true")
 
     # --- body ---
     p = sub.add_parser("body", help="Print the body text of a doc.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
 
     # --- show ---
     p = sub.add_parser("show", help="Show full doc with resolved edge labels.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--json", action="store_true")
 
     # --- find ---
     p = sub.add_parser("find", help="Search/filter docs.")
-    p.add_argument("query", nargs="?", default="", help="Optional query string (searches title+slug+body).")
+    p.add_argument("query", nargs="?", default="", help="Optional query string (searches title+label+body).")
     p.add_argument("--type", default="")
     p.add_argument("--level", default="")
     p.add_argument("--state", default="")
@@ -523,22 +525,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- resolve ---
     p = sub.add_parser("resolve", help="Resolve a ref to its canonical id.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
 
     # --- label ---
     p = sub.add_parser("label", help="Print '<Type>: <Title>' label for a ref.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
 
     # --- neighbors ---
     p = sub.add_parser("neighbors", help="Show neighbors of a doc.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--kind", default="all",
                    choices=["depends_on", "references", "dependents", "referenced_by", "all"])
     p.add_argument("--json", action="store_true")
 
     # --- graph ---
     p = sub.add_parser("graph", help="BFS traversal over depends_on edges.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--depth", type=int, default=1)
     p.add_argument("--direction", default="both", choices=["up", "down", "both"])
     p.add_argument("--json", action="store_true")
@@ -547,14 +549,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("new", help="Create a new doc.")
     p.add_argument("--type", required=True, choices=VALID_TYPES)
     p.add_argument("--title", required=True)
-    p.add_argument("--slug", default="")
+    p.add_argument("--label", default="",
+                   help="Short label; auto-derived from title (word-boundary) if omitted.")
     p.add_argument("--level", default="incidental", choices=VALID_LEVELS)
     p.add_argument("--state", default="actual", choices=VALID_STATES)
     p.add_argument("--status", default="living", choices=VALID_STATUSES)
     p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/slugs/titles.")
+                   help="Comma-separated ids/labels/titles.")
     p.add_argument("--references", default="",
-                   help="Comma-separated ids/slugs/titles.")
+                   help="Comma-separated ids/labels/titles.")
     p.add_argument("--tags-domain", default="", dest="tags_domain")
     p.add_argument("--tags-scope", default="", dest="tags_scope")
     p.add_argument("--kind", default="", choices=REFERENCE_KIND_CHOICES + [""])
@@ -563,9 +566,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- set ---
     p = sub.add_parser("set", help="Update scalar frontmatter fields.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--title", default=None)
-    p.add_argument("--slug", default=None)
+    p.add_argument("--label", default=None)
     p.add_argument("--level", default=None, choices=VALID_LEVELS)
     p.add_argument("--state", default=None, choices=VALID_STATES)
     p.add_argument("--status", default=None, choices=VALID_STATUSES)
@@ -573,23 +576,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- link ---
     p = sub.add_parser("link", help="Add edge(s) to a doc.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/slugs/titles.")
+                   help="Comma-separated ids/labels/titles.")
     p.add_argument("--references", default="",
-                   help="Comma-separated ids/slugs/titles.")
+                   help="Comma-separated ids/labels/titles.")
 
     # --- unlink ---
     p = sub.add_parser("unlink", help="Remove edge(s) from a doc.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/slugs/titles.")
+                   help="Comma-separated ids/labels/titles.")
     p.add_argument("--references", default="",
-                   help="Comma-separated ids/slugs/titles.")
+                   help="Comma-separated ids/labels/titles.")
 
     # --- history ---
     p = sub.add_parser("history", help="Add a history entry to a doc.")
-    p.add_argument("ref", help="id | slug | title")
+    p.add_argument("ref", help="id | label | title")
     p.add_argument("--add", required=True, help="Summary text for the history entry.")
 
     # --- ingest-raw ---
@@ -598,7 +601,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--from-file", default="", dest="from_file")
     p.add_argument("--body", default="")
     p.add_argument("--title", default="")
-    p.add_argument("--slug", default="")
+    p.add_argument("--label", default="")
 
     # --- validate ---
     p = sub.add_parser("validate", help="Run structural integrity checks.")
