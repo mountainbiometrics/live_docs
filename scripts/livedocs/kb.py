@@ -18,7 +18,7 @@ from .model import (
     generate_id, title_to_label, unique_label, display_label,
 )
 from .serialize import parse_doc, dump_doc, _yaml_str
-from .graph import reverse_edges, referenced_by, forward_edges
+from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges
 
 
 # ---------------------------------------------------------------------------
@@ -184,8 +184,9 @@ class KB:
         """
         Return full doc info including resolved edges.
 
-        depends_on, references, dependents, referenced_by each rendered as
-        [{id, label, display}] rather than bare id lists.
+        requires, belongs_to, relates, provenance, superseded_by are rendered
+        as [{id, label, display}] lists.  Reverse cascade edges (dependents)
+        and reverse provenance (provenance_of) are also included.
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
@@ -201,10 +202,15 @@ class KB:
             "display": self.display_label(doc_id),
             "frontmatter": fm,
             "body": doc.get("body", ""),
-            "depends_on": self._edge_list(doc.get("depends_on", [])),
-            "references": self._edge_list(doc.get("references", [])),
+            # Forward edges
+            "requires": self._edge_list(doc.get("requires", [])),
+            "belongs_to": self._edge_list(doc.get("belongs_to", [])),
+            "relates": self._edge_list(doc.get("relates", [])),
+            "provenance": self._edge_list(doc.get("provenance", [])),
+            "superseded_by": self._edge_list(doc.get("superseded_by", [])),
+            # Reverse edges
             "dependents": self._edge_list(rev.get(doc_id, [])),
-            "referenced_by": self._edge_list(ref_by.get(doc_id, [])),
+            "provenance_of": self._edge_list(ref_by.get(doc_id, [])),
         }
 
     def find(
@@ -212,7 +218,6 @@ class KB:
         query: str | None = None,
         type: str | None = None,
         level: str | None = None,
-        state: str | None = None,
         status: str | None = None,
         scope: str | None = None,
         domain: str | None = None,
@@ -254,8 +259,6 @@ class KB:
             if type and doc.get("type") != type:
                 continue
             if level and doc.get("level") != level:
-                continue
-            if state and doc.get("state") != state:
                 continue
             if status and doc.get("status") != status:
                 continue
@@ -340,7 +343,8 @@ class KB:
         """
         Return neighbor edge lists for ref.
 
-        kind: 'depends_on' | 'references' | 'dependents' | 'referenced_by' | 'all'
+        kind: 'requires' | 'belongs_to' | 'relates' | 'provenance' |
+              'superseded_by' | 'dependents' | 'provenance_of' | 'all'
         Returns dict with requested edge lists as [{id, label, display}].
         """
         doc_id = self.resolve(ref)
@@ -350,22 +354,29 @@ class KB:
         ref_by = referenced_by(self._docs)
 
         result = {}
-        if kind in ("depends_on", "all"):
-            result["depends_on"] = self._edge_list(doc.get("depends_on", []))
-        if kind in ("references", "all"):
-            result["references"] = self._edge_list(doc.get("references", []))
+        if kind in ("requires", "all"):
+            result["requires"] = self._edge_list(doc.get("requires", []))
+        if kind in ("belongs_to", "all"):
+            result["belongs_to"] = self._edge_list(doc.get("belongs_to", []))
+        if kind in ("relates", "all"):
+            result["relates"] = self._edge_list(doc.get("relates", []))
+        if kind in ("provenance", "all"):
+            result["provenance"] = self._edge_list(doc.get("provenance", []))
+        if kind in ("superseded_by", "all"):
+            result["superseded_by"] = self._edge_list(doc.get("superseded_by", []))
         if kind in ("dependents", "all"):
             result["dependents"] = self._edge_list(rev.get(doc_id, []))
-        if kind in ("referenced_by", "all"):
-            result["referenced_by"] = self._edge_list(ref_by.get(doc_id, []))
+        if kind in ("provenance_of", "all"):
+            result["provenance_of"] = self._edge_list(ref_by.get(doc_id, []))
 
         return result
 
     def graph(self, ref: str, depth: int = 1, direction: str = "both") -> dict:
         """
-        BFS traversal over depends_on edges only (references are NOT graph edges).
+        BFS traversal over cascade-hard edges only (requires + belongs_to).
+        Navigation-only edges (relates, provenance, superseded_by) are NOT walked.
 
-        direction: 'up' (follow depends_on), 'down' (follow dependents), 'both'
+        direction: 'up' (follow requires/belongs_to), 'down' (follow dependents), 'both'
         Returns {nodes: [{id, label, display, depth}], edges: [[from_id, to_id], ...]}
         """
         root_id = self.resolve(ref)
@@ -432,10 +443,12 @@ class KB:
         title: str,
         label: str = "",
         level: str = "incidental",
-        state: str = "actual",
         status: str = "living",
-        depends_on: list[str] = None,
-        references: list[str] = None,
+        requires: list[str] = None,
+        belongs_to: list[str] = None,
+        relates: list[str] = None,
+        provenance: list[str] = None,
+        superseded_by: list[str] = None,
         tags_domain: list[str] = None,
         tags_scope: list[str] = None,
         body: str = "",
@@ -446,14 +459,23 @@ class KB:
         """
         Create a new doc. Returns the new doc id.
 
-        depends_on and references accept ids, labels, or titles — resolved via resolve().
+        All edge arguments (requires, belongs_to, relates, provenance,
+        superseded_by) accept ids, labels, or titles — resolved via resolve().
         """
         doc_id = generate_id(self.docs_dir)
         created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Resolve edge refs to ids
-        dep_ids = [self.resolve(r) for r in (depends_on or [])]
-        ref_ids = [self.resolve(r) for r in (references or [])]
+        edge_ids = {
+            field: [self.resolve(r) for r in (refs or [])]
+            for field, refs in [
+                ("requires", requires),
+                ("belongs_to", belongs_to),
+                ("relates", relates),
+                ("provenance", provenance),
+                ("superseded_by", superseded_by),
+            ]
+        }
 
         # Generate label if not provided (word-boundary, never kebab)
         if not label:
@@ -467,16 +489,17 @@ class KB:
             "type": type,
             "status": status,
             "level": level,
-            "state": state,
-            "depends_on": dep_ids,
-            "references": ref_ids,
             "tags": {
                 "domain": list(tags_domain or []),
                 "scope": list(tags_scope or []),
             },
             "created": created,
-            "history": [],
         }
+
+        # Only include edge fields when non-empty (omit empty lists per spec)
+        for field, ids in edge_ids.items():
+            if ids:
+                fm[field] = ids
 
         if type == "reference":
             fm["kind"] = kind or "clipping"
@@ -490,11 +513,11 @@ class KB:
 
     def set(self, ref: str, **fields) -> None:
         """
-        Update scalar frontmatter fields: title, label, level, state, status, type.
+        Update scalar frontmatter fields: title, label, level, status, type.
 
         Resolves ref, loads doc, updates fields, writes back.
         """
-        allowed = {"title", "label", "level", "state", "status", "type"}
+        allowed = {"title", "label", "level", "status", "type"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -505,7 +528,15 @@ class KB:
             fm[k] = v
         self._write_doc(doc_id, fm, body)
 
-    def link(self, ref: str, depends_on: list[str] = None, references: list[str] = None) -> None:
+    def link(
+        self,
+        ref: str,
+        requires: list[str] = None,
+        belongs_to: list[str] = None,
+        relates: list[str] = None,
+        provenance: list[str] = None,
+        superseded_by: list[str] = None,
+    ) -> None:
         """
         Add edges. Deduplicates; does NOT remove existing edges.
 
@@ -514,21 +545,30 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
 
-        if depends_on:
-            existing = set(fm.get("depends_on", []))
-            for r in depends_on:
-                existing.add(self.resolve(r))
-            fm["depends_on"] = sorted(existing)
-
-        if references:
-            existing = set(fm.get("references", []))
-            for r in references:
-                existing.add(self.resolve(r))
-            fm["references"] = sorted(existing)
+        for field, new_refs in [
+            ("requires", requires),
+            ("belongs_to", belongs_to),
+            ("relates", relates),
+            ("provenance", provenance),
+            ("superseded_by", superseded_by),
+        ]:
+            if new_refs:
+                existing = set(fm.get(field, []))
+                for r in new_refs:
+                    existing.add(self.resolve(r))
+                fm[field] = sorted(existing)
 
         self._write_doc(doc_id, fm, body)
 
-    def unlink(self, ref: str, depends_on: list[str] = None, references: list[str] = None) -> None:
+    def unlink(
+        self,
+        ref: str,
+        requires: list[str] = None,
+        belongs_to: list[str] = None,
+        relates: list[str] = None,
+        provenance: list[str] = None,
+        superseded_by: list[str] = None,
+    ) -> None:
         """
         Remove edges.
 
@@ -537,13 +577,20 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
 
-        if depends_on:
-            remove = {self.resolve(r) for r in depends_on}
-            fm["depends_on"] = [i for i in fm.get("depends_on", []) if i not in remove]
-
-        if references:
-            remove = {self.resolve(r) for r in references}
-            fm["references"] = [i for i in fm.get("references", []) if i not in remove]
+        for field, remove_refs in [
+            ("requires", requires),
+            ("belongs_to", belongs_to),
+            ("relates", relates),
+            ("provenance", provenance),
+            ("superseded_by", superseded_by),
+        ]:
+            if remove_refs:
+                remove = {self.resolve(r) for r in remove_refs}
+                remaining = [i for i in fm.get(field, []) if i not in remove]
+                if remaining:
+                    fm[field] = remaining
+                else:
+                    fm.pop(field, None)  # omit empty edge fields
 
         self._write_doc(doc_id, fm, body)
 
@@ -592,7 +639,7 @@ class KB:
         lines += [
             "type: reference",
             "kind: clipping",
-            "status: historical",
+            "status: reference",
             f"original_source: {_yaml_str(source)}",
             f"imported: {_yaml_str(imported)}",
             "---",
@@ -678,17 +725,21 @@ class KB:
           total              — total doc count
           by_type            — {type: count}
           by_level           — {level: count}
-          by_state           — {state: count}
           by_status          — {status: count}
-          edge_count         — total depends_on edge count
-          reference_count    — total references edge count
+          requires_count     — total requires edge count (cascade-hard)
+          belongs_to_count   — total belongs_to edge count (cascade-hard)
+          relates_count      — total relates edge count (navigation)
+          provenance_count   — total provenance edge count (navigation)
+          superseded_by_count— total superseded_by edge count
         """
         by_type: dict[str, int] = {}
         by_level: dict[str, int] = {}
-        by_state: dict[str, int] = {}
         by_status: dict[str, int] = {}
-        edge_count = 0
-        reference_count = 0
+        requires_count = 0
+        belongs_to_count = 0
+        relates_count = 0
+        provenance_count = 0
+        superseded_by_count = 0
 
         for doc in self._docs.values():
             t = doc.get("type") or "(none)"
@@ -697,41 +748,44 @@ class KB:
             lv = doc.get("level") or "(none)"
             by_level[lv] = by_level.get(lv, 0) + 1
 
-            st = doc.get("state") or "(none)"
-            by_state[st] = by_state.get(st, 0) + 1
-
             ss = doc.get("status") or "(none)"
             by_status[ss] = by_status.get(ss, 0) + 1
 
-            edge_count += len(doc.get("depends_on", []))
-            reference_count += len(doc.get("references", []))
+            requires_count += len(doc.get("requires", []))
+            belongs_to_count += len(doc.get("belongs_to", []))
+            relates_count += len(doc.get("relates", []))
+            provenance_count += len(doc.get("provenance", []))
+            superseded_by_count += len(doc.get("superseded_by", []))
 
         return {
             "total": len(self._docs),
             "by_type": dict(sorted(by_type.items())),
             "by_level": dict(sorted(by_level.items())),
-            "by_state": dict(sorted(by_state.items())),
             "by_status": dict(sorted(by_status.items())),
-            "edge_count": edge_count,
-            "reference_count": reference_count,
+            "requires_count": requires_count,
+            "belongs_to_count": belongs_to_count,
+            "relates_count": relates_count,
+            "provenance_count": provenance_count,
+            "superseded_by_count": superseded_by_count,
         }
 
     def validate_edge_refs(
         self,
-        depends_on: list[str],
-        references: list[str],
+        requires: list[str] = None,
+        belongs_to: list[str] = None,
+        relates: list[str] = None,
+        provenance: list[str] = None,
+        superseded_by: list[str] = None,
     ) -> list[str]:
         """
         Validate that all edge refs resolve. Returns a list of unresolved ref strings.
         Does NOT raise — callers check the returned list.
         """
         unresolved = []
-        for r in depends_on:
-            try:
-                self.resolve(r)
-            except ValueError:
-                unresolved.append(r)
-        for r in references:
+        all_refs = list(requires or []) + list(belongs_to or []) + \
+                   list(relates or []) + list(provenance or []) + \
+                   list(superseded_by or [])
+        for r in all_refs:
             try:
                 self.resolve(r)
             except ValueError:

@@ -32,11 +32,10 @@ def _yaml_wikilink_list(items: list) -> str:
     """Render a list of ids as quoted wikilinks for Obsidian compatibility.
 
     Example: ["[[20260616181728]]", "[[20260616181820]]"]
-    Empty list stays [].  Quoting is required — unquoted [[…]] inside an
-    inline YAML list is ambiguous/invalid YAML.
+    Callers must guard against empty lists before calling (empty lists are
+    omitted entirely on disk, not written as []).  Quoting is required —
+    unquoted [[…]] inside an inline YAML list is ambiguous/invalid YAML.
     """
-    if not items:
-        return "[]"
     inner = ", ".join(f'"[[{i}]]"' for i in items)
     return f"[{inner}]"
 
@@ -46,10 +45,17 @@ def _yaml_wikilink_list(items: list) -> str:
 # ---------------------------------------------------------------------------
 
 # Canonical order for ALL doc types (baseline)
+# Spec: id, title, label, type, status, level, belongs_to, requires, relates,
+#       provenance, superseded_by, tags, created, history
 CANONICAL_FIELD_ORDER = [
-    "id", "title", "label", "type", "status", "level", "state",
-    "depends_on", "references", "tags", "created", "history",
+    "id", "title", "label", "type", "status", "level",
+    "belongs_to", "requires", "relates", "provenance", "superseded_by",
+    "tags", "created", "history",
 ]
+
+# Edge fields that use wikilink-wrapped lists on disk.
+# These are omitted entirely when empty (not written as []).
+EDGE_FIELDS = {"belongs_to", "requires", "relates", "provenance", "superseded_by"}
 
 # Extra fields appended for reference docs (after canonical baseline)
 REFERENCE_EXTRA_FIELDS = ["kind", "source", "imported"]
@@ -205,20 +211,44 @@ def _parse_frontmatter_text(fm_text: str) -> dict:
 # Public: parse a single doc
 # ---------------------------------------------------------------------------
 
+def _normalize_edge_field(fm: dict, key: str) -> None:
+    """
+    Normalize a wikilink-list edge field in-place.
+
+    On-disk values may be wrapped as "[[<id>]]" (wikilink form for Obsidian);
+    _unwrap_wikilink strips that wrapper so the in-memory model uses plain ids.
+    Absent field stays absent (no empty list injected) — absence == [] downstream.
+    """
+    val = fm.get(key)
+    if val is None:
+        # Field absent — leave absent; callers use .get(key, [])
+        return
+    if isinstance(val, str):
+        fm[key] = [_unwrap_wikilink(val)] if val else []
+    else:
+        fm[key] = [_unwrap_wikilink(v) for v in val]
+
+
 def parse_doc(path: Path) -> dict:
     """
     Parse a live_docs markdown file and return a dict with:
-      id, title, label, type, status, level, state
-      depends_on  — list of id strings (may be empty)
-      references  — list of id strings (may be empty)
-      tags        — dict with keys 'domain' and 'scope' (each a list)
-      created     — ISO 8601 string
-      history     — list of {at, summary} dicts (may be empty)
-      body        — the text after the closing '---'
+      id, title, label, type, status, level
+      belongs_to    — list of id strings (absent if empty; use .get(k, []))
+      requires      — list of id strings (absent if empty)
+      relates       — list of id strings (absent if empty)
+      provenance    — list of id strings (absent if empty)
+      superseded_by — list of id strings (absent if empty)
+      tags          — dict with keys 'domain' and 'scope' (each a list)
+      created       — ISO 8601 string
+      history       — list of {at, summary} dicts (may be empty list or absent)
+      body          — the text after the closing '---'
+
+    Old field names (depends_on, references, state) are tolerated on read and
+    normalised transparently: depends_on → requires, references → provenance,
+    state is kept as-is (validate will warn; doc migration removes it).
 
     Fields not present in the file are absent from the dict (no defaults injected).
-    The 'id' key is always set from the filename (authoritative); the frontmatter
-    id is also parsed as 'id' and should match.
+    The 'id' key is always set from the filename (authoritative).
     """
     text = path.read_text(encoding="utf-8")
     parts = text.split("---", 2)
@@ -232,32 +262,28 @@ def parse_doc(path: Path) -> dict:
 
     fm = _parse_frontmatter_text(fm_raw)
 
-    # Normalize depends_on to always be a list of bare ids.
-    # On-disk values may be wrapped as "[[<id>]]" (wikilink form for Obsidian);
-    # _unwrap_wikilink strips that wrapper so the in-memory model stays as plain ids.
-    dep = fm.get("depends_on")
-    if dep is None:
-        fm["depends_on"] = []
-    elif isinstance(dep, str):
-        # Scalar — shouldn't happen but handle gracefully
-        fm["depends_on"] = [_unwrap_wikilink(dep)] if dep else []
-    else:
-        fm["depends_on"] = [_unwrap_wikilink(d) for d in dep]
+    # --- Transparent backward-compat aliases (old field names) ---
+    # depends_on → requires (if requires not already present)
+    if "depends_on" in fm and "requires" not in fm:
+        fm["requires"] = fm.pop("depends_on")
+    elif "depends_on" in fm:
+        fm.pop("depends_on")  # discard old name if new one already present
 
-    # Normalize references to always be a list of bare ids (absent field → []).
-    # Same wikilink unwrap as depends_on.
-    ref = fm.get("references")
-    if ref is None:
-        fm["references"] = []
-    elif isinstance(ref, str):
-        fm["references"] = [_unwrap_wikilink(ref)] if ref else []
-    else:
-        fm["references"] = [_unwrap_wikilink(r) for r in ref]
+    # references → provenance (if provenance not already present)
+    if "references" in fm and "provenance" not in fm:
+        fm["provenance"] = fm.pop("references")
+    elif "references" in fm:
+        fm.pop("references")
 
-    # Normalize history to always be a list
+    # Normalize all edge fields (wikilink unwrap; absent stays absent)
+    for edge_key in ("belongs_to", "requires", "relates", "provenance", "superseded_by"):
+        _normalize_edge_field(fm, edge_key)
+
+    # Normalize history to always be a list (absent → leave absent OR normalize to [])
     hist = fm.get("history")
     if hist is None:
-        fm["history"] = []
+        # absent — leave absent; callers do fm.get("history", [])
+        pass
     elif not isinstance(hist, list):
         fm["history"] = []
 
@@ -301,23 +327,31 @@ def _emit_field(key: str, value: Any) -> list[str]:
 
     Handles: str scalars, list (inline or block sequence for history),
     dict (nested mapping for tags), None → omitted.
+
+    Empty-list omission rules:
+    - Edge fields (belongs_to, requires, relates, provenance, superseded_by):
+      omitted entirely when empty.
+    - history: omitted entirely when empty.
+    - tags: omitted when both domain and scope are empty.
     """
     if value is None:
         return []
 
-    # Tags: nested mapping
+    # Tags: nested mapping — omit entirely when both domain and scope are empty
     if key == "tags" and isinstance(value, dict):
-        lines = ["tags:"]
         domain = value.get("domain", [])
         scope = value.get("scope", [])
+        if not domain and not scope:
+            return []
+        lines = ["tags:"]
         lines.append(f"  domain: {_yaml_list(domain)}")
         lines.append(f"  scope: {_yaml_list(scope)}")
         return lines
 
-    # History: block sequence of mappings
+    # History: block sequence of mappings — omit entirely when empty
     if key == "history" and isinstance(value, list):
         if not value:
-            return ["history: []"]
+            return []
         lines = ["history:"]
         for entry in value:
             at = entry.get("at", "")
@@ -326,9 +360,12 @@ def _emit_field(key: str, value: Any) -> list[str]:
             lines.append(f"    summary: {_yaml_str(summary)}")
         return lines
 
-    # depends_on / references: inline list of quoted wikilinks for Obsidian graph.
-    # Stored as ["[[id1]]", "[[id2]]"] on disk; parsed back to bare ids by parse_doc.
-    if key in ("depends_on", "references") and isinstance(value, list):
+    # Edge fields: wikilink-wrapped inline list for Obsidian graph.
+    # Omitted entirely when empty — callers should not pass empty lists here,
+    # but guard defensively.
+    if key in EDGE_FIELDS and isinstance(value, list):
+        if not value:
+            return []
         return [f"{key}: {_yaml_wikilink_list(value)}"]
 
     # Other lists: inline
@@ -338,9 +375,8 @@ def _emit_field(key: str, value: Any) -> list[str]:
     # Scalar — use quoted string for everything except simple unquoted values
     # (We quote all scalar values for consistency and safety.)
     if isinstance(value, str):
-        # Unquoted for type/status/level/state/kind values (simple identifiers)
-        # to match existing style
-        if key in ("type", "status", "level", "state", "kind") and value and \
+        # Unquoted for type/status/level/kind values (simple identifiers)
+        if key in ("type", "status", "level", "kind") and value and \
                 re.match(r'^[a-z][a-z0-9_-]*$', value):
             return [f"{key}: {value}"]
         return [f"{key}: {_yaml_str(value)}"]
@@ -352,9 +388,15 @@ def dump_doc(frontmatter: dict, body: str) -> str:
     """
     Serialize a doc back to its on-disk format.
 
-    Emits frontmatter fields in canonical order (id, title, label, type, status,
-    level, state, depends_on, references, tags, created, history), then appends
-    reference-type extras (kind, source, imported) if present.
+    Emits frontmatter fields in canonical order:
+      id, title, label, type, status, level,
+      belongs_to, requires, relates, provenance, superseded_by,
+      tags, created, history
+    Then appends reference-type extras (kind, source, imported) if present.
+
+    Empty-list edge fields (belongs_to, requires, relates, provenance,
+    superseded_by) and empty history are omitted entirely.
+    Tags are omitted when both domain and scope are empty.
 
     Body is preserved byte-for-byte; only the frontmatter block is reconstructed.
     Returns the full file text ready to write.

@@ -54,39 +54,52 @@ independent; run them in any order.
      sub-sections of one concern).
    - The `history` list has many entries with varied summaries (hot-file signal:
      many parties update this doc for different reasons).
-   - The `depends_on` list is very long (pulling in many unrelated inputs).
+   - The `requires` list is very long (pulling in many unrelated inputs).
    - The doc's title uses "and" or contains a list ("X and Y", "A, B, C").
    - You would naturally say "this doc owns X, but it also owns Y."
 3. For each split candidate, PROPOSE (do not auto-apply without confirmation):
    - **New doc A**: what it owns, suggested title and type.
    - **New doc B**: what it owns, suggested title and type.
-   - How `depends_on` edges would be rewired (which existing docs would now point
-     to A or B instead of the original; the original may become an index or be
-     retired to `status: historical`).
-   - The `depends_on` of A and B (provenance: they likely both depend on whatever
-     the original depended on, unless that too should be split).
+   - How `requires` (or `belongs_to`) edges would be rewired (which existing docs
+     would now point to A or B instead of the original; the original may become an
+     index or be retired to `status: deprecated`).
+   - The `requires` of A and B (they likely both depend on whatever the original
+     depended on, unless that too should be split).
 4. Present the full proposal to the user. On confirmation:
    - Create each new doc:
      ```bash
      python3 scripts/ldoc.py new --type <type> --title "<title>" \
-       --level <level> --state <state> --depends-on <dep-ids>
+       --level <level> --status <status> --requires <dep-ids>
      ```
-   - Retire the original doc:
+   - Retire the original doc with a full deprecation (NOT a bare status flip):
      ```bash
-     python3 scripts/ldoc.py set <original-id> --status historical
+     python3 scripts/ldoc.py set <original-id> --status deprecated \
+       --superseded-by <A-id> <B-id>
      python3 scripts/ldoc.py history <original-id> --add "split into <A-id> and <B-id>"
      ```
+     Also add a `## Correction` section to the original doc body explaining why
+     it was split and which docs replace it.
    - Update any docs that pointed to the original and now should point to A or B:
      ```bash
-     python3 scripts/ldoc.py unlink <pointing-doc> --depends-on <original-id>
-     python3 scripts/ldoc.py link   <pointing-doc> --depends-on <A-id>
-     python3 scripts/ldoc.py history <pointing-doc> --add "rewired depends_on from <original-id> to <A-id> after split"
+     python3 scripts/ldoc.py unlink <pointing-doc> --requires <original-id>
+     python3 scripts/ldoc.py link   <pointing-doc> --requires <A-id>
+     python3 scripts/ldoc.py history <pointing-doc> --add "rewired requires from <original-id> to <A-id> after split"
      ```
 5. After splits, run `cascade-check` on each new doc to confirm consistency.
 
 **Hot-file heuristic**: sort docs by history length descending — `ldoc get <id>
---json` includes the `history` array; count entries. Docs in the top 10% with
-> 3 history entries AND mixed-topic summaries are prime candidates.
+--json` includes the `history` array (list of `{at, summary}` entries); count
+entries. Docs in the top 10% with > 3 history entries AND mixed-topic summaries
+are prime candidates.
+
+**Edge-reclassification note**: after any split or edge rewire, opportunistically
+review the `requires` edges on the new docs and reclassify where appropriate:
+- Move to `belongs_to` if the edge expresses structural parent/child membership
+  (index → child, part-of, "this doc lives under that one").
+- Move to `relates` if it is symmetric kinship / see-also rather than an
+  existential dependency.
+- Keep as `requires` only for genuine existential dependency (the doc is
+  meaningless or wrong without the target).
 
 ---
 
@@ -99,9 +112,10 @@ itself — potential stale dependents.
    ```bash
    python3 scripts/ldoc.py get <id> --json   # includes history array
    ```
-2. For each id in D's `depends_on` (from `ldoc neighbors <id> --kind depends_on
-   --json`), load the dependency's history and note its most recent `at`
-   timestamp.
+2. For each id in D's `requires` and `belongs_to` hard edges (from
+   `ldoc neighbors <id> --kind requires --json` and
+   `ldoc neighbors <id> --kind belongs_to --json`), load the dependency's
+   history and note its most recent `at` timestamp.
 3. If any dependency was updated AFTER D's last update, D is a **staleness flag**.
 4. Emit a report:
    ```
@@ -123,18 +137,21 @@ Start with an automated scan:
 ```bash
 python3 scripts/ldoc.py validate
 ```
-This surfaces broken `depends_on` references and missing/invalid fields.
+This surfaces broken hard-edge references and missing/invalid fields.
 Then complement with graph-level checks:
 
-1. **Broken depends_on references**: flagged by `ldoc validate`. For each broken
-   ref, propose removing or correcting via `ldoc unlink <id> --depends-on <bad-id>`.
+1. **Broken hard-edge references**: flagged by `ldoc validate`. For each broken
+   `requires` or `belongs_to` ref, propose removing or correcting via
+   `ldoc unlink <id> --requires <bad-id>` (or `--belongs-to` as appropriate).
 2. **Orphans**: docs with no outbound AND no inbound edges. Find them:
    ```bash
    python3 scripts/ldoc.py edges --json   # inspect docs with empty forward+reverse
    ```
    Or read `docs/.index/orphans.txt` (from the last reindex). Exempt `type: index`
    and `type: type` docs. For genuine orphans, propose: add edges via `ldoc link`
-   or retire with `ldoc set <id> --status historical`.
+   or retire with `ldoc set <id> --status deprecated` (plus a `## Correction`
+   section and `--superseded-by` if the doc is being superseded, or a plain
+   deprecation note if it is simply being removed).
 3. **Missing required fields**: surfaced by `ldoc validate`. Propose the missing
    field's value; apply with `ldoc set <id> --<field> <value>`.
 4. **id != filename**: surfaced by `ldoc validate`. Propose correcting the
@@ -159,15 +176,20 @@ Default alias map (extend as the schema evolves):
 ```json
 {
   "field_aliases": {
-    "depends": "depends_on",
-    "depend_on": "depends_on",
+    "depends": "requires",
+    "depend_on": "requires",
+    "depends_on": "requires",
+    "references": "provenance",
     "tag": "tags",
     "created_at": "created"
   },
   "value_aliases": {
-    "status": { "archived": "historical", "active": "living" },
-    "level": { "none": "incidental", "required": "requirement" },
-    "state": { "current": "actual", "desired": "target" }
+    "status": {
+      "archived": "deprecated",
+      "active": "living",
+      "historical": "deprecated"
+    },
+    "level": { "none": "incidental", "required": "requirement" }
   }
 }
 ```
@@ -177,17 +199,22 @@ Procedure:
    --json` and scan for keys matching a `field_aliases` entry or values matching
    `value_aliases`. Rename/replace as needed via direct frontmatter edit (no `ldoc`
    verb exists for arbitrary key rename).
-2. For canonical-field enum corrections (e.g. `status`, `level`, `state`), use:
+2. **State-field migration** (in addition to the alias map): if a doc still has a
+   `state:` field, fold it into `status` then delete the `state` key:
+   - `state: target`  → set `status: target` (regardless of current status value).
+   - `state: actual`  → leave `status` as-is (or set `status: living` if absent).
+   - Drop the `state:` line in both cases.
+3. For canonical-field enum corrections (e.g. `status`, `level`), use:
    ```bash
    python3 scripts/ldoc.py set <id> --status living   # example
    ```
-3. Changes are applied **non-destructively**: record a history entry noting the
+4. Changes are applied **non-destructively**: record a history entry noting the
    normalization:
    ```bash
    python3 scripts/ldoc.py history <id> --add "field-aliases normalization: renamed <old> → <new>"
    ```
    Do not change any semantic content.
-4. Report how many docs were normalized and which fields were affected.
+5. Report how many docs were normalized and which fields were affected.
 
 ---
 

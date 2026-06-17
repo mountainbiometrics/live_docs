@@ -18,7 +18,6 @@ from .model import (
     VALID_TYPES,
     VALID_STATUSES,
     VALID_LEVELS,
-    VALID_STATES,
     VALID_REFERENCE_KINDS,
     LABEL_RE,
     generate_id,
@@ -34,6 +33,7 @@ from .model import (
 from .serialize import (
     CANONICAL_FIELD_ORDER,
     REFERENCE_EXTRA_FIELDS,
+    EDGE_FIELDS,
     parse_doc,
     dump_doc,
 )
@@ -45,6 +45,8 @@ from .graph import (
     reference_edges,
     referenced_by,
     dangling_references,
+    relates_edges,
+    superseded_by_edges,
     id_title_map,
 )
 
@@ -70,7 +72,6 @@ __all__ = [
     "VALID_TYPES",
     "VALID_STATUSES",
     "VALID_LEVELS",
-    "VALID_STATES",
     "VALID_REFERENCE_KINDS",
     "LABEL_RE",
     "generate_id",
@@ -84,6 +85,7 @@ __all__ = [
     # serialize
     "CANONICAL_FIELD_ORDER",
     "REFERENCE_EXTRA_FIELDS",
+    "EDGE_FIELDS",
     "parse_doc",
     "dump_doc",
     # graph
@@ -93,6 +95,8 @@ __all__ = [
     "reference_edges",
     "referenced_by",
     "dangling_references",
+    "relates_edges",
+    "superseded_by_edges",
     "id_title_map",
     # kb
     "KB",

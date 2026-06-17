@@ -62,9 +62,16 @@ For each changed doc id, retrieve its full neighbor set using:
 python3 scripts/ldoc.py neighbors <id> --json
 ```
 
-This returns `{depends_on, references, dependents, referenced_by}` — all
-resolved to `{id, label, display}` entries. Use `depends_on` (upstream) and
-`dependents` (downstream) for the cascade walk.
+This returns `{requires, belongs_to, provenance, relates, dependents, referenced_by}` — all
+resolved to `{id, label, display}` entries. Use `requires` and `belongs_to`
+(upstream) and their `dependents` (downstream) for the cascade walk. `relates`
+and `provenance` edges are navigation-only and do NOT cascade.
+
+**Which edges cascade:** only `requires` and `belongs_to` are hard edges that
+cascade in both directions. `relates` and `provenance` are soft navigation edges
+— never walked for cascade. When a doc becomes `deprecated`, its reverse
+`requires`/`belongs_to` dependents must still be cascade-checked (they now
+depend on something that no longer holds).
 
 Do not read from `docs/.index/dependents.json` — always call `ldoc neighbors`
 for fresh data. At this scale a full scan takes milliseconds and avoids
@@ -106,8 +113,9 @@ For each id popped from queue:
 
 1. If already in `session["visited"]`, skip (loop guard).
 2. Add to `session["visited"]`.
-3. Collect neighbors via `ldoc neighbors <id> --json`; use `depends_on` entries
-   (upstream) and `dependents` entries (downstream).
+3. Collect neighbors via `ldoc neighbors <id> --json`; use `requires` and
+   `belongs_to` entries (upstream) and their corresponding `dependents`
+   (downstream). Skip `relates` and `provenance` entries entirely.
 4. For each neighbor `n`:
    - If `n` is already in `session["visited"]`, check the verdict: if it would be
      `cascade`, that is a **loop** — emit `incompatible` and HALT that branch.
@@ -124,28 +132,41 @@ For each id popped from queue:
 
 ## Step 4 — Verdict rubric
 
+**is_living check first.** Before issuing any verdict, check the neighbor's
+`status`:
+- `status: living` or `status: target` — the doc is *living* and may be
+  rewritten to track new reality. Apply verdicts normally.
+- `status: deprecated` or `status: reference` — the doc is *frozen*. Cascade-
+  check may still flag it as `incompatible` (to surface the conflict to the
+  user), but it is **never rewritten** to track current state. The only allowed
+  edit to a deprecated doc is refining its `## Correction` section or adding a
+  `superseded_by` edge. Skip `cascade` verdicts for frozen docs; emit
+  `incompatible` instead and surface to user.
+
 Emit exactly one verdict per neighbor edge:
 
 | Verdict | When | Action |
 |---------|------|--------|
 | `inconsequential` | The change in the source doc does not affect the meaning, correctness, or completeness of the neighbor. **This is the norm.** | Stop propagation. |
-| `cascade` | The neighbor references or relies on something that changed, and its content is now incorrect, stale, or misleading without an update. | Update neighbor (Step 5), enqueue it. |
-| `incompatible` | The change conflicts with something in the neighbor in a way that cannot be resolved without human judgment — e.g., contradictory constraints, or this would be the second update to a doc already updated in this session. | HALT that branch, surface to user with specifics. |
+| `cascade` | The neighbor is *living* (`status: living` or `target`), relies on something that changed, and its content is now incorrect, stale, or misleading without an update. | Update neighbor (Step 5), enqueue it. |
+| `incompatible` | The change conflicts with something in the neighbor in a way that cannot be resolved without human judgment — e.g., contradictory constraints, a second update to a doc already updated in this session, or a *frozen* doc whose claim is now contradicted. | HALT that branch, surface to user with specifics. |
 | `context-request` | You cannot determine the impact with confidence from the text alone. | Ask the user one targeted question rather than defaulting silently to `inconsequential`. |
 
 **Bias rule**: Prefer `inconsequential` when the relationship is weak or
 tangential. Prefer `context-request` over a low-confidence `inconsequential`
 — silent drift is worse than a question. Prefer `incompatible` over a guess.
 
-**Direction note**: Both upstream (things this doc depends on) and downstream
-(things that depend on this doc) neighbors must be evaluated. Upstream neighbors
-need checking because the changed doc may now violate or contradict something it
-was supposed to conform to. Downstream neighbors need checking because they cited
-this doc for something that has now changed.
+**Direction note**: Both upstream (things this doc requires or belongs_to) and
+downstream (things that require or belong_to this doc) neighbors must be
+evaluated. Upstream neighbors need checking because the changed doc may now
+violate or contradict something it was supposed to conform to. Downstream
+neighbors need checking because they cited this doc for something that has now
+changed.
 
 ## Step 5 — Apply a cascade update
 
-When the verdict is `cascade`:
+When the verdict is `cascade` (only valid for *living* docs — `status: living`
+or `status: target`):
 
 1. Load the doc to understand its current content:
    ```bash
@@ -155,11 +176,18 @@ When the verdict is `cascade`:
    scalar frontmatter fields, `ldoc link`/`ldoc unlink` for edge changes, and
    direct file editing only for body-text changes that have no `ldoc` verb:
    ```bash
-   # scalar field update
-   python3 scripts/ldoc.py set <n> --status historical
-   # edge update
-   python3 scripts/ldoc.py link <n> --depends-on <new-dep-id>
+   # scalar field update (use new status values: living, target, deprecated, reference)
+   python3 scripts/ldoc.py set <n> --status deprecated
+   # edge updates
+   python3 scripts/ldoc.py link <n> --requires <new-dep-id>
+   python3 scripts/ldoc.py link <n> --belongs-to <parent-id>
+   python3 scripts/ldoc.py link <n> --superseded-by <replacement-id>
    ```
+   **Deprecation rule**: if restoring consistency means deprecating the doc,
+   a bare `--status deprecated` is insufficient. You MUST also add a
+   `## Correction` section to the body explaining why the doc is now wrong and
+   which doc supersedes it, then add the `--superseded-by` edge. Only after
+   both are in place is the deprecation complete.
    Do not refactor or rewrite beyond what the cascade requires.
 3. Record the cascade history entry:
    ```bash
@@ -225,19 +253,21 @@ Review is post-hoc and non-gating: this never blocks the cascade result.
 
 ## Worked example
 
-**Scenario**: `20260615090003.md` (Type: decision) is edited — its "Cascade
-Behavior" section is updated to say cascade should also examine `goal` docs.
+**Scenario**: `20260615090003.md` (Type: decision, status: living) is edited —
+its "Cascade Behavior" section is updated to say cascade should also examine
+`goal` docs.
 
 **Neighbors of 20260615090003** (from `ldoc neighbors 20260615090003 --json`):
-`depends_on: []` (none upstream), `dependents: [{id: "20260615100010", ...}]`
-(one downstream — a decision doc that lists 20260615090003 in its `depends_on`).
+`requires: []` (none upstream), `dependents: [{id: "20260615100010", ...}]`
+(one downstream — a decision doc that lists 20260615090003 in its `requires`).
 
 **Walk**:
 
 1. Start: queue = [20260615090003]
 2. Pop 20260615090003, mark visited. Call `ldoc neighbors 20260615090003 --json`.
-   Upstream empty, one downstream: 20260615100010.
-3. Evaluate 20260615100010 (downstream). Load it with `ldoc show 20260615100010`:
+   Upstream empty, one downstream via `requires`: 20260615100010.
+3. Check is_living for 20260615100010: `status: living` → eligible for cascade.
+   Evaluate 20260615100010 (downstream). Load it with `ldoc show 20260615100010`:
    - Read it. Its content references the decision type's cascade rules.
    - The change adds `goal` to the cascade list. Does 20260615100010 enumerate
      cascade targets? If yes — the list is now stale → **cascade**.
@@ -246,5 +276,10 @@ Behavior" section is updated to say cascade should also examine `goal` docs.
 5. Walk complete. Record history: `ldoc history 20260615090003 --add "cascade-check ran: 1 neighbor evaluated — 20260615100010: inconsequential"`. Surface table.
 6. Total cascaded: 0 → no wide-cascade warning.
 
-**Same scenario but 5 dependents all reference the cascade list**: cascade fires
-on all 5, triggering the wide-cascade smell warning suggesting a `garden` run.
+**Same scenario but 20260615100010 has `status: deprecated`**: is_living check
+fails → verdict is `incompatible` (not `cascade`). Surface to user: "downstream
+doc 20260615100010 is deprecated but conflicts with the updated claim — check its
+Correction section." Do not rewrite the deprecated doc.
+
+**Same scenario but 5 living dependents all reference the cascade list**: cascade
+fires on all 5, triggering the wide-cascade smell warning suggesting a `garden` run.

@@ -8,8 +8,10 @@ Usage:
 docs_dir defaults to DOCS_DIR from livedocs (repo root / docs).
 
 Generates:
-    docs/.index/dependents.json    — reverse-dependency map (depends_on only; CASCADE INPUT)
-    docs/.index/referenced_by.json — reverse-references map (references only; NAVIGATION ONLY, NOT cascade)
+    docs/.index/dependents.json    — reverse-dependency map (requires + belongs_to;
+                                     CASCADE INPUT)
+    docs/.index/referenced_by.json — reverse-provenance map (provenance field only;
+                                     NAVIGATION ONLY, NOT cascade)
     docs/.index/hierarchy.md       — index doc children rollup
     docs/.index/orphans.txt        — disconnected docs
 
@@ -38,15 +40,15 @@ ORPHAN_EXEMPT_TYPES = {"index", "type"}
 
 
 # ---------------------------------------------------------------------------
-# Generate dependents.json (CASCADE INPUT — depends_on edges only)
+# Generate dependents.json (CASCADE INPUT — requires + belongs_to edges)
 # ---------------------------------------------------------------------------
 
 def write_dependents_json(rev: dict, index_dir: Path) -> None:
     """
     Write reverse-dependency map to dependents.json.
 
-    This is the CASCADE INPUT — derived from depends_on edges only.
-    Never includes references edges.
+    This is the CASCADE INPUT — derived from requires + belongs_to edges (both
+    are cascade-hard).  Never includes provenance, relates, or superseded_by.
     """
     output = {k: sorted(v) for k, v in sorted(rev.items())}
     out_path = index_dir / "dependents.json"
@@ -55,15 +57,15 @@ def write_dependents_json(rev: dict, index_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Generate referenced_by.json (NAVIGATION ONLY — references edges, NOT cascade)
+# Generate referenced_by.json (NAVIGATION ONLY — provenance edges, NOT cascade)
 # ---------------------------------------------------------------------------
 
 def write_referenced_by_json(ref_by: dict, index_dir: Path) -> None:
     """
-    Write reverse-references map to referenced_by.json.
+    Write reverse-provenance map to referenced_by.json.
 
-    NAVIGATION ARTIFACT ONLY — derived from the `references` frontmatter field.
-    This is provenance / "informed by" data.
+    NAVIGATION ARTIFACT ONLY — derived from the `provenance` frontmatter field.
+    This is immutable derivation lineage ("was derived from" / "informed by").
     MUST NOT be used as cascade input. Use dependents.json for cascade.
     """
     output = {k: sorted(v) for k, v in sorted(ref_by.items())}
@@ -77,7 +79,11 @@ def write_referenced_by_json(ref_by: dict, index_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def write_hierarchy_md(docs: dict, fwd: dict, index_dir: Path) -> None:
-    """Write index-doc hierarchy rollup to hierarchy.md."""
+    """Write index-doc hierarchy rollup to hierarchy.md.
+
+    Children are docs that have a hard edge (requires or belongs_to) pointing
+    at an index doc.
+    """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     index_docs = [d for d in docs.values() if d.get("type") == "index"]
@@ -95,7 +101,7 @@ def write_hierarchy_md(docs: dict, fwd: dict, index_dir: Path) -> None:
         lines.append(f"## {idx_title} (`{idx_id}`)")
         lines.append("")
 
-        # Children = docs whose depends_on includes this index doc's id
+        # Children = docs that have a hard edge pointing at this index doc
         children = [d for d in docs.values() if idx_id in fwd.get(d["id"], [])]
         children.sort(key=lambda d: d["id"])
 
@@ -126,7 +132,12 @@ def write_hierarchy_md(docs: dict, fwd: dict, index_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def write_orphans_txt(docs: dict, fwd: dict, rev: dict, index_dir: Path) -> None:
-    """Write disconnected doc ids to orphans.txt."""
+    """Write disconnected doc ids to orphans.txt.
+
+    A doc is an orphan if it has no outbound hard edges (requires/belongs_to)
+    and no inbound hard edges (dependents).  Navigation-only edges (relates,
+    provenance, superseded_by) do NOT count for orphan purposes.
+    """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     orphans = []
@@ -143,10 +154,10 @@ def write_orphans_txt(docs: dict, fwd: dict, rev: dict, index_dir: Path) -> None
     orphans.sort(key=lambda d: d["id"])
 
     lines = [
-        "# orphans — docs with no graph edges",
+        "# orphans — docs with no hard graph edges",
         f"# Generated: {now}",
-        "# These docs are disconnected from the dependency graph.",
-        "# Consider: add depends_on edges, or retire to status: historical.",
+        "# These docs have no requires, belongs_to edges (outbound or inbound).",
+        "# Consider: add requires/belongs_to edges, or retire to status: deprecated.",
         "# Format: <id> [<label>] \"<Type>: <Title>\"",
         "#",
         f"# Count: {len(orphans)}",
@@ -182,9 +193,10 @@ def main() -> int:
     docs = load_all(docs_dir)
     print(f"Loaded: {len(docs)} docs")
 
+    # forward_edges and reverse_edges now cover requires + belongs_to (both cascade-hard)
     fwd = forward_edges(docs)
     rev = reverse_edges(docs)
-    ref_by = referenced_by(docs)
+    ref_by = referenced_by(docs)  # provenance reverse map (navigation only)
 
     write_dependents_json(rev, index_dir)
     write_referenced_by_json(ref_by, index_dir)

@@ -33,9 +33,8 @@ VALID_TYPES = {
     "type", "principle", "goal", "decision", "constraint",
     "requirement", "use-case", "guide", "component", "reference", "index",
 }
-VALID_STATUSES = {"living", "historical"}
+VALID_STATUSES = {"living", "target", "deprecated", "reference"}
 VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
-VALID_STATES = {"actual", "target"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
 # Label validation pattern: letters/digits, with single spaces or hyphens

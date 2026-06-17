@@ -17,11 +17,13 @@ Subcommands (grouped):
     show <ref> [<ref2> ...]  [--json] [--plain]
     resolve <ref> [<ref2> ...]
     label <ref> [<ref2> ...]
-    neighbors <ref> [<ref2> ...]  [--kind depends_on|references|dependents|referenced_by|all] [--json]
+    neighbors <ref> [<ref2> ...]
+        [--kind requires|belongs_to|relates|provenance|superseded_by|dependents|provenance_of|all]
+        [--json]
 
   ── Search / list ──
     find [term ...] [--or] [--regex PAT]
-         [--type] [--level] [--state] [--status] [--scope] [--domain] [--json] [--plain]
+         [--type] [--level] [--status] [--scope] [--domain] [--json] [--plain]
     ls [--type] [--json] [--plain]
     log [--since <ISO>] [--limit N] [--json]
     count [--json]
@@ -31,14 +33,18 @@ Subcommands (grouped):
     edges [--json]
 
   ── Mutations ──
-    new --type T --title T [--label L] [--level L] [--state S] [--status S]
-        [--depends-on a,b] [--references c,d] [--tags-domain d] [--tags-scope s]
+    new --type T --title T [--label L] [--level L] [--status S]
+        [--requires a,b] [--belongs-to a,b] [--relates a,b]
+        [--provenance a,b] [--superseded-by a,b]
+        [--tags-domain d] [--tags-scope s]
         [--kind K] [--source S] [--body T|-] [--dry-run]
-    set <ref> [--title] [--label] [--level] [--state] [--status] [--type]
+    set <ref> [--title] [--label] [--level] [--status] [--type]
               [--body -|TEXT] [--dry-run]
     edit <ref>   (alias: set <ref> --body -)
-    link <ref> [--depends-on a,b] [--references c,d] [--dry-run]
-    unlink <ref> [--depends-on a,b] [--references c,d]
+    link <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
+               [--provenance a,b] [--superseded-by a,b] [--dry-run]
+    unlink <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
+                 [--provenance a,b] [--superseded-by a,b]
     history <ref> --add "summary"
     ingest-raw (--from-file P | --body T|-) --source S [--title T] [--label L]
 
@@ -61,7 +67,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATES, VALID_STATUSES, VALID_REFERENCE_KINDS
+from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, REVIEWS_DIR
 
 
@@ -155,7 +161,7 @@ def cmd_get(kb: KB, args) -> int:
         print(f"label:  {result['label']}")
         print(f"title:  {result['display']}")
         print(f"type:   {fm.get('type', '')}")
-        print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}  state: {fm.get('state', '')}")
+        print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}")
         print(f"created: {fm.get('created', '')}")
         tags = fm.get("tags", {})
         print(f"tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
@@ -229,24 +235,33 @@ def cmd_show(kb: KB, args) -> int:
         print(f"  id:     {result['id']}")
         print(f"  label:  {result['label']}")
         print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
-              f"level: {fm.get('level','')}  state: {fm.get('state','')}")
+              f"level: {fm.get('level','')}")
         tags = fm.get("tags", {})
         print(f"  tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
         print(f"  created: {fm.get('created','')}")
         print(f"{'='*60}")
         print()
 
-        print("DEPENDS ON:")
-        print(_fmt_edge_list(result["depends_on"], plain=plain))
+        print("REQUIRES:")
+        print(_fmt_edge_list(result["requires"], plain=plain))
         print()
-        print("REFERENCES:")
-        print(_fmt_edge_list(result["references"], plain=plain))
+        print("BELONGS TO:")
+        print(_fmt_edge_list(result["belongs_to"], plain=plain))
+        print()
+        print("RELATES:")
+        print(_fmt_edge_list(result["relates"], plain=plain))
+        print()
+        print("PROVENANCE:")
+        print(_fmt_edge_list(result["provenance"], plain=plain))
+        print()
+        print("SUPERSEDED BY:")
+        print(_fmt_edge_list(result["superseded_by"], plain=plain))
         print()
         print("DEPENDENTS:")
         print(_fmt_edge_list(result["dependents"], plain=plain))
         print()
-        print("REFERENCED BY:")
-        print(_fmt_edge_list(result["referenced_by"], plain=plain))
+        print("PROVENANCE OF:")
+        print(_fmt_edge_list(result["provenance_of"], plain=plain))
         print()
 
         hist = fm.get("history", [])
@@ -276,7 +291,6 @@ def cmd_find(kb: KB, args) -> int:
             regex=getattr(args, "regex", None) or None,
             type=args.type or None,
             level=args.level or None,
-            state=args.state or None,
             status=args.status or None,
             scope=args.scope or None,
             domain=args.domain or None,
@@ -484,48 +498,35 @@ def cmd_count(kb: KB, args) -> int:
     for k, v in stats["by_level"].items():
         print(f"  {k:20s}  {v}")
     print()
-    print("By state:")
-    for k, v in stats["by_state"].items():
-        print(f"  {k:20s}  {v}")
-    print()
     print("By status:")
     for k, v in stats["by_status"].items():
         print(f"  {k:20s}  {v}")
     print()
-    print(f"depends_on edges: {stats['edge_count']}")
-    print(f"references edges: {stats['reference_count']}")
+    print(f"requires edges:      {stats['requires_count']}")
+    print(f"belongs_to edges:    {stats['belongs_to_count']}")
+    print(f"relates edges:       {stats['relates_count']}")
+    print(f"provenance edges:    {stats['provenance_count']}")
+    print(f"superseded_by edges: {stats['superseded_by_count']}")
 
     return 0
 
 
 def cmd_new(kb: KB, args) -> int:
-    # Parse edge refs
-    depends_on_refs = [s.strip() for s in args.depends_on.split(",") if s.strip()] \
-        if args.depends_on else []
-    references_refs = [s.strip() for s in args.references.split(",") if s.strip()] \
-        if args.references else []
+    edges = _parse_edge_args(args)
     domain_tags = [s.strip() for s in args.tags_domain.split(",") if s.strip()] \
         if args.tags_domain else []
     scope_tags = [s.strip() for s in args.tags_scope.split(",") if s.strip()] \
         if args.tags_scope else []
 
-    # Edge-ref validation (capability 6): validate before writing
-    if depends_on_refs or references_refs:
-        unresolved = kb.validate_edge_refs(depends_on_refs, references_refs)
+    # Edge-ref validation: validate before writing
+    if any(edges.values()):
+        unresolved = kb.validate_edge_refs(**edges)
         if unresolved:
             _err(
                 f"Unresolved edge ref(s): {', '.join(repr(r) for r in unresolved)}. "
                 f"Check with: ldoc resolve <ref>"
             )
             return 1
-
-    # Resolve edge refs to ids
-    try:
-        dep_ids = [kb.resolve(r) for r in depends_on_refs] if depends_on_refs else []
-        ref_ids = [kb.resolve(r) for r in references_refs] if references_refs else []
-    except ValueError as e:
-        _err(str(e))
-        return 1
 
     # Body
     if args.body == "-":
@@ -535,7 +536,7 @@ def cmd_new(kb: KB, args) -> int:
     else:
         body = ""
 
-    # --dry-run preview (capability 11)
+    # --dry-run preview
     if getattr(args, "dry_run", False):
         from livedocs.model import title_to_label, unique_label
         label = args.label or ""
@@ -547,12 +548,10 @@ def cmd_new(kb: KB, args) -> int:
         print(f"  title:   {args.title}")
         print(f"  label:   {label}")
         print(f"  level:   {args.level}")
-        print(f"  state:   {args.state}")
         print(f"  status:  {args.status}")
-        if dep_ids:
-            print(f"  depends_on: {dep_ids}")
-        if ref_ids:
-            print(f"  references: {ref_ids}")
+        for field, refs in edges.items():
+            if refs:
+                print(f"  {field}: {refs}")
         if body.strip():
             print(f"\n  body preview:\n    {body.strip()[:200]}")
         print("\n(No doc written.)")
@@ -564,10 +563,8 @@ def cmd_new(kb: KB, args) -> int:
             title=args.title,
             label=args.label or "",
             level=args.level,
-            state=args.state,
             status=args.status,
-            depends_on=dep_ids,
-            references=ref_ids,
+            **edges,
             tags_domain=domain_tags,
             tags_scope=scope_tags,
             body=body,
@@ -596,8 +593,6 @@ def cmd_set(kb: KB, args) -> int:
         fields["label"] = label
     if args.level is not None:
         fields["level"] = args.level
-    if args.state is not None:
-        fields["state"] = args.state
     if args.status is not None:
         fields["status"] = args.status
     if args.type is not None:
@@ -612,7 +607,7 @@ def cmd_set(kb: KB, args) -> int:
         new_body = body_arg
 
     if not fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --level, --state, --status, --type, or --body.")
+        _err("No fields specified. Use --title, --label, --level, --status, --type, or --body.")
         return 1
 
     # --dry-run preview
@@ -661,18 +656,29 @@ def cmd_edit(kb: KB, args) -> int:
     return 0
 
 
-def cmd_link(kb: KB, args) -> int:
-    depends_on_refs = [s.strip() for s in args.depends_on.split(",") if s.strip()] \
-        if args.depends_on else []
-    references_refs = [s.strip() for s in args.references.split(",") if s.strip()] \
-        if args.references else []
+def _parse_edge_args(args) -> dict:
+    """Parse all edge CLI args into lists of ref strings."""
+    def _split(val: str) -> list:
+        return [s.strip() for s in val.split(",") if s.strip()] if val else []
+    return {
+        "requires": _split(getattr(args, "requires", "") or ""),
+        "belongs_to": _split(getattr(args, "belongs_to", "") or ""),
+        "relates": _split(getattr(args, "relates", "") or ""),
+        "provenance": _split(getattr(args, "provenance", "") or ""),
+        "superseded_by": _split(getattr(args, "superseded_by", "") or ""),
+    }
 
-    if not depends_on_refs and not references_refs:
-        _err("Specify --depends-on or --references (or both).")
+
+def cmd_link(kb: KB, args) -> int:
+    edges = _parse_edge_args(args)
+
+    if not any(edges.values()):
+        _err("Specify at least one of: --requires, --belongs-to, --relates, "
+             "--provenance, --superseded-by.")
         return 1
 
-    # Edge-ref validation (capability 6)
-    unresolved = kb.validate_edge_refs(depends_on_refs, references_refs)
+    # Edge-ref validation
+    unresolved = kb.validate_edge_refs(**edges)
     if unresolved:
         _err(
             f"Unresolved edge ref(s): {', '.join(repr(r) for r in unresolved)}. "
@@ -683,15 +689,14 @@ def cmd_link(kb: KB, args) -> int:
     # --dry-run preview
     if getattr(args, "dry_run", False):
         print("## DRY RUN — would link:\n")
-        if depends_on_refs:
-            print(f"  --depends-on: {depends_on_refs}")
-        if references_refs:
-            print(f"  --references: {references_refs}")
+        for field, refs in edges.items():
+            if refs:
+                print(f"  --{field.replace('_', '-')}: {refs}")
         print("\n(No doc written.)")
         return 0
 
     try:
-        kb.link(args.ref, depends_on=depends_on_refs or None, references=references_refs or None)
+        kb.link(args.ref, **{k: v or None for k, v in edges.items()})
     except ValueError as e:
         _err(str(e))
         return 1
@@ -701,17 +706,15 @@ def cmd_link(kb: KB, args) -> int:
 
 
 def cmd_unlink(kb: KB, args) -> int:
-    depends_on_refs = [s.strip() for s in args.depends_on.split(",") if s.strip()] \
-        if args.depends_on else []
-    references_refs = [s.strip() for s in args.references.split(",") if s.strip()] \
-        if args.references else []
+    edges = _parse_edge_args(args)
 
-    if not depends_on_refs and not references_refs:
-        _err("Specify --depends-on or --references (or both).")
+    if not any(edges.values()):
+        _err("Specify at least one of: --requires, --belongs-to, --relates, "
+             "--provenance, --superseded-by.")
         return 1
 
     try:
-        kb.unlink(args.ref, depends_on=depends_on_refs or None, references=references_refs or None)
+        kb.unlink(args.ref, **{k: v or None for k, v in edges.items()})
     except ValueError as e:
         _err(str(e))
         return 1
@@ -922,7 +925,8 @@ def cmd_help(kb: KB, args) -> int:
   ldoc show porcelain-roadmap --plain      # bare id/label format
   ldoc resolve "Batch Operations"
   ldoc label porcelain-roadmap batch-operations
-  ldoc neighbors porcelain-roadmap --kind depends_on
+  ldoc neighbors porcelain-roadmap --kind requires
+  ldoc neighbors porcelain-roadmap --kind dependents
   ldoc neighbors porcelain-roadmap batch-operations
   echo -e "porcelain-roadmap\\nbatch-operations" | ldoc show -
 
@@ -937,14 +941,14 @@ def cmd_help(kb: KB, args) -> int:
 
   # Mutations
   ldoc new --type decision --title "My Decision" --level preference \\
-       --depends-on cognitive-load
+       --requires cognitive-load
   ldoc new --type decision --title "Test" --dry-run
   ldoc set porcelain-roadmap --title "New Title"
   ldoc set porcelain-roadmap --body -         # read body from stdin
   echo "new body text" | ldoc edit porcelain-roadmap
-  ldoc link porcelain-roadmap --depends-on batch-operations
-  ldoc link porcelain-roadmap --depends-on batch-operations --dry-run
-  ldoc unlink porcelain-roadmap --depends-on batch-operations
+  ldoc link porcelain-roadmap --requires batch-operations
+  ldoc link porcelain-roadmap --relates batch-operations --dry-run
+  ldoc unlink porcelain-roadmap --requires batch-operations
   ldoc history porcelain-roadmap --add "Updated approach"
 
   # Maintenance
@@ -965,7 +969,6 @@ def cmd_help(kb: KB, args) -> int:
 
 VALID_TYPES_SORTED = sorted(VALID_TYPES)
 VALID_LEVELS_SORTED = sorted(VALID_LEVELS)
-VALID_STATES_SORTED = sorted(VALID_STATES)
 VALID_STATUSES_SORTED = sorted(VALID_STATUSES)
 REFERENCE_KIND_CHOICES = sorted(VALID_REFERENCE_KINDS) + [""]
 
@@ -1008,7 +1011,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Regex pattern applied to title + label + body (re.IGNORECASE).")
     p.add_argument("--type", default="", choices=VALID_TYPES_SORTED + [""])
     p.add_argument("--level", default="", choices=VALID_LEVELS_SORTED + [""])
-    p.add_argument("--state", default="", choices=VALID_STATES_SORTED + [""])
     p.add_argument("--status", default="", choices=VALID_STATUSES_SORTED + [""])
     p.add_argument("--scope", default="")
     p.add_argument("--domain", default="")
@@ -1038,7 +1040,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("refs", nargs="+", metavar="ref",
                    help="id | label | title; or '-' to read from stdin.")
     p.add_argument("--kind", default="all",
-                   choices=["depends_on", "references", "dependents", "referenced_by", "all"])
+                   choices=["requires", "belongs_to", "relates", "provenance",
+                            "superseded_by", "dependents", "provenance_of", "all"])
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label edge format instead of typed wiki-links.")
@@ -1069,7 +1072,6 @@ def build_parser() -> argparse.ArgumentParser:
                        description=(
                            "Type-aware defaults:\n"
                            "  --level:  incidental (override with --level)\n"
-                           "  --state:  actual     (override with --state)\n"
                            "  --status: living     (override with --status)\n"
                            "  --label:  auto-derived as Title-Case from title words\n"
                            "            (up to ~24 chars, word boundaries only)\n"
@@ -1081,12 +1083,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--label", default="",
                    help="Short Title-Case label; auto-derived from title if omitted.")
     p.add_argument("--level", default="incidental", choices=VALID_LEVELS_SORTED)
-    p.add_argument("--state", default="actual", choices=VALID_STATES_SORTED)
     p.add_argument("--status", default="living", choices=VALID_STATUSES_SORTED)
-    p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/labels/titles. Validated before write.")
-    p.add_argument("--references", default="",
-                   help="Comma-separated ids/labels/titles. Validated before write.")
+    p.add_argument("--requires", default="",
+                   help="Comma-separated ids/labels/titles. Cascade-hard. Validated before write.")
+    p.add_argument("--belongs-to", default="", dest="belongs_to",
+                   help="Comma-separated ids/labels/titles. Cascade-hard (structural parent). "
+                        "Validated before write.")
+    p.add_argument("--relates", default="",
+                   help="Comma-separated ids/labels/titles. Navigation/clustering. Validated before write.")
+    p.add_argument("--provenance", default="",
+                   help="Comma-separated ids/labels/titles. Immutable derivation lineage. Validated before write.")
+    p.add_argument("--superseded-by", default="", dest="superseded_by",
+                   help="Comma-separated ids/labels/titles. Deprecation pointer. Validated before write.")
     p.add_argument("--tags-domain", default="", dest="tags_domain")
     p.add_argument("--tags-scope", default="", dest="tags_scope")
     p.add_argument("--kind", default="", choices=REFERENCE_KIND_CHOICES + [""])
@@ -1101,7 +1109,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title", default=None)
     p.add_argument("--label", default=None)
     p.add_argument("--level", default=None, choices=VALID_LEVELS_SORTED)
-    p.add_argument("--state", default=None, choices=VALID_STATES_SORTED)
     p.add_argument("--status", default=None, choices=VALID_STATUSES_SORTED)
     p.add_argument("--type", default=None, choices=VALID_TYPES_SORTED)
     p.add_argument("--body", default=None,
@@ -1117,19 +1124,32 @@ def build_parser() -> argparse.ArgumentParser:
     # --- link ---
     p = sub.add_parser("link", help="Add edge(s) to a doc.")
     p.add_argument("ref", help="id | label | title")
-    p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/labels/titles. Validated before write.")
-    p.add_argument("--references", default="",
-                   help="Comma-separated ids/labels/titles. Validated before write.")
+    p.add_argument("--requires", default="",
+                   help="Comma-separated ids/labels/titles. Cascade-hard. Validated before write.")
+    p.add_argument("--belongs-to", default="", dest="belongs_to",
+                   help="Comma-separated ids/labels/titles. Cascade-hard (structural parent). "
+                        "Validated before write.")
+    p.add_argument("--relates", default="",
+                   help="Comma-separated ids/labels/titles. Navigation/clustering.")
+    p.add_argument("--provenance", default="",
+                   help="Comma-separated ids/labels/titles. Immutable derivation lineage.")
+    p.add_argument("--superseded-by", default="", dest="superseded_by",
+                   help="Comma-separated ids/labels/titles. Deprecation pointer.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview the edges that would be added without writing.")
 
     # --- unlink ---
     p = sub.add_parser("unlink", help="Remove edge(s) from a doc.")
     p.add_argument("ref", help="id | label | title")
-    p.add_argument("--depends-on", default="", dest="depends_on",
+    p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles.")
-    p.add_argument("--references", default="",
+    p.add_argument("--belongs-to", default="", dest="belongs_to",
+                   help="Comma-separated ids/labels/titles.")
+    p.add_argument("--relates", default="",
+                   help="Comma-separated ids/labels/titles.")
+    p.add_argument("--provenance", default="",
+                   help="Comma-separated ids/labels/titles.")
+    p.add_argument("--superseded-by", default="", dest="superseded_by",
                    help="Comma-separated ids/labels/titles.")
 
     # --- history ---

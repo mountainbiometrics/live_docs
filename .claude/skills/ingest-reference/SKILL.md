@@ -83,7 +83,7 @@ Determine `kind`:
 python3 scripts/ldoc.py new \
   --type reference \
   --kind <kind> \
-  --status living \
+  --status reference \
   --level incidental \
   --title "Reference: <descriptive title>" \
   --source "raw/<RAW_ID>.md" \
@@ -94,9 +94,11 @@ Key differences from Step 2:
 
 - This doc goes into **`docs/`** — it IS a graph node (NORM_ID lives in docs/).
 - `--source "raw/<RAW_ID>.md"` is the provenance link to the raw tier.  Use a
-  path, not a depends_on edge — raw files are not graph nodes, so a depends_on
+  path, not a requires edge — raw files are not graph nodes, so a requires
   entry pointing at RAW_ID would be a dangling edge.
-- Do NOT pass `--depends-on "<RAW_ID>"`.  RAW_ID is not in the graph.
+- Do NOT pass `--requires "<RAW_ID>"`.  RAW_ID is not in the graph.
+- `type: reference` docs always get `status: reference` — they are frozen
+  supporting material, not truth claims that evolve.
 
 Note the created id: call it **NORM_ID**.
 
@@ -106,6 +108,49 @@ Note the created id: call it **NORM_ID**.
 
 Read the normalized reference and extract durable learnings. For each distinct
 idea, ask: "Is this a single responsibility?" If yes, it becomes its own doc.
+
+**Conflict detection comes first.** Before creating any new doc, ask: does this
+idea conflict with something already in the store? The source rarely says "doc
+1234 is wrong" outright — it just asserts a concept that contradicts an existing
+claim. Search the store for docs making the opposing claim:
+
+```bash
+python3 scripts/ldoc.py search "<key claim or concept from source>"
+```
+
+For each matching existing doc, read it and judge: is the source's claim
+compatible, or does it assert something incompatible with what the doc says?
+**Correcting stale existing docs is the primary output — more valuable than any
+newly created doc**, because existing docs have dependents and cascade-check will
+propagate the correction; freshly created docs have no dependents yet and surface
+nothing when cascaded from.
+
+**When the source contradicts an existing doc:**
+
+- If the existing doc is **living or target** (i.e., `status: living` or
+  `status: target`): revise it to reflect the correct claim. Do not create a new
+  doc that says the same corrected thing — update the one that's there.
+- If the source **supersedes** the existing doc entirely (the doc's entire claim
+  is now wrong): deprecate the existing doc:
+  1. Add a `## Correction` section to the body explaining why it is wrong and
+     which doc (or this ingest episode's output) supersedes it.
+  2. Set `status: deprecated` and add the superseding doc id(s) to `superseded_by`:
+     ```bash
+     python3 scripts/ldoc.py set <existing-id> --status deprecated
+     python3 scripts/ldoc.py link <existing-id> --superseded-by <new-id>
+     ```
+  3. A bare status flip without a `## Correction` section is invalid — do both.
+- After correcting or deprecating existing docs, **run cascade-check from those
+  corrected docs** (not from freshly created docs). They have dependents; new
+  docs do not.
+
+**Body-content rule.** Extracted doc bodies describe the decision or mental
+model — what is true (or intended) and why. Anti-patterns to avoid:
+- Narrating absence or implementation state ("X was never built", "a migration
+  will happen"). If reality doesn't match the model yet, set `status: target`;
+  the body need not say so.
+- "Extension" notes that are really migration plans rather than corrections to
+  the doc's own claim.
 
 **Extraction categories** (pick the most precise type for each unit):
 
@@ -128,30 +173,31 @@ For each extracted unit:
      --type <type> \
      --title "<precise, single-responsibility title>" \
      --level <incidental|trial|preference|requirement> \
-     --state <actual|target> \
-     --references "<NORM_ID>" \
+     --status <living|target> \
+     --provenance "<NORM_ID>" \
      --tags-scope "<scope tags, e.g. live_docs,sinai>" \
      --body "<the extracted content>"
    ```
-   The `--references NORM_ID` establishes provenance: this doc was extracted from /
+   The `--provenance NORM_ID` establishes provenance: this doc was extracted from /
    informed by that reference. This is the **provenance rule**.
-   Use `--depends-on` for genuine structural dependencies (e.g. a decision that
-   logically depends on a principle), added separately when they exist.
+   Use `--requires` for genuine existential dependencies (e.g. a decision that is
+   meaningless without a principle), or `--belongs-to` for structural parent/child
+   membership, added separately when they exist.
 3. If the extracted idea DUPLICATES or STRENGTHENS an EXISTING doc: do not create
-   a new doc. Instead, link NORM_ID to the existing doc's `references` list (not
-   `depends_on`):
+   a new doc. Instead, link NORM_ID to the existing doc's `provenance` list (not
+   `requires`):
    ```bash
-   python3 scripts/ldoc.py link <existing-id> --references <NORM_ID>
+   python3 scripts/ldoc.py link <existing-id> --provenance <NORM_ID>
    ```
 
 ---
 
 ## Step 5 — Provenance rule check
 
-After decomposition, every extracted doc MUST have at least one `references` entry
+After decomposition, every extracted doc MUST have at least one `provenance` entry
 pointing to NORM_ID (or directly to the source if there's no normalized layer). A
-floating extracted doc with neither `references` nor `source` nor `depends_on` is a
-provenance violation — add the `references` edge.
+floating extracted doc with neither `provenance` nor `source` nor `requires` is a
+provenance violation — add the `provenance` edge.
 
 ---
 
@@ -170,10 +216,15 @@ Extracted docs:
   <id>  type: decision    title: "<title>"
   <id>  type: constraint  title: "<title>"
 
-Linked to existing docs:
-  <id>  "<existing doc title>" — added <NORM_ID> to depends_on
+Corrected existing docs (primary outputs):
+  <id>  "<existing doc title>" — revised: <one-line summary of what changed>
+  <id>  "<existing doc title>" — deprecated: added Correction section + superseded_by
 
-Next: consider running cascade-check if any existing docs were modified.
+Linked to existing docs (provenance only):
+  <id>  "<existing doc title>" — added <NORM_ID> to provenance
+
+Next: run cascade-check from each CORRECTED EXISTING doc (not from newly created
+docs). Corrected docs have dependents; new docs do not.
 ```
 
 ---
@@ -204,9 +255,13 @@ via `python3 scripts/ldoc.py review show <id>`.
 ## Atomicity checklist before finishing
 
 - [ ] Every extracted doc has exactly one responsibility (single-reason-to-change test).
-- [ ] Every extracted doc has provenance: `references` includes NORM_ID (not RAW_ID — raw is not a graph node).
+- [ ] Every extracted doc has provenance: `provenance` includes NORM_ID (not RAW_ID — raw is not a graph node).
 - [ ] `raw/<RAW_ID>.md` body is the verbatim, unedited original (raw tier, outside docs/).
-- [ ] NORM_ID lives in `docs/` with `source: "raw/<RAW_ID>.md"` pointing back to the raw tier.
+- [ ] NORM_ID lives in `docs/` with `source: "raw/<RAW_ID>.md"` pointing back to the raw tier, and `status: reference`.
 - [ ] NORM_ID body is a cleaned summary, not the extraction outputs.
+- [ ] Conflict-detection pass was run: store was searched for docs making claims conflicting with the source material.
+- [ ] Any corrected or deprecated existing docs have a `## Correction` section and, if deprecated, a `superseded_by` edge.
+- [ ] cascade-check was run from CORRECTED EXISTING docs (not from freshly created docs).
+- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Gap between model and reality is expressed via `status: target`, not body text.
 - [ ] No extracted doc duplicates an existing doc (check by searching titles).
-- [ ] No `depends_on` edge points at RAW_ID — raw files are not graph nodes.
+- [ ] No `requires` edge points at RAW_ID — raw files are not graph nodes.

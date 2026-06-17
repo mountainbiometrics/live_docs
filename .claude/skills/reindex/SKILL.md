@@ -35,6 +35,7 @@ python3 scripts/reindex.py [docs_dir]
 
 The script creates `docs/.index/` if it doesn't exist, then writes:
 - `docs/.index/dependents.json`
+- `docs/.index/provenance_sources.json`
 - `docs/.index/hierarchy.md`
 - `docs/.index/orphans.txt`
 
@@ -44,8 +45,9 @@ The script creates `docs/.index/` if it doesn't exist, then writes:
 
 ### dependents.json
 
-Reverse-dependency map: for each doc id, which OTHER doc ids list it in their
-`depends_on`. Format:
+Reverse hard-edge map: for each doc id, which OTHER doc ids list it in their
+`requires` or `belongs_to` edges. Both are hard edges that cascade, so they are
+combined into a single reverse map. Format:
 
 ```json
 {
@@ -58,10 +60,15 @@ Reverse-dependency map: for each doc id, which OTHER doc ids list it in their
 Every doc id present in the store appears as a key, even if its value is an
 empty list. This lets callers check membership without a key-existence guard.
 
+`provenance` edges (immutable derivation / source links) are navigation-only and
+do NOT cascade; they get their own reverse map in `provenance_sources.json` (same
+format), which records for each doc which other docs cite it as provenance.
+
 ### hierarchy.md
 
 A human-readable rollup of `index` docs and their children. For each doc of
-`type: index`, list every doc that `depends_on` it. Format:
+`type: index`, list every doc that has it as a `belongs_to` or `requires` target.
+Format:
 
 ```markdown
 # live_docs Index Hierarchy
@@ -82,9 +89,10 @@ appear in `orphans.txt` instead).
 
 ### orphans.txt
 
-One id per line: docs with NO inbound depends_on edges (nothing depends on them)
-AND NO outbound depends_on edges (they depend on nothing). These are structural
-orphans — disconnected from the graph entirely.
+One id per line: docs with NO inbound hard edges (no other doc has them in
+`requires` or `belongs_to`) AND NO outbound hard edges (they require or belong to
+nothing). These are structural orphans — disconnected from the cascade graph
+entirely. (`relates` and `provenance` edges do not count for orphan purposes.)
 
 Exempt from orphan reporting:
 - Docs of `type: index` (they are roots by design).
@@ -93,10 +101,10 @@ Exempt from orphan reporting:
 
 Format:
 ```
-# orphans — docs with no graph edges
+# orphans — docs with no hard graph edges
 # Generated: <timestamp>
 # These docs are disconnected from the dependency graph.
-# Consider: add edges, or retire to status: historical.
+# Consider: add edges, or retire to status: deprecated.
 20260615XXXXXX
 20260615YYYYYY
 ```
