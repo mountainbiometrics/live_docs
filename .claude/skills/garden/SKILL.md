@@ -19,6 +19,19 @@ It never silently rewrites meaning, deletes docs, or merges distinct ideas.
 
 ---
 
+## Episode start time
+
+Before beginning any pass, capture the current UTC time:
+
+```bash
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+This is used at the end of the pass to generate a review summary — but only
+if the pass actually applied changes (see "Review summary" below).
+
+---
+
 ## Passes
 
 Run one pass by naming it, or run all with `garden all`. Each pass is
@@ -199,4 +212,32 @@ After applying, print:
 ```
 Applied: [list of actions taken]
 Docs modified: [list of ids]
+```
+
+---
+
+## Review summary (change passes only; FINAL step)
+
+**Only when the pass applied changes** (splits, edits, field normalizations, or
+edge rewires were written to the store). A read-only or proposal-only pass that
+wrote nothing emits no summary.
+
+Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating
+the summary never blocks the gardening result; it records the episode for later
+review/signoff.
+
+Cascade-check calls made internally by garden (e.g. after splits in Pass 1) are
+**nested invocations** — they must NOT emit their own review summary. Garden owns
+the single summary for the episode.
+
+After all changes for the pass are applied:
+
+```bash
+python3 scripts/ldoc.py review new --since "$START"
+```
+
+Report the returned review id to the user:
+
+```
+Review summary created: <id>   (reviews/<id>.md)
 ```

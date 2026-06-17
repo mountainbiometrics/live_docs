@@ -6,30 +6,52 @@ Usage:
     ldoc <subcommand> [args...]
 
 All ref arguments accept: id | label | title (exact or unique substring).
+Multiple refs: most read verbs accept one or more refs (space-separated).
+  Pass - as the sole ref to read refs from stdin (one per line).
 Stdlib only. No external dependencies.
 
-Subcommands:
-    get <ref> [--json]
-    body <ref>
-    show <ref> [--json]
-    find [query] [--type] [--level] [--state] [--status] [--scope] [--domain] [--json]
-    ls [--type] [--json]
-    resolve <ref>
-    label <ref>
-    neighbors <ref> [--kind depends_on|references|dependents|referenced_by|all] [--json]
+Subcommands (grouped):
+  ── Reads ──
+    get <ref> [<ref2> ...]  [--json]
+    body <ref> [<ref2> ...]
+    show <ref> [<ref2> ...]  [--json] [--plain]
+    resolve <ref> [<ref2> ...]
+    label <ref> [<ref2> ...]
+    neighbors <ref> [<ref2> ...]  [--kind depends_on|references|dependents|referenced_by|all] [--json]
+
+  ── Search / list ──
+    find [term ...] [--or] [--regex PAT]
+         [--type] [--level] [--state] [--status] [--scope] [--domain] [--json] [--plain]
+    ls [--type] [--json] [--plain]
+    log [--since <ISO>] [--limit N] [--json]
+    count [--json]
+
+  ── Graph ──
     graph <ref> [--depth N] [--direction up|down|both] [--json]
+    edges [--json]
+
+  ── Mutations ──
     new --type T --title T [--label L] [--level L] [--state S] [--status S]
         [--depends-on a,b] [--references c,d] [--tags-domain d] [--tags-scope s]
-        [--kind K] [--source S] [--body T|-]
+        [--kind K] [--source S] [--body T|-] [--dry-run]
     set <ref> [--title] [--label] [--level] [--state] [--status] [--type]
-    link <ref> [--depends-on a,b] [--references c,d]
+              [--body -|TEXT] [--dry-run]
+    edit <ref>   (alias: set <ref> --body -)
+    link <ref> [--depends-on a,b] [--references c,d] [--dry-run]
     unlink <ref> [--depends-on a,b] [--references c,d]
     history <ref> --add "summary"
     ingest-raw (--from-file P | --body T|-) --source S [--title T] [--label L]
+
+  ── Maintenance ──
     validate
     reindex
-    edges [--json]
+    review <new|list|show|sign> ...
+
+  ── Help ──
+    help
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -41,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATES, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, REVIEWS_DIR
+from livedocs.model import ref_link
 
 
 # ---------------------------------------------------------------------------
@@ -55,15 +78,57 @@ def _err(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
 
 
-def _fmt_edge_list(edges: list[dict]) -> str:
-    """Format [{id, label, display}] for human display (always carries the label)."""
+def _fmt_edge_list(edges: list[dict], plain: bool = False) -> str:
+    """
+    Format [{id, label, display}] for human display.
+
+    plain=False (default): typed wiki-link format '[<Type>: <Title>](<id>.md)'
+    plain=True: '<id> [<label>] <Type>: <Title>'
+    """
     if not edges:
         return "  (none)"
     lines = []
     for e in edges:
-        label_part = f" [{e['label']}]" if e.get("label") else ""
-        lines.append(f"  {e['id']}{label_part}  {e.get('display', '')}")
+        if plain:
+            label_part = f" [{e['label']}]" if e.get("label") else ""
+            lines.append(f"  {e['id']}{label_part}  {e.get('display', '')}")
+        else:
+            doc_id = e["id"]
+            display = e.get("display", "")
+            lines.append(f"  [{display}]({doc_id}.md)")
     return "\n".join(lines)
+
+
+def _resolve_refs(kb: KB, raw_refs: list[str]) -> list[str] | None:
+    """
+    Resolve a list of raw ref strings (possibly containing '-' for stdin).
+
+    Returns the list of resolved refs, or None on error (already printed).
+    '-' as the only element means read refs from stdin (one per line).
+    """
+    if raw_refs == ["-"]:
+        stdin_refs = [line.strip() for line in sys.stdin if line.strip()]
+        return stdin_refs
+    return list(raw_refs)
+
+
+# ---------------------------------------------------------------------------
+# Batch helpers — wrap single-ref KB calls into multi-ref loops
+# ---------------------------------------------------------------------------
+
+_BATCH_SEP = "---"
+
+
+def _batch_output(items: list, render_fn, sep: str = _BATCH_SEP) -> int:
+    """
+    Render a list of items via render_fn(item) -> None.
+    Separate multiple items with sep. Returns 0 on success.
+    """
+    for i, item in enumerate(items):
+        if i > 0:
+            print(sep)
+        render_fn(item)
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -71,96 +136,145 @@ def _fmt_edge_list(edges: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 def cmd_get(kb: KB, args) -> int:
-    try:
-        result = kb.get(args.ref)
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
 
-    if args.json:
-        _json(result)
+    def render(ref: str) -> None:
+        try:
+            result = kb.get(ref)
+        except ValueError as e:
+            _err(str(e))
+            return
+
+        if args.json:
+            print(json.dumps(result, indent=2, default=str))
+            return
+
+        fm = result["frontmatter"]
+        print(f"id:     {result['id']}")
+        print(f"label:  {result['label']}")
+        print(f"title:  {result['display']}")
+        print(f"type:   {fm.get('type', '')}")
+        print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}  state: {fm.get('state', '')}")
+        print(f"created: {fm.get('created', '')}")
+        tags = fm.get("tags", {})
+        print(f"tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
+        hist = fm.get("history", [])
+        print(f"history: {len(hist)} entries")
+
+    if args.json and len(refs) > 1:
+        results = []
+        for ref in refs:
+            try:
+                results.append(kb.get(ref))
+            except ValueError as e:
+                _err(str(e))
+                return 1
+        _json(results)
         return 0
 
-    fm = result["frontmatter"]
-    print(f"id:     {result['id']}")
-    print(f"label:  {result['label']}")
-    print(f"title:  {result['display']}")
-    print(f"type:   {fm.get('type', '')}")
-    print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}  state: {fm.get('state', '')}")
-    print(f"created: {fm.get('created', '')}")
-    tags = fm.get("tags", {})
-    print(f"tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
-    hist = fm.get("history", [])
-    print(f"history: {len(hist)} entries")
-    return 0
+    return _batch_output(refs, render)
 
 
 def cmd_body(kb: KB, args) -> int:
-    try:
-        text = kb.body(args.ref)
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
-    print(text, end="")
+
+    for i, ref in enumerate(refs):
+        if i > 0:
+            print(_BATCH_SEP)
+        try:
+            text = kb.body(ref)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+        print(text, end="")
+
     return 0
 
 
 def cmd_show(kb: KB, args) -> int:
-    try:
-        result = kb.show(args.ref)
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
 
-    if args.json:
-        _json(result)
+    plain = getattr(args, "plain", False)
+
+    if args.json and len(refs) > 1:
+        results = []
+        for ref in refs:
+            try:
+                results.append(kb.show(ref))
+            except ValueError as e:
+                _err(str(e))
+                return 1
+        _json(results)
         return 0
 
-    fm = result["frontmatter"]
-    print(f"{'='*60}")
-    print(f"  {result['display']}")
-    print(f"  id:     {result['id']}")
-    print(f"  label:  {result['label']}")
-    print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
-          f"level: {fm.get('level','')}  state: {fm.get('state','')}")
-    tags = fm.get("tags", {})
-    print(f"  tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
-    print(f"  created: {fm.get('created','')}")
-    print(f"{'='*60}")
-    print()
+    def render(ref: str) -> None:
+        try:
+            result = kb.show(ref)
+        except ValueError as e:
+            _err(str(e))
+            return
 
-    print("DEPENDS ON:")
-    print(_fmt_edge_list(result["depends_on"]))
-    print()
-    print("REFERENCES:")
-    print(_fmt_edge_list(result["references"]))
-    print()
-    print("DEPENDENTS:")
-    print(_fmt_edge_list(result["dependents"]))
-    print()
-    print("REFERENCED BY:")
-    print(_fmt_edge_list(result["referenced_by"]))
-    print()
+        if args.json:
+            print(json.dumps(result, indent=2, default=str))
+            return
 
-    hist = fm.get("history", [])
-    if hist:
-        print("HISTORY:")
-        for h in hist:
-            print(f"  {h.get('at','')}  {h.get('summary','')}")
+        fm = result["frontmatter"]
+        print(f"{'='*60}")
+        print(f"  {result['display']}")
+        print(f"  id:     {result['id']}")
+        print(f"  label:  {result['label']}")
+        print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
+              f"level: {fm.get('level','')}  state: {fm.get('state','')}")
+        tags = fm.get("tags", {})
+        print(f"  tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
+        print(f"  created: {fm.get('created','')}")
+        print(f"{'='*60}")
         print()
 
-    body = result.get("body", "").strip()
-    if body:
-        print("BODY:")
-        print(body)
+        print("DEPENDS ON:")
+        print(_fmt_edge_list(result["depends_on"], plain=plain))
+        print()
+        print("REFERENCES:")
+        print(_fmt_edge_list(result["references"], plain=plain))
+        print()
+        print("DEPENDENTS:")
+        print(_fmt_edge_list(result["dependents"], plain=plain))
+        print()
+        print("REFERENCED BY:")
+        print(_fmt_edge_list(result["referenced_by"], plain=plain))
+        print()
 
-    return 0
+        hist = fm.get("history", [])
+        if hist:
+            print("HISTORY:")
+            for h in hist:
+                print(f"  {h.get('at','')}  {h.get('summary','')}")
+            print()
+
+        body = result.get("body", "").strip()
+        if body:
+            print("BODY:")
+            print(body)
+
+    return _batch_output(refs, render)
 
 
 def cmd_find(kb: KB, args) -> int:
+    # terms is nargs='*', may be empty list
+    terms = args.terms or []
+    plain = getattr(args, "plain", False)
+
     try:
         results = kb.find(
-            query=args.query or None,
+            terms=terms if terms else None,
+            or_mode=getattr(args, "or_mode", False),
+            regex=getattr(args, "regex", None) or None,
             type=args.type or None,
             level=args.level or None,
             state=args.state or None,
@@ -168,7 +282,7 @@ def cmd_find(kb: KB, args) -> int:
             scope=args.scope or None,
             domain=args.domain or None,
         )
-    except Exception as e:
+    except ValueError as e:
         _err(str(e))
         return 1
 
@@ -181,8 +295,13 @@ def cmd_find(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        label_part = f" [{r['label']}]" if r.get("label") else ""
-        print(f"{r['id']}{label_part}  {r.get('display', '')}")
+        if plain:
+            label_part = f" [{r['label']}]" if r.get("label") else ""
+            print(f"{r['id']}{label_part}  {r.get('display', '')}")
+        else:
+            doc_id = r["id"]
+            display = r.get("display", "")
+            print(f"[{display}]({doc_id}.md)")
         if r.get("snippet"):
             print(f"  {r['snippet']}")
 
@@ -190,6 +309,7 @@ def cmd_find(kb: KB, args) -> int:
 
 
 def cmd_ls(kb: KB, args) -> int:
+    plain = getattr(args, "plain", False)
     try:
         results = kb.ls(type=args.type or None)
     except Exception as e:
@@ -201,49 +321,86 @@ def cmd_ls(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        label_part = f" [{r['label']}]" if r.get("label") else ""
-        print(f"{r['id']}{label_part}  {r.get('display', '')}")
+        if plain:
+            label_part = f" [{r['label']}]" if r.get("label") else ""
+            print(f"{r['id']}{label_part}  {r.get('display', '')}")
+        else:
+            doc_id = r["id"]
+            display = r.get("display", "")
+            print(f"[{display}]({doc_id}.md)")
 
     return 0
 
 
 def cmd_resolve(kb: KB, args) -> int:
-    try:
-        doc_id = kb.resolve(args.ref)
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
-    print(doc_id)
+
+    for ref in refs:
+        try:
+            doc_id = kb.resolve(ref)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+        print(doc_id)
+
     return 0
 
 
 def cmd_label(kb: KB, args) -> int:
-    try:
-        doc_id = kb.resolve(args.ref)
-        print(kb.display_label(doc_id))
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
+
+    for ref in refs:
+        try:
+            doc_id = kb.resolve(ref)
+            print(kb.display_label(doc_id))
+        except ValueError as e:
+            _err(str(e))
+            return 1
+
     return 0
 
 
 def cmd_neighbors(kb: KB, args) -> int:
-    try:
-        result = kb.neighbors(args.ref, kind=args.kind)
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
 
-    if args.json:
-        _json(result)
+    plain = getattr(args, "plain", False)
+
+    if args.json and len(refs) > 1:
+        all_results = []
+        for ref in refs:
+            try:
+                all_results.append({"ref": ref, **kb.neighbors(ref, kind=args.kind)})
+            except ValueError as e:
+                _err(str(e))
+                return 1
+        _json(all_results)
         return 0
 
-    for edge_kind, edges in result.items():
-        print(f"{edge_kind.upper()}:")
-        print(_fmt_edge_list(edges))
-        print()
+    def render(ref: str) -> None:
+        try:
+            result = kb.neighbors(ref, kind=args.kind)
+        except ValueError as e:
+            _err(str(e))
+            return
 
-    return 0
+        if args.json:
+            print(json.dumps(result, indent=2, default=str))
+            return
+
+        if len(refs) > 1:
+            print(f"# {ref}")
+        for edge_kind, edges in result.items():
+            print(f"{edge_kind.upper()}:")
+            print(_fmt_edge_list(edges, plain=plain))
+            print()
+
+    return _batch_output(refs, render)
 
 
 def cmd_graph(kb: KB, args) -> int:
@@ -271,8 +428,79 @@ def cmd_graph(kb: KB, args) -> int:
     return 0
 
 
+def cmd_log(kb: KB, args) -> int:
+    """Read-only recent-changes view. Does NOT create a review record."""
+    since = getattr(args, "since", None) or None
+    limit = getattr(args, "limit", None)
+
+    try:
+        events = kb.log(since=since, limit=limit)
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    if args.json:
+        _json(events)
+        return 0
+
+    if not events:
+        print("(no recent changes)")
+        return 0
+
+    for ev in events:
+        doc_id = ev["id"]
+        display = ev.get("display", "")
+        at = ev.get("at", "")
+        event = ev.get("event", "")
+        summary = ev.get("summary", "")
+
+        link = f"[{display}]({doc_id}.md)"
+        if summary:
+            print(f"{at}  {event}  {link} — {summary}")
+        else:
+            print(f"{at}  {event}  {link}")
+
+    return 0
+
+
+def cmd_count(kb: KB, args) -> int:
+    """Doc and edge count statistics."""
+    try:
+        stats = kb.count()
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    if args.json:
+        _json(stats)
+        return 0
+
+    print(f"Total docs: {stats['total']}")
+    print()
+    print("By type:")
+    for k, v in stats["by_type"].items():
+        print(f"  {k:20s}  {v}")
+    print()
+    print("By level:")
+    for k, v in stats["by_level"].items():
+        print(f"  {k:20s}  {v}")
+    print()
+    print("By state:")
+    for k, v in stats["by_state"].items():
+        print(f"  {k:20s}  {v}")
+    print()
+    print("By status:")
+    for k, v in stats["by_status"].items():
+        print(f"  {k:20s}  {v}")
+    print()
+    print(f"depends_on edges: {stats['edge_count']}")
+    print(f"references edges: {stats['reference_count']}")
+
+    return 0
+
+
 def cmd_new(kb: KB, args) -> int:
-    # Resolve depends_on / references
+    # Parse edge refs
     depends_on_refs = [s.strip() for s in args.depends_on.split(",") if s.strip()] \
         if args.depends_on else []
     references_refs = [s.strip() for s in args.references.split(",") if s.strip()] \
@@ -282,7 +510,17 @@ def cmd_new(kb: KB, args) -> int:
     scope_tags = [s.strip() for s in args.tags_scope.split(",") if s.strip()] \
         if args.tags_scope else []
 
-    # Resolve edge refs
+    # Edge-ref validation (capability 6): validate before writing
+    if depends_on_refs or references_refs:
+        unresolved = kb.validate_edge_refs(depends_on_refs, references_refs)
+        if unresolved:
+            _err(
+                f"Unresolved edge ref(s): {', '.join(repr(r) for r in unresolved)}. "
+                f"Check with: ldoc resolve <ref>"
+            )
+            return 1
+
+    # Resolve edge refs to ids
     try:
         dep_ids = [kb.resolve(r) for r in depends_on_refs] if depends_on_refs else []
         ref_ids = [kb.resolve(r) for r in references_refs] if references_refs else []
@@ -297,6 +535,29 @@ def cmd_new(kb: KB, args) -> int:
         body = args.body
     else:
         body = ""
+
+    # --dry-run preview (capability 11)
+    if getattr(args, "dry_run", False):
+        from livedocs.model import title_to_label, unique_label
+        label = args.label or ""
+        if not label:
+            existing = (d.get("label", "") for d in kb._docs.values())
+            label = unique_label(title_to_label(args.title), existing)
+        print("## DRY RUN — would create:\n")
+        print(f"  type:    {args.type}")
+        print(f"  title:   {args.title}")
+        print(f"  label:   {label}")
+        print(f"  level:   {args.level}")
+        print(f"  state:   {args.state}")
+        print(f"  status:  {args.status}")
+        if dep_ids:
+            print(f"  depends_on: {dep_ids}")
+        if ref_ids:
+            print(f"  references: {ref_ids}")
+        if body.strip():
+            print(f"\n  body preview:\n    {body.strip()[:200]}")
+        print("\n(No doc written.)")
+        return 0
 
     try:
         doc_id = kb.new(
@@ -343,17 +604,61 @@ def cmd_set(kb: KB, args) -> int:
     if args.type is not None:
         fields["type"] = args.type
 
-    if not fields:
-        _err("No fields specified. Use --title, --label, --level, --state, --status, --type.")
+    # --body: read new body from stdin or inline
+    body_arg = getattr(args, "body", None)
+    new_body = None
+    if body_arg == "-":
+        new_body = sys.stdin.read()
+    elif body_arg:
+        new_body = body_arg
+
+    if not fields and new_body is None:
+        _err("No fields specified. Use --title, --label, --level, --state, --status, --type, or --body.")
         return 1
 
+    # --dry-run preview
+    if getattr(args, "dry_run", False):
+        print("## DRY RUN — would update:\n")
+        try:
+            doc_id = kb.resolve(args.ref)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+        print(f"  doc: {doc_id}")
+        for k, v in fields.items():
+            print(f"  {k}: {v!r}")
+        if new_body is not None:
+            print(f"  body: (replace, {len(new_body)} chars)")
+        print("\n(No doc written.)")
+        return 0
+
+    if fields:
+        try:
+            kb.set(args.ref, **fields)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+
+    if new_body is not None:
+        try:
+            kb.set_body(args.ref, new_body)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+
+    print(f"Updated {args.ref}")
+    return 0
+
+
+def cmd_edit(kb: KB, args) -> int:
+    """Alias: read new body from stdin and replace doc body."""
+    body = sys.stdin.read()
     try:
-        kb.set(args.ref, **fields)
+        kb.set_body(args.ref, body)
     except ValueError as e:
         _err(str(e))
         return 1
-
-    print(f"Updated {args.ref}")
+    print(f"Body updated for {args.ref}")
     return 0
 
 
@@ -366,6 +671,25 @@ def cmd_link(kb: KB, args) -> int:
     if not depends_on_refs and not references_refs:
         _err("Specify --depends-on or --references (or both).")
         return 1
+
+    # Edge-ref validation (capability 6)
+    unresolved = kb.validate_edge_refs(depends_on_refs, references_refs)
+    if unresolved:
+        _err(
+            f"Unresolved edge ref(s): {', '.join(repr(r) for r in unresolved)}. "
+            f"Check with: ldoc resolve <ref>"
+        )
+        return 1
+
+    # --dry-run preview
+    if getattr(args, "dry_run", False):
+        print("## DRY RUN — would link:\n")
+        if depends_on_refs:
+            print(f"  --depends-on: {depends_on_refs}")
+        if references_refs:
+            print(f"  --references: {references_refs}")
+        print("\n(No doc written.)")
+        return 0
 
     try:
         kb.link(args.ref, depends_on=depends_on_refs or None, references=references_refs or None)
@@ -583,14 +907,67 @@ def cmd_edges(kb: KB, args) -> int:
     return result.returncode
 
 
+def cmd_help(kb: KB, args) -> int:
+    """Print grouped overview with copy-pasteable examples."""
+    print(__doc__)
+    print()
+    print("=" * 60)
+    print("EXAMPLES")
+    print("=" * 60)
+    print("""
+  # Reads
+  ldoc get porcelain-roadmap
+  ldoc get porcelain-roadmap batch-operations --json
+  ldoc body label-and-title
+  ldoc show porcelain-roadmap
+  ldoc show porcelain-roadmap --plain      # bare id/label format
+  ldoc resolve "Batch Operations"
+  ldoc label porcelain-roadmap batch-operations
+  ldoc neighbors porcelain-roadmap --kind depends_on
+  ldoc neighbors porcelain-roadmap batch-operations
+  echo -e "porcelain-roadmap\\nbatch-operations" | ldoc show -
+
+  # Search / list
+  ldoc find porcelain
+  ldoc find label title --or              # OR-mode multi-term
+  ldoc find --regex 'batch|multi'
+  ldoc find --type decision --status living
+  ldoc ls --type principle
+  ldoc log --since 2026-06-15T00:00:00Z --limit 10
+  ldoc count
+
+  # Mutations
+  ldoc new --type decision --title "My Decision" --level preference \\
+       --depends-on cognitive-load
+  ldoc new --type decision --title "Test" --dry-run
+  ldoc set porcelain-roadmap --title "New Title"
+  ldoc set porcelain-roadmap --body -         # read body from stdin
+  echo "new body text" | ldoc edit porcelain-roadmap
+  ldoc link porcelain-roadmap --depends-on batch-operations
+  ldoc link porcelain-roadmap --depends-on batch-operations --dry-run
+  ldoc unlink porcelain-roadmap --depends-on batch-operations
+  ldoc history porcelain-roadmap --add "Updated approach"
+
+  # Maintenance
+  ldoc validate
+  ldoc reindex
+  ldoc edges
+  ldoc review new --since 2026-06-15T00:00:00Z
+  ldoc review list
+  ldoc review show <review-id>
+  ldoc review sign <review-id> --as "Your Name"
+""")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
-VALID_TYPES = sorted(VALID_TYPES)
-VALID_LEVELS = sorted(VALID_LEVELS)
-VALID_STATES = sorted(VALID_STATES)
-VALID_STATUSES = sorted(VALID_STATUSES)
+VALID_TYPES_SORTED = sorted(VALID_TYPES)
+VALID_LEVELS_SORTED = sorted(VALID_LEVELS)
+VALID_STATES_SORTED = sorted(VALID_STATES)
+VALID_STATUSES_SORTED = sorted(VALID_STATUSES)
 REFERENCE_KIND_CHOICES = sorted(VALID_REFERENCE_KINDS) + [""]
 
 
@@ -604,49 +981,68 @@ def build_parser() -> argparse.ArgumentParser:
     sub.required = True
 
     # --- get ---
-    p = sub.add_parser("get", help="Show frontmatter summary for a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p = sub.add_parser("get", help="Show frontmatter summary for one or more docs.")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--json", action="store_true")
 
     # --- body ---
-    p = sub.add_parser("body", help="Print the body text of a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p = sub.add_parser("body", help="Print the body text of one or more docs.")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin.")
 
     # --- show ---
-    p = sub.add_parser("show", help="Show full doc with resolved edge labels.")
-    p.add_argument("ref", help="id | label | title")
+    p = sub.add_parser("show", help="Show full doc with resolved edge links.")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin.")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--plain", action="store_true",
+                   help="Use plain id/label format for edge lists (not typed wiki-links).")
 
     # --- find ---
-    p = sub.add_parser("find", help="Search/filter docs.")
-    p.add_argument("query", nargs="?", default="", help="Optional query string (searches title+label+body).")
-    p.add_argument("--type", default="")
-    p.add_argument("--level", default="")
-    p.add_argument("--state", default="")
-    p.add_argument("--status", default="")
+    p = sub.add_parser("find", help="Search/filter docs. Multiple terms = AND (use --or for OR).")
+    p.add_argument("terms", nargs="*", metavar="term",
+                   help="Search terms (matches title + label + body, case-insensitive).")
+    p.add_argument("--or", dest="or_mode", action="store_true",
+                   help="Combine multiple terms with OR instead of AND.")
+    p.add_argument("--regex", default="", metavar="PATTERN",
+                   help="Regex pattern applied to title + label + body (re.IGNORECASE).")
+    p.add_argument("--type", default="", choices=VALID_TYPES_SORTED + [""])
+    p.add_argument("--level", default="", choices=VALID_LEVELS_SORTED + [""])
+    p.add_argument("--state", default="", choices=VALID_STATES_SORTED + [""])
+    p.add_argument("--status", default="", choices=VALID_STATUSES_SORTED + [""])
     p.add_argument("--scope", default="")
     p.add_argument("--domain", default="")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--plain", action="store_true",
+                   help="Plain id/label output instead of typed wiki-links.")
 
     # --- ls ---
     p = sub.add_parser("ls", help="List all docs (optionally filter by type).")
-    p.add_argument("--type", default="")
+    p.add_argument("--type", default="", choices=VALID_TYPES_SORTED + [""])
     p.add_argument("--json", action="store_true")
+    p.add_argument("--plain", action="store_true",
+                   help="Plain id/label output instead of typed wiki-links.")
 
     # --- resolve ---
-    p = sub.add_parser("resolve", help="Resolve a ref to its canonical id.")
-    p.add_argument("ref", help="id | label | title")
+    p = sub.add_parser("resolve", help="Resolve ref(s) to canonical id(s).")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin.")
 
     # --- label ---
-    p = sub.add_parser("label", help="Print '<Type>: <Title>' label for a ref.")
-    p.add_argument("ref", help="id | label | title")
+    p = sub.add_parser("label", help="Print '<Type>: <Title>' for ref(s).")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin.")
 
     # --- neighbors ---
-    p = sub.add_parser("neighbors", help="Show neighbors of a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p = sub.add_parser("neighbors", help="Show neighbors of one or more docs.")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin.")
     p.add_argument("--kind", default="all",
                    choices=["depends_on", "references", "dependents", "referenced_by", "all"])
     p.add_argument("--json", action="store_true")
+    p.add_argument("--plain", action="store_true",
+                   help="Plain id/label edge format instead of typed wiki-links.")
 
     # --- graph ---
     p = sub.add_parser("graph", help="BFS traversal over depends_on edges.")
@@ -655,42 +1051,79 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--direction", default="both", choices=["up", "down", "both"])
     p.add_argument("--json", action="store_true")
 
+    # --- log ---
+    p = sub.add_parser("log",
+                       help="Recent-changes view (created/edited, newest first). "
+                            "Read-only; does NOT create a review record.")
+    p.add_argument("--since", default="", metavar="ISO8601",
+                   help="Show only changes at or after this ISO 8601 UTC timestamp.")
+    p.add_argument("--limit", type=int, default=None, metavar="N",
+                   help="Maximum number of events to show.")
+    p.add_argument("--json", action="store_true")
+
+    # --- count ---
+    p = sub.add_parser("count", help="Doc and edge count statistics.")
+    p.add_argument("--json", action="store_true")
+
     # --- new ---
-    p = sub.add_parser("new", help="Create a new doc.")
-    p.add_argument("--type", required=True, choices=VALID_TYPES)
+    p = sub.add_parser("new", help="Create a new doc.",
+                       description=(
+                           "Type-aware defaults:\n"
+                           "  --level:  incidental (override with --level)\n"
+                           "  --state:  actual     (override with --state)\n"
+                           "  --status: living     (override with --status)\n"
+                           "  --label:  auto-derived as Title-Case from title words\n"
+                           "            (up to ~24 chars, word boundaries only)\n"
+                           "Edge refs validated before writing; unresolved refs cause an error."
+                       ),
+                       formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--type", required=True, choices=VALID_TYPES_SORTED)
     p.add_argument("--title", required=True)
     p.add_argument("--label", default="",
-                   help="Short label; auto-derived from title (word-boundary) if omitted.")
-    p.add_argument("--level", default="incidental", choices=VALID_LEVELS)
-    p.add_argument("--state", default="actual", choices=VALID_STATES)
-    p.add_argument("--status", default="living", choices=VALID_STATUSES)
+                   help="Short Title-Case label; auto-derived from title if omitted.")
+    p.add_argument("--level", default="incidental", choices=VALID_LEVELS_SORTED)
+    p.add_argument("--state", default="actual", choices=VALID_STATES_SORTED)
+    p.add_argument("--status", default="living", choices=VALID_STATUSES_SORTED)
     p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/labels/titles.")
+                   help="Comma-separated ids/labels/titles. Validated before write.")
     p.add_argument("--references", default="",
-                   help="Comma-separated ids/labels/titles.")
+                   help="Comma-separated ids/labels/titles. Validated before write.")
     p.add_argument("--tags-domain", default="", dest="tags_domain")
     p.add_argument("--tags-scope", default="", dest="tags_scope")
     p.add_argument("--kind", default="", choices=REFERENCE_KIND_CHOICES + [""])
     p.add_argument("--source", default="")
     p.add_argument("--body", default="", help="Body text or '-' to read from stdin.")
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   help="Preview what would be created without writing.")
 
     # --- set ---
-    p = sub.add_parser("set", help="Update scalar frontmatter fields.")
+    p = sub.add_parser("set", help="Update frontmatter fields or body of a doc.")
     p.add_argument("ref", help="id | label | title")
     p.add_argument("--title", default=None)
     p.add_argument("--label", default=None)
-    p.add_argument("--level", default=None, choices=VALID_LEVELS)
-    p.add_argument("--state", default=None, choices=VALID_STATES)
-    p.add_argument("--status", default=None, choices=VALID_STATUSES)
-    p.add_argument("--type", default=None, choices=VALID_TYPES)
+    p.add_argument("--level", default=None, choices=VALID_LEVELS_SORTED)
+    p.add_argument("--state", default=None, choices=VALID_STATES_SORTED)
+    p.add_argument("--status", default=None, choices=VALID_STATUSES_SORTED)
+    p.add_argument("--type", default=None, choices=VALID_TYPES_SORTED)
+    p.add_argument("--body", default=None,
+                   help="Replace body: TEXT value or '-' to read from stdin.")
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   help="Preview what would change without writing.")
+
+    # --- edit ---
+    p = sub.add_parser("edit",
+                       help="Replace a doc's body from stdin (alias for: set <ref> --body -).")
+    p.add_argument("ref", help="id | label | title")
 
     # --- link ---
     p = sub.add_parser("link", help="Add edge(s) to a doc.")
     p.add_argument("ref", help="id | label | title")
     p.add_argument("--depends-on", default="", dest="depends_on",
-                   help="Comma-separated ids/labels/titles.")
+                   help="Comma-separated ids/labels/titles. Validated before write.")
     p.add_argument("--references", default="",
-                   help="Comma-separated ids/labels/titles.")
+                   help="Comma-separated ids/labels/titles. Validated before write.")
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   help="Preview the edges that would be added without writing.")
 
     # --- unlink ---
     p = sub.add_parser("unlink", help="Remove edge(s) from a doc.")
@@ -714,12 +1147,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--label", default="")
 
     # --- validate ---
-    p = sub.add_parser("validate", help="Run structural integrity checks.")
-    # no extra args
+    sub.add_parser("validate", help="Run structural integrity checks.")
 
     # --- reindex ---
-    p = sub.add_parser("reindex", help="Rebuild docs/.index/ artifacts.")
-    # no extra args
+    sub.add_parser("reindex", help="Rebuild docs/.index/ artifacts.")
 
     # --- edges ---
     p = sub.add_parser("edges", help="Print forward/reverse edge maps.")
@@ -730,7 +1161,6 @@ def build_parser() -> argparse.ArgumentParser:
     rev_sub = p_rev.add_subparsers(dest="review_verb", metavar="verb")
     rev_sub.required = True
 
-    # review new
     p_rn = rev_sub.add_parser("new", help="Create a new review summary record.")
     p_rn.add_argument("--since", default="",
                       help="ISO 8601 UTC timestamp; scan docs/ for changes since this time.")
@@ -739,20 +1169,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_rn.add_argument("--summary", default="",
                       help="Summary body text, or '-' to read from stdin.")
 
-    # review list
     p_rl = rev_sub.add_parser("list", help="List review records.")
     p_rl.add_argument("--unsigned-by", default="", dest="unsigned_by",
                       help="Show only records NOT signed by this name.")
 
-    # review show
     p_rs = rev_sub.add_parser("show", help="Show a review record.")
     p_rs.add_argument("ref", help="Review record id (or unique prefix/substring).")
 
-    # review sign
     p_rsg = rev_sub.add_parser("sign", help="Sign a review record.")
     p_rsg.add_argument("ref", help="Review record id (or unique prefix/substring).")
     p_rsg.add_argument("--as", dest="as_who", required=True,
                        help="Your name (free-text signature).")
+
+    # --- help ---
+    sub.add_parser("help", help="Show overview with grouped verbs and copy-pasteable examples.")
 
     return parser
 
@@ -771,8 +1201,11 @@ COMMANDS = {
     "label": cmd_label,
     "neighbors": cmd_neighbors,
     "graph": cmd_graph,
+    "log": cmd_log,
+    "count": cmd_count,
     "new": cmd_new,
     "set": cmd_set,
+    "edit": cmd_edit,
     "link": cmd_link,
     "unlink": cmd_unlink,
     "history": cmd_history,
@@ -781,6 +1214,7 @@ COMMANDS = {
     "reindex": cmd_reindex,
     "edges": cmd_edges,
     "review": cmd_review,
+    "help": cmd_help,
 }
 
 

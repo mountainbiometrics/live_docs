@@ -49,6 +49,7 @@ from .graph import (
 from .kb import (
     KB,
     load_all,
+    # KB.set_body, KB.log, KB.count, KB.validate_edge_refs are methods on KB
 )
 
 from .reviews import (

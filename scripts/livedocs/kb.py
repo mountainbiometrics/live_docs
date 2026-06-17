@@ -6,6 +6,9 @@ layer. Mutators are DUMB: they write what you tell them; no cascade judgment her
 Stdlib only. No external dependencies.
 """
 
+from __future__ import annotations
+
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -206,25 +209,48 @@ class KB:
 
     def find(
         self,
-        query: str = None,
-        type: str = None,
-        level: str = None,
-        state: str = None,
-        status: str = None,
-        scope: str = None,
-        domain: str = None,
+        query: str | None = None,
+        type: str | None = None,
+        level: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
+        scope: str | None = None,
+        domain: str | None = None,
+        terms: list[str] | None = None,
+        or_mode: bool = False,
+        regex: str | None = None,
     ) -> list[dict]:
         """
         Search docs with optional filters. Returns [{id, label, display, snippet}].
 
-        query matches title + label + body (case-insensitive).
+        query       — single query string; matches title + label + body (case-insensitive).
+        terms       — list of query strings; in AND mode (default) all must match;
+                      in OR mode (or_mode=True) any match is sufficient.
+        or_mode     — when True, combine `terms` with OR logic instead of AND.
+        regex       — a regex pattern applied to title + label + body (re.IGNORECASE).
+
         All other args filter by frontmatter field values.
+        Multiple query mechanisms (query / terms / regex) are AND-combined with each other.
         """
         results = []
-        q = query.lower() if query else None
+
+        # Build query matchers
+        # Single `query` → convert to single-term list (AND with `terms`)
+        all_terms: list[str] = []
+        if query:
+            all_terms.append(query.lower())
+        if terms:
+            all_terms.extend(t.lower() for t in terms if t)
+
+        compiled_regex = None
+        if regex:
+            try:
+                compiled_regex = re.compile(regex, re.IGNORECASE)
+            except re.error as exc:
+                raise ValueError(f"Invalid regex pattern {regex!r}: {exc}") from exc
 
         for doc_id, doc in sorted(self._docs.items()):
-            # Filter checks
+            # Metadata filters
             if type and doc.get("type") != type:
                 continue
             if level and doc.get("level") != level:
@@ -235,29 +261,54 @@ class KB:
                 continue
 
             tags = doc.get("tags", {})
-            if scope:
-                if scope not in tags.get("scope", []):
-                    continue
-            if domain:
-                if domain not in tags.get("domain", []):
-                    continue
+            if scope and scope not in tags.get("scope", []):
+                continue
+            if domain and domain not in tags.get("domain", []):
+                continue
 
-            # Query match
+            # Build searchable text fields
+            title_lower = doc.get("title", "").lower()
+            label_lower = doc.get("label", "").lower()
+            body_raw = doc.get("body", "")
+            body_lower = body_raw.lower()
+
+            def _first_snippet(term: str) -> str:
+                """Return first matching body line snippet for a term."""
+                for line in body_raw.splitlines():
+                    if term in line.lower():
+                        return line.strip()[:120]
+                return ""
+
             snippet = ""
-            if q:
-                title = doc.get("title", "").lower()
-                label = doc.get("label", "").lower()
-                body = doc.get("body", "").lower()
-                if q in title or q in label or q in body:
-                    # Build snippet from first matching body line
-                    for line in doc.get("body", "").splitlines():
-                        if q in line.lower():
-                            snippet = line.strip()[:120]
+
+            # Term matching
+            if all_terms:
+                def _term_hits(t: str) -> bool:
+                    return t in title_lower or t in label_lower or t in body_lower
+
+                if or_mode:
+                    if not any(_term_hits(t) for t in all_terms):
+                        continue
+                    for t in all_terms:
+                        if _term_hits(t):
+                            snippet = _first_snippet(t) or doc.get("title", "")[:120]
                             break
-                    if not snippet and q in doc.get("title", "").lower():
-                        snippet = doc.get("title", "")[:120]
                 else:
+                    # AND: every term must match somewhere
+                    if not all(_term_hits(t) for t in all_terms):
+                        continue
+                    snippet = _first_snippet(all_terms[0]) or doc.get("title", "")[:120]
+
+            # Regex matching
+            if compiled_regex:
+                combined = f"{doc.get('title','')} {doc.get('label','')} {body_raw}"
+                if not compiled_regex.search(combined):
                     continue
+                # Extract snippet from first regex match in body
+                m = compiled_regex.search(body_raw)
+                if m and not snippet:
+                    start = max(0, m.start() - 20)
+                    snippet = body_raw[start:m.end() + 60].strip()[:120]
 
             results.append({
                 "id": doc_id,
@@ -554,6 +605,138 @@ class KB:
         out = RAW_DIR / f"{raw_id}.md"
         out.write_text(content, encoding="utf-8")
         return raw_id
+
+    def set_body(self, ref: str, body: str) -> None:
+        """
+        Replace the body of a doc, preserving all frontmatter fields.
+
+        This is the ONLY porcelain way to edit a doc's body content.
+        """
+        doc_id = self.resolve(ref)
+        fm, _ = self._load_doc_raw(doc_id)
+        self._write_doc(doc_id, fm, body)
+
+    def log(
+        self,
+        since: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """
+        Return a READ-ONLY recent-changes view (newest first).
+
+        Each item represents a doc that was created or had a history entry added.
+        Items: {id, label, display, at, event, summary}
+
+        `event` is 'created' or 'history'.
+        `at` is the ISO 8601 timestamp of the event.
+        `summary` is the history entry summary (empty for 'created' events).
+
+        Does NOT write a review record — that is `ldoc review new`.
+        """
+        events: list[dict] = []
+
+        for doc_id, doc in self._docs.items():
+            created = doc.get("created", "")
+            if not since or created >= since:
+                events.append({
+                    "id": doc_id,
+                    "label": doc.get("label", ""),
+                    "display": self.display_label(doc_id),
+                    "at": created,
+                    "event": "created",
+                    "summary": "",
+                })
+
+            for h in doc.get("history", []):
+                at = h.get("at", "")
+                if not at:
+                    continue
+                if since and at < since:
+                    continue
+                events.append({
+                    "id": doc_id,
+                    "label": doc.get("label", ""),
+                    "display": self.display_label(doc_id),
+                    "at": at,
+                    "event": "history",
+                    "summary": h.get("summary", ""),
+                })
+
+        # Sort newest first
+        events.sort(key=lambda e: e["at"], reverse=True)
+
+        if limit is not None:
+            events = events[:limit]
+
+        return events
+
+    def count(self) -> dict:
+        """
+        Return doc and edge count statistics.
+
+        Returns a dict with:
+          total              — total doc count
+          by_type            — {type: count}
+          by_level           — {level: count}
+          by_state           — {state: count}
+          by_status          — {status: count}
+          edge_count         — total depends_on edge count
+          reference_count    — total references edge count
+        """
+        by_type: dict[str, int] = {}
+        by_level: dict[str, int] = {}
+        by_state: dict[str, int] = {}
+        by_status: dict[str, int] = {}
+        edge_count = 0
+        reference_count = 0
+
+        for doc in self._docs.values():
+            t = doc.get("type") or "(none)"
+            by_type[t] = by_type.get(t, 0) + 1
+
+            lv = doc.get("level") or "(none)"
+            by_level[lv] = by_level.get(lv, 0) + 1
+
+            st = doc.get("state") or "(none)"
+            by_state[st] = by_state.get(st, 0) + 1
+
+            ss = doc.get("status") or "(none)"
+            by_status[ss] = by_status.get(ss, 0) + 1
+
+            edge_count += len(doc.get("depends_on", []))
+            reference_count += len(doc.get("references", []))
+
+        return {
+            "total": len(self._docs),
+            "by_type": dict(sorted(by_type.items())),
+            "by_level": dict(sorted(by_level.items())),
+            "by_state": dict(sorted(by_state.items())),
+            "by_status": dict(sorted(by_status.items())),
+            "edge_count": edge_count,
+            "reference_count": reference_count,
+        }
+
+    def validate_edge_refs(
+        self,
+        depends_on: list[str],
+        references: list[str],
+    ) -> list[str]:
+        """
+        Validate that all edge refs resolve. Returns a list of unresolved ref strings.
+        Does NOT raise — callers check the returned list.
+        """
+        unresolved = []
+        for r in depends_on:
+            try:
+                self.resolve(r)
+            except ValueError:
+                unresolved.append(r)
+        for r in references:
+            try:
+                self.resolve(r)
+            except ValueError:
+                unresolved.append(r)
+        return unresolved
 
     def delete(self, doc_id: str) -> None:
         """Delete a doc by id. Use only for throwaway/test docs."""

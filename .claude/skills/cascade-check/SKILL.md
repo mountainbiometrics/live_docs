@@ -11,6 +11,23 @@ description: >
 
 # cascade-check — Propagate or halt consistency across the dependency graph
 
+## Review-summary rule (read before proceeding)
+
+**Nested invocations do NOT emit their own review summary.** When cascade-check
+is called by a higher-level skill (`ingest-reference`, `revise-doc`, `garden`),
+the top-level skill owns the single review summary for the episode. Duplicate or
+overlapping review records violate the one-summary-per-episode principle.
+
+Emit a review summary **only when cascade-check is invoked directly by the
+user** (standalone invocation). In that case, capture `START` before Step 1 and
+run `python3 scripts/ldoc.py review new --since "$START"` as the final step
+after Step 7/8. See "Step 9" below.
+
+Review is **post-hoc and non-gating** (see `review-is-post-hoc`): the summary
+records the episode for later review/signoff and never blocks the cascade.
+
+---
+
 ## Inputs
 
 - **Changed doc id(s)** — one or more `docs/<id>.md` filenames (without `.md`).
@@ -18,6 +35,24 @@ description: >
   modified docs; if that yields nothing, ask the user which doc changed.
 - **Change description** (optional but strongly preferred) — a plain-language
   summary of what changed and why. Richer context produces more reliable verdicts.
+- **Invocation context** — **standalone** (user called cascade-check directly)
+  or **nested** (called from another skill). Default: standalone.
+
+## Step 0 — Capture start time (standalone invocations only)
+
+If this is a **standalone invocation** (user called cascade-check directly, not
+from within another skill), capture the episode start time before doing anything
+else:
+
+```bash
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+If this is a **nested invocation** (called from `ingest-reference`, `revise-doc`,
+or `garden`), skip this step entirely — the outer skill owns the timestamp and
+will emit the review summary.
+
+---
 
 ## Step 1 — Collect neighbors for each changed doc (fresh, every time)
 
@@ -162,6 +197,29 @@ If total cascaded docs > 3 from a single routine edit, emit this warning:
 > **Design smell**: This cascade touched N docs from a single edit of `<id>`.
 > The changed doc may carry more than one responsibility.
 > Consider running the `garden` skill (`single-responsibility` pass) on `<id>`.
+
+---
+
+## Step 9 — Generate the review summary (standalone invocations only; FINAL step)
+
+**Skip this step entirely for nested invocations** — when cascade-check is
+called from within `ingest-reference`, `revise-doc`, or `garden`, the outer
+skill owns the single episode summary. Emitting one here would create a
+duplicate, overlapping review record.
+
+For **standalone invocations only**, after the walk and smell-check are complete:
+
+```bash
+python3 scripts/ldoc.py review new --since "$START"
+```
+
+Report the returned review id to the user:
+
+```
+Review summary created: <id>   (reviews/<id>.md)
+```
+
+Review is post-hoc and non-gating: this never blocks the cascade result.
 
 ---
 

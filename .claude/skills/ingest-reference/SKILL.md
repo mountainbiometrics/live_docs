@@ -19,6 +19,19 @@ decomposition.
 
 ---
 
+## Step 0 — Capture the episode start time
+
+Before doing anything else, record the current UTC time:
+
+```bash
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+This timestamp will be used at the end of the episode to generate a single
+review summary covering all docs created during the ingest.
+
+---
+
 ## Step 1 — Receive the material
 
 Accept input in any of these forms:
@@ -162,6 +175,29 @@ Linked to existing docs:
 
 Next: consider running cascade-check if any existing docs were modified.
 ```
+
+---
+
+## Step 7 — Generate the review summary (FINAL step)
+
+After all raw/normalized/extracted docs are created and any cascades are
+resolved, emit a single review summary for the entire ingest episode.
+
+Review is **post-hoc and non-gating** (see `review-is-post-hoc`): this step
+records the episode for later review and signoff. It never blocks the change.
+
+```bash
+python3 scripts/ldoc.py review new --since "$START"
+```
+
+Report the returned review id to the user:
+
+```
+Review summary created: <id>   (reviews/<id>.md)
+```
+
+This is the canonical record of the ingest episode. Reviewers can inspect it
+via `python3 scripts/ldoc.py review show <id>`.
 
 ---
 

@@ -5,6 +5,8 @@ Paths, enum sets, label utilities, and ID generation.
 Stdlib only. No external dependencies.
 """
 
+from __future__ import annotations
+
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,26 +75,35 @@ def title_to_label(title: str) -> str:
     - Break on word boundaries — never truncate mid-word.
     - Accumulate whole words while the running length stays within ~24 chars.
       Always keep at least the first word, even if it alone exceeds the budget.
-    - Lowercase the result and strip trailing punctuation.
-    - Does NOT kebab-case: whitespace between words is preserved.
+    - The result is Title Case (each word capitalised); whitespace between words
+      is preserved; NOT kebab-cased.
+    - Strip trailing punctuation from each word before capitalising.
+
+    Per label-and-title decision: labels are Title-Case names, not kebab slugs.
     """
     MAX_LEN = 24
     words = title.split()
     if not words:
         return ""
 
-    chosen: list[str] = [words[0]]
-    length = len(words[0])
-    for w in words[1:]:
+    # Strip trailing punctuation from each raw word before building
+    stripped = [re.sub(r'[^A-Za-z0-9]+$', '', w) for w in words]
+    stripped = [w for w in stripped if w]  # drop words that were pure punctuation
+
+    if not stripped:
+        return ""
+
+    chosen: list[str] = [stripped[0]]
+    length = len(stripped[0])
+    for w in stripped[1:]:
         # +1 accounts for the joining space
         if length + 1 + len(w) > MAX_LEN:
             break
         chosen.append(w)
         length += 1 + len(w)
 
-    label = " ".join(chosen).lower()
-    # Strip trailing punctuation (anything that's not a letter/digit) per word end
-    label = re.sub(r'[^A-Za-z0-9]+$', '', label)
+    # Title Case (each word capitalised, whitespace preserved)
+    label = " ".join(w.capitalize() for w in chosen)
     return label
 
 

@@ -24,6 +24,19 @@ a history entry, and a cascade-check pass.
 
 ---
 
+## Step 0 — Capture the episode start time
+
+Before doing anything else, record the current UTC time:
+
+```bash
+START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+This timestamp will be used at the end of the episode to generate a single
+review summary (for substantive changes only — see Step 7).
+
+---
+
 ## Step 1 — Locate and load the target doc
 
 1. The caller supplies either the doc **id** (e.g. `20260615090003`) or a
@@ -199,6 +212,33 @@ Cascade summary: <N neighbors evaluated — list each id: verdict>
   (or "skipped — references-only change")
 
 Validation: <N docs scanned — clean | N errors, N warnings>
+```
+
+---
+
+## Step 7 — Generate the review summary (substantive changes only; FINAL step)
+
+**Only for substantive changes** (title, body, type, level, state, status, or
+depends_on were altered). References-only changes that add no history entry need
+no review summary — skip this step entirely for those.
+
+Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating
+the summary never blocks the change; it records the episode for later
+review/signoff.
+
+**Standalone invocation only**: if revise-doc was called by a higher-level
+skill (e.g. `ingest-reference`), do NOT emit a summary here — the top-level
+skill owns the single summary for the episode. Emit a summary only when
+revise-doc is the outermost skill for this editing session.
+
+```bash
+python3 scripts/ldoc.py review new --since "$START"
+```
+
+Report the returned review id to the user:
+
+```
+Review summary created: <id>   (reviews/<id>.md)
 ```
 
 ---
