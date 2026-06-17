@@ -25,7 +25,9 @@ from .model import (
     title_to_label,
     unique_label,
     display_label,
-    ref_link,
+    ref_token,
+    render_ref_token,
+    WIKILINK_RE,
     doc_prefix,
 )
 
@@ -75,7 +77,9 @@ __all__ = [
     "title_to_label",
     "unique_label",
     "display_label",
-    "ref_link",
+    "ref_token",
+    "render_ref_token",
+    "WIKILINK_RE",
     "doc_prefix",
     # serialize
     "CANONICAL_FIELD_ORDER",

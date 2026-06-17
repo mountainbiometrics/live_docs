@@ -63,7 +63,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATES, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, REVIEWS_DIR
-from livedocs.model import ref_link
 
 
 # ---------------------------------------------------------------------------
@@ -873,7 +872,7 @@ def _review_show(ledger: ReviewLedger, args) -> int:
         print("SIGNOFFS: (none)")
         print()
 
-    body = rec.get("body", "").strip()
+    body = ledger.render_body(rec.get("body", "")).strip()
     if body:
         print("SUMMARY:")
         print(body)

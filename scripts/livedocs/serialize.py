@@ -11,6 +11,37 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
+# Wikilink helpers for depends_on / references on-disk encoding
+# ---------------------------------------------------------------------------
+
+# Matches a bare wikilink id, e.g. [[20260616181728]] or [[20260616181728|alias]]
+_WIKILINK_ID_RE = re.compile(r'^\[\[(\d{14})(?:\|[^\]]*)?\]\]$')
+
+
+def _unwrap_wikilink(s: str) -> str:
+    """Strip a '[[<id>]]' (or '[[<id>|alias]]') wrapper to the bare id.
+
+    Passes through anything that does not match the wikilink pattern so that
+    plain bare ids already stored on disk are returned unchanged.
+    """
+    m = _WIKILINK_ID_RE.match(s.strip()) if isinstance(s, str) else None
+    return m.group(1) if m else s
+
+
+def _yaml_wikilink_list(items: list) -> str:
+    """Render a list of ids as quoted wikilinks for Obsidian compatibility.
+
+    Example: ["[[20260616181728]]", "[[20260616181820]]"]
+    Empty list stays [].  Quoting is required — unquoted [[…]] inside an
+    inline YAML list is ambiguous/invalid YAML.
+    """
+    if not items:
+        return "[]"
+    inner = ", ".join(f'"[[{i}]]"' for i in items)
+    return f"[{inner}]"
+
+
+# ---------------------------------------------------------------------------
 # Canonical field order
 # ---------------------------------------------------------------------------
 
@@ -201,22 +232,27 @@ def parse_doc(path: Path) -> dict:
 
     fm = _parse_frontmatter_text(fm_raw)
 
-    # Normalize depends_on to always be a list
+    # Normalize depends_on to always be a list of bare ids.
+    # On-disk values may be wrapped as "[[<id>]]" (wikilink form for Obsidian);
+    # _unwrap_wikilink strips that wrapper so the in-memory model stays as plain ids.
     dep = fm.get("depends_on")
     if dep is None:
         fm["depends_on"] = []
     elif isinstance(dep, str):
         # Scalar — shouldn't happen but handle gracefully
-        fm["depends_on"] = [dep] if dep else []
-    # else: already a list
+        fm["depends_on"] = [_unwrap_wikilink(dep)] if dep else []
+    else:
+        fm["depends_on"] = [_unwrap_wikilink(d) for d in dep]
 
-    # Normalize references to always be a list (absent field → [], not an error)
+    # Normalize references to always be a list of bare ids (absent field → []).
+    # Same wikilink unwrap as depends_on.
     ref = fm.get("references")
     if ref is None:
         fm["references"] = []
     elif isinstance(ref, str):
-        fm["references"] = [ref] if ref else []
-    # else: already a list
+        fm["references"] = [_unwrap_wikilink(ref)] if ref else []
+    else:
+        fm["references"] = [_unwrap_wikilink(r) for r in ref]
 
     # Normalize history to always be a list
     hist = fm.get("history")
@@ -290,9 +326,10 @@ def _emit_field(key: str, value: Any) -> list[str]:
             lines.append(f"    summary: {_yaml_str(summary)}")
         return lines
 
-    # depends_on / references: inline list
+    # depends_on / references: inline list of quoted wikilinks for Obsidian graph.
+    # Stored as ["[[id1]]", "[[id2]]"] on disk; parsed back to bare ids by parse_doc.
     if key in ("depends_on", "references") and isinstance(value, list):
-        return [f"{key}: {_yaml_list(value)}"]
+        return [f"{key}: {_yaml_wikilink_list(value)}"]
 
     # Other lists: inline
     if isinstance(value, list):

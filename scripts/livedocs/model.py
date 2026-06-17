@@ -134,16 +134,35 @@ def display_label(doc: dict) -> str:
     return f"{t.capitalize()}: {title}"
 
 
-def ref_link(doc: dict) -> str:
-    """
-    Render a doc as a typed wiki-link: '[<Type>: <Title>](<id>.md)'.
+# A stored reference is a bare wiki-link to a doc id: [[20260616181719]].
+# The 14-digit guard keeps a stray timestamp in prose from being mistaken
+# for a ref, and an optional |alias is tolerated so render output round-trips.
+WIKILINK_RE = re.compile(r'\[\[(\d{14})(?:\|[^\]]*)?\]\]')
 
-    Example: '[Decision: review-is-post-hoc](20260616181719.md)'
 
-    This is the canonical ref format used in review summaries.
+def ref_token(doc_or_id) -> str:
     """
-    doc_id = doc.get("id", "?")
-    return f"[{display_label(doc)}]({doc_id}.md)"
+    Canonical *stored* reference: '[[<id>]]'.
+
+    This is what gets serialized into review summaries and any other artifact.
+    It carries only the id — the single source of truth — so a label change
+    never leaves a stale copy behind. Accepts a doc dict or a bare id string.
+    """
+    doc_id = doc_or_id.get("id", "?") if isinstance(doc_or_id, dict) else str(doc_or_id)
+    return f"[[{doc_id}]]"
+
+
+def render_ref_token(doc_id: str, doc: dict | None) -> str:
+    """
+    Render a stored '[[<id>]]' for human display as '[[<id>|<Type>: <Title>]]'.
+
+    The label is resolved live from the current doc, so display always reflects
+    the doc's present title. A missing target renders explicitly rather than
+    silently dropping the ref. The |alias form is also what Obsidian shows.
+    """
+    if doc is None:
+        return f"[[{doc_id}|(missing)]]"
+    return f"[[{doc_id}|{display_label(doc)}]]"
 
 
 def doc_prefix(doc: dict) -> str:

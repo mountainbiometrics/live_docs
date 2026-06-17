@@ -21,12 +21,15 @@ Record format (reviews/<id>.md):
     ---
 
     ## Additions
-    - [<Type>: <Title>](<id>.md)
+    - [[<id>]]
       <Context or Overview section, indented>
     ## Revisions
-    - [<Type>: <Title>](<id>.md) — <what changed>
+    - [[<id>]] — <what changed>
     ## Minor Alterations
     - <note>
+
+Refs are stored as bare '[[<id>]]' tokens (the id is the only source of
+truth); labels are resolved live at display time via ReviewLedger.render_body.
 
 Stdlib only. No external dependencies.
 """
@@ -35,7 +38,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import REVIEWS_DIR, generate_id, DOCS_DIR, ref_link
+from .model import (
+    REVIEWS_DIR, generate_id, DOCS_DIR,
+    ref_token, render_ref_token, WIKILINK_RE,
+)
 from .serialize import _yaml_str, _yaml_list, _parse_frontmatter_text
 
 
@@ -345,7 +351,7 @@ class ReviewLedger:
         lines.append("## Additions")
         if additions:
             for doc_id in additions:
-                lines.extend(_format_addition_entry(ref_link(docs[doc_id]), docs[doc_id]))
+                lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
         else:
             lines.append("(none)")
 
@@ -354,7 +360,7 @@ class ReviewLedger:
         if revisions:
             for doc_id in revisions:
                 doc = docs[doc_id]
-                link = ref_link(doc)
+                link = ref_token(doc_id)
                 # Use the most recent history entry as summary
                 hist = doc.get("history", [])
                 last_summary = ""
@@ -383,7 +389,7 @@ class ReviewLedger:
         if touched:
             for doc_id in touched:
                 if doc_id in docs:
-                    lines.extend(_format_addition_entry(ref_link(docs[doc_id]), docs[doc_id]))
+                    lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
         else:
             lines.append("(none)")
 
@@ -444,6 +450,22 @@ class ReviewLedger:
         records = self._load_all_reviews()
         rec_id = self._resolve(ref, records)
         return records[rec_id]
+
+    def render_body(self, body: str) -> str:
+        """
+        Expand stored '[[<id>]]' refs into '[[<id>|<Type>: <Title>]]' using the
+        docs' *current* labels. This is the read-time presentation step that
+        keeps the on-disk ledger normalized while display stays human-readable.
+        """
+        if not body or "[[" not in body:
+            return body
+        docs = self._load_docs()
+
+        def repl(m) -> str:
+            doc_id = m.group(1)
+            return render_ref_token(doc_id, docs.get(doc_id))
+
+        return WIKILINK_RE.sub(repl, body)
 
     # ------------------------------------------------------------------
     # sign
