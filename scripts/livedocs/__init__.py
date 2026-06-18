@@ -3,7 +3,7 @@ livedocs — Shared library for the live_docs tooling.
 
 Stdlib only (pathlib, re, datetime). No external dependencies. Import from other scripts:
 
-    from livedocs import DOCS_DIR, RAW_DIR, parse_doc, load_all, forward_edges, reverse_edges, id_title_map, generate_id, KB
+    from livedocs import DOCS_DIR, RAW_DIR, REVIEWS_DIR, parse_doc, load_all, forward_edges, reverse_edges, id_title_map, generate_id, KB
 
 Repo-root detection: the repo root is the parent of the parent of the directory that
 contains this package (scripts/livedocs/ → scripts/ → repo root).
@@ -13,7 +13,6 @@ from .model import (
     REPO_ROOT,
     DOCS_DIR,
     RAW_DIR,
-    TEMPLATES_DIR,
     REVIEWS_DIR,
     VALID_TYPES,
     VALID_STATUSES,
@@ -67,7 +66,6 @@ __all__ = [
     "REPO_ROOT",
     "DOCS_DIR",
     "RAW_DIR",
-    "TEMPLATES_DIR",
     "REVIEWS_DIR",
     "VALID_TYPES",
     "VALID_STATUSES",

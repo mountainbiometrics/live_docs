@@ -21,7 +21,6 @@ _SCRIPTS_DIR: Path = Path(__file__).resolve().parent.parent
 REPO_ROOT: Path = _SCRIPTS_DIR.parent
 DOCS_DIR: Path = REPO_ROOT / "docs"
 RAW_DIR: Path = REPO_ROOT / "raw"
-TEMPLATES_DIR: Path = REPO_ROOT / "templates"
 REVIEWS_DIR: Path = REPO_ROOT / "reviews"
 
 
