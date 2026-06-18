@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "6c09e6984749bee4",
+        "id": "047fcefbf3d955b3",
         "type": "tabs",
         "children": [
           {
-            "id": "2f9bab975787b100",
+            "id": "3ce45d9e7eabfef4",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "kb/02-docs/20260615100001.md",
+                "file": "kb/02-docs/20260617144634.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20260615100001"
+              "title": "20260617144634"
             }
           }
         ]
@@ -182,8 +182,13 @@
       "bases:Create new base": false
     }
   },
-  "active": "2f9bab975787b100",
+  "active": "3ce45d9e7eabfef4",
   "lastOpenFiles": [
+    "kb/02-docs/20260615100013.md",
+    "reports/obsidian-plugins.md",
+    "Untitled.base",
+    "Untitled 1.base",
+    "kb/02-docs/20260615100001.md",
     "kb/02-docs/20260615204138.md",
     "kb/02-docs/20260615182358.md",
     "kb/02-docs/20260615100016.md",
@@ -192,7 +197,6 @@
     "kb/02-docs/20260615100004.md",
     "kb/02-docs/20260615090011.md",
     "kb/02-docs/20260615100000.md",
-    "kb/02-docs/20260615100001.md",
     "kb/02-docs/20260615100003.md",
     "kb/review-queue.base",
     "kb/reviews/20260618000534.md",
@@ -212,13 +216,9 @@
     "kb/reviews/20260618001701.md",
     "kb/reviews/20260617224908.md",
     "kb/reviews/20260617152500.md",
-    "kb/reviews/20260616200323.md",
     "kb/reviews",
-    "kb/01-raw/20260617144139.md",
     "kb/01-raw",
     "kb/02-docs",
-    "kb",
-    "reports",
-    "Untitled.base"
+    "kb"
   ]
 }
