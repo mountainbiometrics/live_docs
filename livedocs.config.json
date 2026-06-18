@@ -1,0 +1,6 @@
+{
+  "inbox": "kb/00-inbox",
+  "raw": "kb/01-raw",
+  "docs": "kb/02-docs",
+  "reviews": "kb/reviews"
+}

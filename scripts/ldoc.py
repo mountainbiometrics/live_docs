@@ -48,6 +48,11 @@ Subcommands (grouped):
     history <ref> --add "summary"
     ingest-raw (--from-file P | --body T|-) --source S [--title T] [--label L]
 
+  ── Inbox pipeline ──
+    inbox add (--from-file P | --body T|-) [--title T] [--source S]
+    inbox list
+    promote <ref> [--all]
+
   ── Maintenance ──
     validate
     reindex
@@ -69,6 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, REVIEWS_DIR
+from livedocs import INBOX_DIR, RAW_DIR, generate_id
 
 
 # ---------------------------------------------------------------------------
@@ -779,6 +785,286 @@ def cmd_ingest_raw(kb: KB, args) -> int:
     return 0
 
 
+def _yaml_str_inbox(value: str) -> str:
+    """Wrap value in double-quotes, escaping any inner double-quotes."""
+    return '"' + value.replace('"', '\\"') + '"'
+
+
+def _inbox_resolver(ref: str, search_dir: Path) -> Path | None:
+    """
+    Resolve a ref against a flat directory of <id>.md files.
+
+    Matches (in order):
+    1. Exact id: <ref>.md exists
+    2. Unique filename substring: exactly one file whose stem contains <ref>
+    3. Unique title substring (case-insensitive) in frontmatter
+
+    Returns the Path on a unique match, None if not found or ambiguous.
+    Prints an error to stderr on ambiguity.
+    """
+    import re as _re
+
+    candidates = list(search_dir.glob("*.md"))
+
+    # 1. Exact id match
+    exact = search_dir / f"{ref}.md"
+    if exact.exists():
+        return exact
+
+    # 2. Filename stem substring
+    stem_matches = [p for p in candidates if ref in p.stem]
+    if len(stem_matches) == 1:
+        return stem_matches[0]
+    if len(stem_matches) > 1:
+        _err(f"Ref {ref!r} is ambiguous (matches: {', '.join(p.stem for p in stem_matches)}). "
+             f"Use a more specific ref or the exact id.")
+        return None
+
+    # 3. Title substring in frontmatter (case-insensitive)
+    pattern = _re.compile(_re.escape(ref), _re.IGNORECASE)
+    title_matches = []
+    for p in candidates:
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # Extract title from frontmatter: look for `title: "..." or title: ...`
+        for line in text.split("\n"):
+            if line.startswith("title:"):
+                title_val = line[len("title:"):].strip().strip('"').strip("'")
+                if pattern.search(title_val):
+                    title_matches.append(p)
+                break
+    if len(title_matches) == 1:
+        return title_matches[0]
+    if len(title_matches) > 1:
+        _err(f"Ref {ref!r} is ambiguous by title (matches: "
+             f"{', '.join(p.stem for p in title_matches)}). "
+             f"Use a more specific ref or the exact id.")
+        return None
+
+    return None
+
+
+def _read_frontmatter_field(path: Path, field: str) -> str:
+    """Return the value of a frontmatter scalar field, or '' if absent."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    in_fm = False
+    for line in text.split("\n"):
+        if line == "---":
+            if not in_fm:
+                in_fm = True
+                continue
+            else:
+                break
+        if in_fm and line.startswith(f"{field}:"):
+            val = line[len(f"{field}:"):].strip().strip('"').strip("'")
+            return val
+    return ""
+
+
+def cmd_inbox(kb: KB, args) -> int:
+    """Dispatch ldoc inbox <subverb> commands."""
+    verb = args.inbox_verb
+
+    if verb == "add":
+        return _inbox_add(args)
+    elif verb == "list":
+        return _inbox_list(args)
+    else:
+        _err(f"Unknown inbox subcommand: {verb!r}")
+        return 1
+
+
+def _inbox_add(args) -> int:
+    """Write one item verbatim into INBOX_DIR with minimal frontmatter."""
+    from datetime import datetime, timezone as _tz
+
+    # Resolve body
+    if getattr(args, "from_file", None):
+        p = Path(args.from_file)
+        if not p.exists():
+            _err(f"--from-file path does not exist: {p}")
+            return 1
+        body = p.read_text(encoding="utf-8")
+    elif args.body == "-":
+        body = sys.stdin.read()
+    elif args.body:
+        body = args.body
+    else:
+        _err("Provide --from-file or --body.")
+        return 1
+
+    INBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+    inbox_id = generate_id(INBOX_DIR)
+    captured = datetime.now(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    title = getattr(args, "title", "") or ""
+    source = getattr(args, "source", "") or ""
+
+    lines = ["---", f"id: {_yaml_str_inbox(inbox_id)}"]
+    if title:
+        lines.append(f"title: {_yaml_str_inbox(title)}")
+    lines.append("status: inbox")
+    if source:
+        lines.append(f"source: {_yaml_str_inbox(source)}")
+    lines.append(f"captured: {_yaml_str_inbox(captured)}")
+    lines.append("---")
+    frontmatter = "\n".join(lines)
+
+    content = frontmatter + "\n\n" + body
+    if not content.endswith("\n"):
+        content += "\n"
+
+    out_path = INBOX_DIR / f"{inbox_id}.md"
+    out_path.write_text(content, encoding="utf-8")
+
+    print(f"id:   {inbox_id}")
+    print(f"path: {out_path}")
+    return 0
+
+
+def _inbox_list(args) -> int:
+    """List items currently in the inbox."""
+    if not INBOX_DIR.exists():
+        print("(inbox is empty)")
+        return 0
+
+    items = sorted(INBOX_DIR.glob("*.md"))
+    # exclude .gitkeep
+    items = [p for p in items if p.suffix == ".md"]
+
+    if not items:
+        print("(inbox is empty)")
+        return 0
+
+    for p in items:
+        doc_id = p.stem
+        title = _read_frontmatter_field(p, "title")
+        source = _read_frontmatter_field(p, "source")
+        captured = _read_frontmatter_field(p, "captured")
+        label_parts = [doc_id]
+        if title:
+            label_parts.append(f'"{title}"')
+        elif source:
+            label_parts.append(f"source: {source}")
+        if captured:
+            label_parts.append(f"captured: {captured}")
+        print("  ".join(label_parts))
+
+    return 0
+
+
+def cmd_promote(kb: KB, args) -> int:
+    """Gate 1: move item(s) from inbox → raw, or explain gate 2 for raw items."""
+    from datetime import date as _date
+
+    if getattr(args, "all", False):
+        # Drain every inbox item
+        if not INBOX_DIR.exists():
+            print("Inbox is empty.")
+            return 0
+        items = sorted(INBOX_DIR.glob("*.md"))
+        if not items:
+            print("Inbox is empty.")
+            return 0
+        rc = 0
+        for p in items:
+            rc = max(rc, _promote_one(p.stem, p, args))
+        return rc
+
+    if not args.ref:
+        _err("Provide <ref> or --all.")
+        return 1
+
+    # Try inbox first
+    inbox_path = _inbox_resolver(args.ref, INBOX_DIR)
+    if inbox_path is not None:
+        return _promote_one(inbox_path.stem, inbox_path, args)
+
+    # Try raw dir — explain gate 2
+    raw_path = _inbox_resolver(args.ref, RAW_DIR)
+    if raw_path is not None:
+        print(
+            f"'{args.ref}' is already in raw/ (gate 1 already done).\n"
+            f"raw→docs promotion is decomposition — run the ingest-reference skill on that raw id:\n"
+            f"  /ingest-reference  (then supply id: {raw_path.stem})"
+        )
+        return 0
+
+    _err(f"Ref {args.ref!r} not found in inbox or raw. Use 'ldoc inbox list' to see inbox items.")
+    return 1
+
+
+def _promote_one(inbox_id: str, inbox_path: Path, args) -> int:
+    """Move one inbox item to raw/, rewriting frontmatter to raw-clipping shape."""
+    from datetime import datetime, timezone as _tz
+
+    try:
+        body_text = inbox_path.read_text(encoding="utf-8")
+    except OSError as e:
+        _err(f"Cannot read {inbox_path}: {e}")
+        return 1
+
+    # Parse the body out (everything after the closing ---)
+    lines = body_text.split("\n")
+    in_fm = False
+    fm_end = 0
+    dash_count = 0
+    for i, line in enumerate(lines):
+        if line == "---":
+            dash_count += 1
+            if dash_count == 2:
+                fm_end = i
+                break
+
+    body_lines = lines[fm_end + 1:] if fm_end else lines
+    body = "\n".join(body_lines)
+    if body and not body.endswith("\n"):
+        body += "\n"
+
+    # Pull useful fields from inbox frontmatter
+    original_source = _read_frontmatter_field(inbox_path, "source") or "(promoted from inbox)"
+    title = _read_frontmatter_field(inbox_path, "title") or ""
+
+    # Generate a collision-safe id for the raw tier
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    raw_id = generate_id(RAW_DIR)
+
+    imported = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+
+    # Build raw-clipping frontmatter (matches ingest_raw.py format exactly)
+    fm_lines = ["---", f'id: "{raw_id}"']
+    if title:
+        fm_lines.append(f'title: "{title.replace(chr(34), chr(92)+chr(34))}"')
+    fm_lines += [
+        "type: reference",
+        "kind: clipping",
+        "status: historical",
+        f'original_source: "{original_source.replace(chr(34), chr(92)+chr(34))}"',
+        f'imported: "{imported}"',
+        "---",
+    ]
+    frontmatter = "\n".join(fm_lines)
+
+    content = frontmatter + "\n\n" + body
+
+    # Write to raw
+    raw_path = RAW_DIR / f"{raw_id}.md"
+    raw_path.write_text(content, encoding="utf-8")
+
+    # Remove from inbox
+    inbox_path.unlink()
+
+    print(f"Promoted: {inbox_id} → {raw_id}")
+    print(f"  raw path: {raw_path}")
+    return 0
+
+
 def cmd_validate(kb: KB, args) -> int:
     """Delegate to validate logic (same as validate.py) via shared KB state."""
     import subprocess
@@ -959,6 +1245,15 @@ def cmd_help(kb: KB, args) -> int:
   ldoc link porcelain-roadmap --relates batch-operations --dry-run
   ldoc unlink porcelain-roadmap --requires batch-operations
   ldoc history porcelain-roadmap --add "Updated approach"
+
+  # Inbox pipeline (gate 0 → gate 1 → gate 2)
+  echo "quick thought" | ldoc inbox add --body - --title "quick thought"
+  ldoc inbox add --from-file notes.txt --title "Meeting notes" --source "meeting 2026-06-18"
+  ldoc inbox list
+  ldoc promote <inbox-id>                # gate 1: inbox → raw
+  ldoc promote --all                     # drain entire inbox
+  # gate 2: raw → docs via ingest-reference skill
+  # (for an item already in raw, promote will print this guidance)
 
   # Maintenance
   ldoc validate
@@ -1178,6 +1473,40 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title", default="")
     p.add_argument("--label", default="")
 
+    # --- inbox ---
+    p_inbox = sub.add_parser(
+        "inbox",
+        help="Inbox drop-point: instant capture before ingestion (gate 0).",
+    )
+    inbox_sub = p_inbox.add_subparsers(dest="inbox_verb", metavar="verb")
+    inbox_sub.required = True
+
+    p_ia = inbox_sub.add_parser(
+        "add",
+        help="Drop one item into the inbox verbatim (no processing).",
+    )
+    p_ia.add_argument("--from-file", default="", dest="from_file",
+                      help="Read verbatim body from this file path.")
+    p_ia.add_argument("--body", default="",
+                      help="Inline body text; use '-' to read from stdin.")
+    p_ia.add_argument("--title", default="",
+                      help="Human-readable title (stored in frontmatter only).")
+    p_ia.add_argument("--source", default="",
+                      help="Where the content came from (URL, file, description).")
+
+    inbox_sub.add_parser("list", help="List items currently in the inbox.")
+
+    # --- promote ---
+    p = sub.add_parser(
+        "promote",
+        help="Gate 1: move inbox item(s) → raw/ with raw-clipping frontmatter. "
+             "For raw→docs, use the ingest-reference skill (gate 2).",
+    )
+    p.add_argument("ref", nargs="?", default="",
+                   help="id or unique substring of an inbox item.")
+    p.add_argument("--all", action="store_true",
+                   help="Promote (drain) every item currently in the inbox.")
+
     # --- validate ---
     sub.add_parser("validate", help="Run structural integrity checks.")
 
@@ -1242,6 +1571,8 @@ COMMANDS = {
     "unlink": cmd_unlink,
     "history": cmd_history,
     "ingest-raw": cmd_ingest_raw,
+    "inbox": cmd_inbox,
+    "promote": cmd_promote,
     "validate": cmd_validate,
     "reindex": cmd_reindex,
     "edges": cmd_edges,

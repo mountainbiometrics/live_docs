@@ -13,6 +13,18 @@ description: >
 
 # ingest-reference — Bring external material into the store atomically
 
+**Where input comes from (two-gate inbox pipeline):**
+
+- **Gate 0 — capture (drop-point):** Raw material arrives via `ldoc inbox add`
+  (or is pasted directly). The inbox (`kb/00-inbox/`) is instant, no-processing.
+- **Gate 1 — accept (promote):** A human runs `ldoc promote <id>` to move the
+  item from inbox → `kb/01-raw/` with raw-clipping frontmatter. This marks it as
+  officially accepted for ingestion.
+- **Gate 2 — ingest (this skill):** `ingest-reference` is invoked on a raw item
+  in `kb/01-raw/`. This is the decomposition step — it MUST NOT be skipped.
+  Running the skill on an inbox item directly (bypassing gate 1) is wrong; promote
+  it first.
+
 The cardinal rule: **the decomposition step is where atomicity is produced.**
 A raw blob ingested as a single doc is a liability, not an asset. Do not skip
 decomposition.
