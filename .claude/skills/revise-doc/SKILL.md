@@ -13,31 +13,51 @@ description: >
   exists in docs/.
 ---
 
-# revise-doc — Governed edit of an existing doc
+# revise-doc — Governed edit of an existing doc (orchestrator)
 
 The cardinal rule: **classify before you write.** A provenance-only change
 (`provenance` or `relates` bookkeeping) never triggers cascade. Whether it needs a
 history entry depends on intent: backfilling initial provenance is not
 history-worthy, but adding a new reference later is. A substantive change
 (anything that affects meaning, structure, or the dependency graph) requires
-dedup/conflict checking, a history entry, and a cascade-check pass.
+dedup/conflict checking, a history entry, and an impact pass.
+
+This skill is a **thin orchestrator** with a **single-doc focus**. Its unique
+parts are that classification gate and its history discipline; the shared phases
+are composed from sub-skills — `identify-key-concepts` (as *claims*),
+`map-concepts-to-docs` (as a dedup/conflict scan), and for substantive changes
+`assess-blast-radius` + `cascade-check` and `synthesize-doc-changes`.
+
+---
+
+## This skill OWNS the episode (recursion / duplicate-review discipline)
+
+Exactly like cascade-check's "orchestrator owns the episode" contract:
+
+- revise-doc captures the single `START` timestamp (Step 0) and emits the **one**
+  review summary for the episode (Step 7), for substantive changes only.
+- Every sub-skill it invokes — `identify-key-concepts`, `map-concepts-to-docs`,
+  `assess-blast-radius`, `synthesize-doc-changes`, and `cascade-check` — is a
+  **nested invocation**: tell each one so. Nested sub-skills must NOT capture
+  their own `START`, run `ldoc review new`, or re-invoke this orchestrator.
+- If revise-doc is itself invoked nested by a higher-level skill (e.g.
+  `ingest-reference`), it does NOT emit a review summary — the outermost skill
+  owns it (see Step 7).
 
 ---
 
 ## Step 0 — Capture the episode start time
 
-Before doing anything else, record the current UTC time:
-
 ```bash
 START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
 
-This timestamp will be used at the end of the episode to generate a single
-review summary (for substantive changes only — see Step 7).
+Used at the end to generate a single review summary (substantive changes only —
+see Step 7).
 
 ---
 
-## Step 1 — Locate, load, and articulate the change
+## Step 1 — Locate, load, and extract the claims
 
 1. The caller supplies either the doc **id** (e.g. `20260615090003`) or a
    **title fragment**. If a title fragment is given, resolve it:
@@ -55,81 +75,40 @@ review summary (for substantive changes only — see Step 7).
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
-4. **Extract the claims the revision is introducing.** Before any KB query,
-   scan the proposed change for concepts by type. Use the table below as a
-   recognition checklist — for each category, ask whether the revision
-   introduces an instance of it:
+4. **Extract the claims the revision introduces** — invoke the
+   **`identify-key-concepts`** skill on the proposed change, as a **nested
+   invocation**. Pass revise-doc's knobs:
 
-   | What you find | Type |
-   |---|---|
-   | A design truth or rule that should guide future work | `principle` |
-   | A significant choice with a rationale | `decision` |
-   | An external force limiting options | `constraint` |
-   | A must-have behavior or property | `requirement` |
-   | A user story or workflow | `use-case` |
-   | A capability description | `component` |
+   > Extract **1–3 claims**, labeled **`Claim`** (not `Concept`). For a small or
+   > purely corrective revision (typo, date, removing stale text), a single claim
+   > entry suffices; for a revision adding substantial new content or changing
+   > the doc's core claim, enumerate each distinct claim separately. No splitting
+   > test.
 
-   Prefer `decision` when describing a choice among alternatives with a
-   rationale. Principles are universal guidelines; decisions are specific
-   choices.
+   It returns the typed claim list (`Claim / Type / Asserts`) — these are the
+   search keys for Step 2.
 
-   Revisions typically touch 1–3 concepts. For small or purely corrective
-   revisions (fixing a typo, adjusting a date, removing stale text), a single
-   concept entry suffices. For revisions that add substantial new content or
-   change the doc's core claim, enumerate each distinct concept separately.
-
-   Write down each concept found as:
-
-   ```
-   Claim: "<short noun phrase>"
-     Type:    <principle | decision | constraint | requirement | use-case | component>
-     Asserts: <one sentence: what will be true after this revision>
-   ```
-
-   These claims are the search keys for Step 2. A vague intent produces vague
-   matches; a precise claim either finds the exact conflict or confirms there
-   isn't one.
-
-   If the revision is provenance-only (no claim changes at all), skip this step
-   and proceed to Step 4 directly.
+   If the revision is **provenance-only** (no claim changes at all), skip this
+   extraction and proceed to Step 4 directly.
 
 ---
 
-## Step 2 — Dedup and conflict scan (ingest-style care)
+## Step 2 — Dedup and conflict scan (invoke `map-concepts-to-docs`)
 
-Before writing anything, check that the revision does not introduce redundancy or
-contradiction.
+Invoke the **`map-concepts-to-docs`** skill with the claim list from Step 1, as a
+**nested invocation**. Emphasis: **a dedup/conflict scan focused on the target
+doc's neighbors and same-type docs** — does the revision duplicate or contradict
+an existing claim? It returns a relationship verdict map. (Read-only — safe to
+run via `context: fork` if the store is large.)
 
-**2a. Build the graph context:**
-```bash
-python3 scripts/ldoc.py neighbors <id> --json
-```
-Note the `requires`/`belongs_to` entries (upstream) and `dependents` entries (downstream).
-To check for dangling edges across the store, run `ldoc edges --json` and inspect
-the `dangling` key — surface any to the user before proceeding.
+Act on the map before writing:
 
-**2b. Read candidate docs** — the docs most likely to overlap with the revision:
-- All upstream neighbors (things this doc depends on): from `ldoc neighbors` output.
-- All downstream neighbors (things that depend on this doc): from `ldoc neighbors` output.
-- All docs of the same `type`:
-  ```bash
-  python3 scripts/ldoc.py ls --type <type> --json
-  ```
-  Read any whose title or scope suggests overlap with the proposed change via
-  `ldoc show <candidate-id>`.
-
-**2c. Evaluate for:**
-- **Duplication** — does the proposed new content already live, in substance, in
-  another doc? If so, prefer one of these resolutions instead of editing this doc:
-  - **Link**: add the other doc to `requires` or `relates` (whichever fits the
-    relationship) and note the relationship.
-  - **Merge**: propose consolidating the two docs (surface to user; do not merge
-    silently).
-  Surface the overlapping doc id and title, explain the overlap, and ask how to
-  proceed.
-- **Conflict** — does the proposed change contradict a principle, decision,
-  constraint, or requirement in another doc? If so, surface the conflict with
-  specifics and ask how to resolve it. Do not apply the edit silently.
+- **Duplication** — if the proposed content already lives, in substance, in
+  another doc, prefer linking (`requires`/`relates`) or proposing a merge
+  (surface to the user; do not merge silently) over editing this doc.
+- **Conflict** — if the change contradicts a principle/decision/constraint/
+  requirement elsewhere (`conflict-unresolved`), surface specifics and ask how
+  to resolve. Do not apply the edit silently.
 
 If neither duplication nor conflict is found, proceed.
 
@@ -156,7 +135,10 @@ python3 scripts/ldoc.py link <id> --superseded-by <new-id>
 # body-text changes: edit docs/<id>.md directly (no ldoc verb for body in-place)
 ```
 
-No gratuitous reformatting, no refactoring beyond scope.
+No gratuitous reformatting, no refactoring beyond scope. For a deprecation or a
+wider rewrite that affects several docs at once, hand the plan to
+`synthesize-doc-changes` (nested) rather than hand-writing each doc — it owns the
+coherent-batch write discipline. Single-field edits stay inline here.
 
 ---
 
@@ -202,22 +184,17 @@ edge.
 python3 scripts/ldoc.py history <id> --add "<concise description of what changed and why>"
 ```
 
-**Action — cascade-check next (nested invocation):**
+**Action — assess impact, then cascade (nested invocations):**
 
-Invoke the `cascade-check` skill starting from this doc's id, passing the change
-description as context. Explicitly tell cascade-check this is a **nested
-invocation** so it does not emit its own review summary (revise-doc owns the
-episode summary).
+For a substantive change you may first invoke the **`assess-blast-radius`** skill
+from this doc's id (nested) to survey the impact set read-only before writing
+neighbors — useful when the edit is large. Then invoke the **`cascade-check`**
+skill starting from this doc's id, passing the change description as context, as
+a **nested invocation** so it does not emit its own review summary (revise-doc
+owns the episode summary). cascade-check runs its own two-pass model (read-only
+walk, then batch write of `cascade` neighbors) and halts on `incompatible`.
 
-cascade-check will use its two-pass model:
-- **Pass 1 (read-only)**: walk both upstream (`requires`/`belongs_to`) and
-  downstream (`dependents`) neighbors; collect verdicts for the entire impact set
-  before writing anything.
-- **Pass 2 (batch write)**: apply all `cascade` updates in one coherent pass,
-  writing each affected doc as its single correct current state.
-- Halt and surface `incompatible` branches to the user.
-
-Do not skip cascade-check for substantive changes, even if the change seems
+Do not skip the cascade for substantive changes, even if the change seems
 minor — cascade decides impact, not the editor.
 
 ---
@@ -269,14 +246,10 @@ Validation: <N docs scanned — clean | N errors, N warnings>
 belongs_to, or tags were altered). Provenance-only changes that add no history
 entry need no review summary — skip this step entirely for those.
 
-Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating
-the summary never blocks the change; it records the episode for later
-review/signoff.
-
-**Standalone invocation only**: if revise-doc was called by a higher-level
+**Standalone invocation only**: if revise-doc was called nested by a higher-level
 skill (e.g. `ingest-reference`), do NOT emit a summary here — the top-level
-skill owns the single summary for the episode. Emit a summary only when
-revise-doc is the outermost skill for this editing session.
+skill owns the single summary for the episode. Emit one only when revise-doc is
+the outermost skill for this editing session.
 
 ```bash
 python3 scripts/ldoc.py review new --since "$START"
@@ -287,6 +260,9 @@ Report the returned review id to the user:
 ```
 Review summary created: <id>   (reviews/<id>.md)
 ```
+
+Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating the
+summary never blocks the change; it records the episode for later signoff.
 
 ---
 
@@ -331,7 +307,8 @@ substantive — this is a two-part mandatory operation, not just a field change:
    `superseded_by` edge and no Correction section is **invalid**.
 3. History entry must record the supersession. Run cascade from this doc:
    all `requires`/`belongs_to` dependents need to know their upstream is
-   now deprecated.
+   now deprecated. (For a deprecation that creates a replacement and rewrites
+   several docs, hand the plan to `synthesize-doc-changes`.)
 
 **Fix a typo in the body**: substantive (body changed) — but cascade will almost
 certainly return all-`inconsequential` verdicts. Still run it.

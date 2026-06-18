@@ -1,0 +1,134 @@
+---
+name: map-concepts-to-docs
+user-invocable: false
+description: >
+  Given an extracted concept (or claim) list, query the live_docs KB and map
+  each concept to existing docs, recording the relationship: compatible,
+  partial-supersession, full-supersession, or conflict-unresolved. Owns the
+  shared survey + dedup-and-conflict scan that apply-to-docs, ingest-reference,
+  and revise-doc each used to inline. Read-only — produces a relationship
+  verdict map, writes nothing. A phase sub-skill, not meant to be run directly
+  by a user.
+---
+
+# map-concepts-to-docs — Map concepts to existing docs (shared phase)
+
+This skill owns the **one** read-only survey that turns a concept list into a
+relationship verdict map. It is invoked after `identify-key-concepts` by the
+governed-write orchestrators. **This entire skill is read-only** — it issues
+only `ldoc find`/`ls`/`show`/`neighbors` and writes nothing.
+
+---
+
+## Nested-invocation rule (read first)
+
+This skill is **always a nested invocation** — the calling orchestrator owns
+the episode. It therefore:
+
+- does NOT capture a `START` time or emit any review summary,
+- does NOT write, revise, or create any doc (synthesis is a later phase),
+- does NOT re-invoke the orchestrator or any write skill.
+
+It leaves a labeled verdict map in context for the orchestrator to read.
+
+Because this phase is purely read-only and can be token-heavy on a large store,
+the orchestrator MAY run it in an isolated context via `context: fork` — in
+which case it receives the concept list as input and returns only the verdict
+map. When run inline (the default), the concept list is already in context.
+
+---
+
+## Inputs (supplied by the orchestrator)
+
+- **The concept/claim list** from `identify-key-concepts` (each with its
+  `Type` and `Asserts` sentence).
+- **The scan emphasis** — a knob the orchestrator passes:
+  - apply-to-docs / ingest-reference: full concept survey across the store.
+  - revise-doc: a dedup/conflict scan focused on the target doc's neighbors and
+    same-type docs (does the revision duplicate or contradict an existing
+    claim?).
+
+---
+
+## Step 1 — Survey candidate docs for each concept
+
+For every concept, search for candidate matching docs using its `Asserts`
+sentence as the search key:
+
+```bash
+python3 scripts/ldoc.py find "<concept noun phrase or key claim>"
+```
+
+If the first search returns no strong candidates, try alternate phrasings:
+
+```bash
+python3 scripts/ldoc.py find "<alternate phrasing>"
+```
+
+Also list all docs of the concept's likely type to catch anything text search
+misses:
+
+```bash
+python3 scripts/ldoc.py ls --type <type> --json
+```
+
+For a dedup/conflict scan around an existing target doc (revise-doc's emphasis),
+also pull the doc's neighbors so upstream and downstream candidates are included:
+
+```bash
+python3 scripts/ldoc.py neighbors <target-id> --json
+```
+
+For each candidate, load the full doc and read it:
+
+```bash
+python3 scripts/ldoc.py show <candidate-id>
+```
+
+To surface dangling edges across the store before relying on the graph, run
+`python3 scripts/ldoc.py edges --json` and check the `dangling` key; surface any
+to the user.
+
+---
+
+## Step 2 — Classify the relationship for each match
+
+For each concept, record zero or more matching existing docs with the
+relationship of the concept's claim to that doc's claim:
+
+| Relationship | Meaning |
+|---|---|
+| `compatible` | Existing doc's claim is fully consistent with the new concept. |
+| `partial-supersession` | New concept changes part of the existing doc's claim; the rest remains valid. |
+| `full-supersession` | New concept renders the entire existing doc's claim obsolete. |
+| `conflict-unresolved` | The two claims are incompatible and need human judgment. |
+
+The source rarely says "doc 1234 is wrong" outright — it just asserts a concept
+that contradicts an existing claim. Judge the substance, not the wording.
+
+**Bias rule**: prefer `compatible` when the relationship is weak or tangential.
+Prefer surfacing a `conflict-unresolved` over silently accepting a weak match —
+silent drift is worse than a flagged conflict.
+
+---
+
+## Output — the relationship verdict map
+
+Leave a labeled map in context for the orchestrator:
+
+```
+Concept: "<short noun phrase>"
+  Asserts: "<new claim>"
+  Matches:
+    <id>  "<existing title>"  — <compatible | partial-supersession | full-supersession | conflict-unresolved>
+      Reason: <one sentence>
+  Action planned: <revise | deprecate | link-provenance | create-new>
+```
+
+Concepts with no match (or whose only matches are frozen/deprecated) are
+candidates for new docs. **Correcting stale existing docs is the highest-value
+output** — existing docs have dependents that cascade-check will propagate to;
+freshly created docs have none.
+
+Do not write anything. The orchestrator decides whether to assess blast radius
+(`assess-blast-radius`) and how to apply changes (`synthesize-doc-changes`).
