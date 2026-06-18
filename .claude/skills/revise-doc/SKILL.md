@@ -37,7 +37,7 @@ review summary (for substantive changes only — see Step 7).
 
 ---
 
-## Step 1 — Locate and load the target doc
+## Step 1 — Locate, load, and articulate the change
 
 1. The caller supplies either the doc **id** (e.g. `20260615090003`) or a
    **title fragment**. If a title fragment is given, resolve it:
@@ -55,6 +55,43 @@ review summary (for substantive changes only — see Step 7).
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
+4. **Extract the claims the revision is introducing.** Before any KB query,
+   scan the proposed change for concepts by type. Use the table below as a
+   recognition checklist — for each category, ask whether the revision
+   introduces an instance of it:
+
+   | What you find | Type |
+   |---|---|
+   | A design truth or rule that should guide future work | `principle` |
+   | A significant choice with a rationale | `decision` |
+   | An external force limiting options | `constraint` |
+   | A must-have behavior or property | `requirement` |
+   | A user story or workflow | `use-case` |
+   | A capability description | `component` |
+
+   Prefer `decision` when describing a choice among alternatives with a
+   rationale. Principles are universal guidelines; decisions are specific
+   choices.
+
+   Revisions typically touch 1–3 concepts. For small or purely corrective
+   revisions (fixing a typo, adjusting a date, removing stale text), a single
+   concept entry suffices. For revisions that add substantial new content or
+   change the doc's core claim, enumerate each distinct concept separately.
+
+   Write down each concept found as:
+
+   ```
+   Claim: "<short noun phrase>"
+     Type:    <principle | decision | constraint | requirement | use-case | component>
+     Asserts: <one sentence: what will be true after this revision>
+   ```
+
+   These claims are the search keys for Step 2. A vague intent produces vague
+   matches; a precise claim either finds the exact conflict or confirms there
+   isn't one.
+
+   If the revision is provenance-only (no claim changes at all), skip this step
+   and proceed to Step 4 directly.
 
 ---
 
@@ -165,16 +202,19 @@ edge.
 python3 scripts/ldoc.py history <id> --add "<concise description of what changed and why>"
 ```
 
-**Action — cascade-check next:**
+**Action — cascade-check next (nested invocation):**
 
-Invoke the `cascade-check` skill starting from this doc's id. Provide the change
-description as context. The skill will:
-- Walk both upstream (`requires`/`belongs_to`) and downstream (`dependents`)
-  neighbors via `ldoc neighbors`.
-- Emit a verdict (`inconsequential`, `cascade`, `incompatible`, or
-  `context-request`) for each neighbor.
-- Update any neighbors that receive a `cascade` verdict using `ldoc set`/`ldoc link`
-  and `ldoc history`.
+Invoke the `cascade-check` skill starting from this doc's id, passing the change
+description as context. Explicitly tell cascade-check this is a **nested
+invocation** so it does not emit its own review summary (revise-doc owns the
+episode summary).
+
+cascade-check will use its two-pass model:
+- **Pass 1 (read-only)**: walk both upstream (`requires`/`belongs_to`) and
+  downstream (`dependents`) neighbors; collect verdicts for the entire impact set
+  before writing anything.
+- **Pass 2 (batch write)**: apply all `cascade` updates in one coherent pass,
+  writing each affected doc as its single correct current state.
 - Halt and surface `incompatible` branches to the user.
 
 Do not skip cascade-check for substantive changes, even if the change seems
