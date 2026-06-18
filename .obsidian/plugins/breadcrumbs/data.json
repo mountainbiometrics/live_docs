@@ -1,16 +1,28 @@
 {
   "is_dirty": false,
   "edge_fields": [
-    { "label": "belongs_to" },
-    { "label": "requires" },
-    { "label": "relates" },
-    { "label": "provenance" },
-    { "label": "superseded_by" }
+    {
+      "label": "belongs_to"
+    },
+    {
+      "label": "requires"
+    },
+    {
+      "label": "relates"
+    },
+    {
+      "label": "provenance"
+    },
+    {
+      "label": "superseded_by"
+    }
   ],
   "edge_field_groups": [
     {
       "label": "parents",
-      "fields": ["belongs_to"]
+      "fields": [
+        "belongs_to"
+      ]
     },
     {
       "label": "children",
@@ -18,19 +30,27 @@
     },
     {
       "label": "dependencies",
-      "fields": ["requires"]
+      "fields": [
+        "requires"
+      ]
     },
     {
       "label": "siblings",
-      "fields": ["relates"]
+      "fields": [
+        "relates"
+      ]
     },
     {
       "label": "sources",
-      "fields": ["provenance"]
+      "fields": [
+        "provenance"
+      ]
     },
     {
       "label": "successors",
-      "fields": ["superseded_by"]
+      "fields": [
+        "superseded_by"
+      ]
     }
   ],
   "implied_relations": {
@@ -39,7 +59,9 @@
         "name": "implied-child",
         "rounds": 1,
         "chain": [
-          { "field": "belongs_to" }
+          {
+            "field": "belongs_to"
+          }
         ],
         "close_field": "belongs_to",
         "close_reversed": true
@@ -48,7 +70,9 @@
         "name": "implied-relates-symmetric",
         "rounds": 1,
         "chain": [
-          { "field": "relates" }
+          {
+            "field": "relates"
+          }
         ],
         "close_field": "relates",
         "close_reversed": true
@@ -57,7 +81,9 @@
         "name": "implied-supersedes",
         "rounds": 1,
         "chain": [
-          { "field": "superseded_by" }
+          {
+            "field": "superseded_by"
+          }
         ],
         "close_field": "superseded_by",
         "close_reversed": true

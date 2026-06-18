@@ -55,11 +55,41 @@
     "link": {
       "colormap": "rainbow",
       "colors": [
-        { "name": "requires",      "color": { "a": 1, "rgb": 14701099 } },
-        { "name": "belongs_to",    "color": { "a": 1, "rgb": 2872532  } },
-        { "name": "relates",       "color": { "a": 1, "rgb": 10176950 } },
-        { "name": "provenance",    "color": { "a": 1, "rgb": 15774761 } },
-        { "name": "superseded_by", "color": { "a": 1, "rgb": 7042688  } }
+        {
+          "name": "requires",
+          "color": {
+            "a": 1,
+            "rgb": 14701099
+          }
+        },
+        {
+          "name": "belongs_to",
+          "color": {
+            "a": 1,
+            "rgb": 2872532
+          }
+        },
+        {
+          "name": "relates",
+          "color": {
+            "a": 1,
+            "rgb": 10176950
+          }
+        },
+        {
+          "name": "provenance",
+          "color": {
+            "a": 1,
+            "rgb": 15774761
+          }
+        },
+        {
+          "name": "superseded_by",
+          "color": {
+            "a": 1,
+            "rgb": 7042688
+          }
+        }
       ],
       "unselected": [],
       "excludeRegex": {
@@ -88,7 +118,10 @@
       "colormap": "hsv",
       "colors": [],
       "unselected": [],
-      "excludeRegex": { "regex": "", "flags": "" },
+      "excludeRegex": {
+        "regex": "",
+        "flags": ""
+      },
       "noneType": "none",
       "showOnGraph": true,
       "enableByDefault": true
@@ -198,7 +231,7 @@
     "repelStrength": 10,
     "linkStrength": 1,
     "linkDistance": 250,
-    "scale": 0.6445171371513894,
+    "scale": 0.4935233711441712,
     "close": true
   },
   "openInNewTab": false,

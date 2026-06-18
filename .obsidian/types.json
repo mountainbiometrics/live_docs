@@ -26,6 +26,11 @@
     "BC-dataview-note-field": "text",
     "BC-traverse-note-field": "text",
     "BC-ignore-in-edges": "checkbox",
-    "BC-ignore-out-edges": "checkbox"
+    "BC-ignore-out-edges": "checkbox",
+    "belongs_to": "multitext",
+    "requires": "multitext",
+    "relates": "multitext",
+    "provenance": "multitext",
+    "superseded_by": "multitext"
   }
 }
