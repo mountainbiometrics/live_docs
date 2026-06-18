@@ -1,0 +1,19 @@
+{
+  "showLineNumber": false,
+  "strictLineBreaks": false,
+  "readableLineLength": true,
+  "promptDelete": true,
+  "defaultViewMode": "source",
+  "livePreview": true,
+  "foldHeading": true,
+  "foldIndent": true,
+  "showFrontmatter": false,
+  "propertiesInDocument": "visible",
+  "pdfExportSettings": {
+    "pageSize": "letter",
+    "landscape": false,
+    "margin": "none",
+    "downscaleEmbeddedImages": true
+  },
+  "attachmentFolderPath": "kb/00-inbox"
+}

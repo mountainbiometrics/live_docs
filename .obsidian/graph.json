@@ -1,0 +1,44 @@
+{
+  "collapse-filter": false,
+  "search": "path:docs  ",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "[\"type\": \"decision\"]",
+      "color": {
+        "a": 1,
+        "rgb": 16729927
+      }
+    },
+    {
+      "query": "[\"type\": \"principle\"]",
+      "color": {
+        "a": 1,
+        "rgb": 15662848
+      }
+    },
+    {
+      "query": "[\"type\": \"reference\"]",
+      "color": {
+        "a": 1,
+        "rgb": 4539717
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.518713248970312,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1.4067280361051404,
+  "close": true
+}

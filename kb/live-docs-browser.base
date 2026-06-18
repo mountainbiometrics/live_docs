@@ -1,0 +1,81 @@
+filters:
+  and:
+    - file.path.startsWith("kb/02-docs/")
+properties:
+  note.title:
+    displayName: Title
+  note.type:
+    displayName: Type
+  note.status:
+    displayName: Status
+  note.level:
+    displayName: Level
+  note.label:
+    displayName: Label
+  note.summary:
+    displayName: Summary
+  note.created:
+    displayName: Created
+views:
+  - type: table
+    name: All Docs
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - status
+      - title
+      - label
+      - level
+      - created
+  - type: table
+    name: By Status
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - status
+      - type
+      - title
+      - level
+      - created
+  - type: table
+    name: Decisions
+    filters:
+      and:
+        - note.type == "decision"
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - status
+      - title
+      - label
+      - level
+      - created
+  - type: table
+    name: Principles
+    filters:
+      and:
+        - note.type == "principle"
+    order:
+      - status
+      - title
+      - label
+      - level
+      - created
+  - type: table
+    name: Living Docs
+    filters:
+      and:
+        - note.status == "living"
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - title
+      - label
+      - level
+      - created

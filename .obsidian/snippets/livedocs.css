@@ -1,0 +1,176 @@
+/* ============================================================
+   live_docs — Obsidian CSS Snippet
+   Covers:
+     1. Type-colored property badges in the Properties panel
+     2. Summary property: larger, readable, no truncation
+     3. History property: rendered as a readable block, not "unknown"
+     4. Status dim for deprecated docs
+     5. File-explorer: de-emphasize opaque timestamp filenames
+   ============================================================ */
+
+/* ---- 1. TYPE BADGE COLORS ---------------------------------- */
+/* Color the `type` property pill in the Properties panel.
+   Obsidian renders properties as .metadata-property elements.
+   We target the value-span for the type property row.         */
+
+.metadata-property[data-property-key="type"] .metadata-property-value {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Type-specific badge color via data-value (set by Obsidian on the container) */
+.metadata-property[data-property-key="type"][data-property-value="decision"] .metadata-property-value {
+  color: #ff4444;
+}
+.metadata-property[data-property-key="type"][data-property-value="principle"] .metadata-property-value {
+  color: #ff8800;
+}
+.metadata-property[data-property-key="type"][data-property-value="goal"] .metadata-property-value {
+  color: #ffd700;
+}
+.metadata-property[data-property-key="type"][data-property-value="constraint"] .metadata-property-value {
+  color: #ff44ff;
+}
+.metadata-property[data-property-key="type"][data-property-value="requirement"] .metadata-property-value {
+  color: #00ffff;
+}
+.metadata-property[data-property-key="type"][data-property-value="component"] .metadata-property-value {
+  color: #00cc44;
+}
+.metadata-property[data-property-key="type"][data-property-value="guide"] .metadata-property-value {
+  color: #3399ff;
+}
+.metadata-property[data-property-key="type"][data-property-value="reference"] .metadata-property-value {
+  color: #888888;
+}
+.metadata-property[data-property-key="type"][data-property-value="index"] .metadata-property-value {
+  color: #ffffff;
+}
+.metadata-property[data-property-key="type"][data-property-value="use-case"] .metadata-property-value {
+  color: #9966cc;
+}
+
+/* ---- 2. STATUS BADGES -------------------------------------- */
+.metadata-property[data-property-key="status"][data-property-value="living"] .metadata-property-value {
+  color: #44cc44;
+}
+.metadata-property[data-property-key="status"][data-property-value="deprecated"] .metadata-property-value {
+  color: #888888;
+  text-decoration: line-through;
+}
+.metadata-property[data-property-key="status"][data-property-value="target"] .metadata-property-value {
+  color: #ffaa00;
+  font-style: italic;
+}
+.metadata-property[data-property-key="status"][data-property-value="reference"] .metadata-property-value {
+  color: #6699aa;
+}
+
+/* ---- 3. SUMMARY FIELD: expand and style ------------------- */
+/* summary is a long text — don't truncate, give it breathing room */
+.metadata-property[data-property-key="summary"] .metadata-property-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9em;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-top: 2px;
+  display: block;
+}
+
+/* ---- 4. HISTORY FIELD: nested objects show as "unknown"
+   Obsidian doesn't support object-list frontmatter in the UI.
+   We can't fix the parse error, but we can:
+   - hide the "unsupported type" warning badge
+   - show the raw value in a monospace block so it's still readable
+   The .metadata-property-type-unknown selector targets the wrapper
+   when Obsidian can't parse the type.                         */
+
+.metadata-property[data-property-key="history"] {
+  background: var(--background-secondary-alt);
+  border-left: 3px solid var(--color-orange);
+  border-radius: 0 4px 4px 0;
+  padding-left: 8px;
+}
+
+.metadata-property[data-property-key="history"] .metadata-property-key::after {
+  content: " (change trail)";
+  font-size: 0.75em;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Hide the ugly type-error icon that appears for object-lists */
+.metadata-property[data-property-key="history"] .metadata-property-type button {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.metadata-property[data-property-key="history"] .metadata-property-value {
+  font-family: var(--font-monospace);
+  font-size: 0.78em;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  max-height: 120px;
+  overflow-y: auto;
+  display: block;
+}
+
+/* ---- 5. EDGE FIELDS: wikilink lists ----------------------- */
+/* requires, belongs_to, relates, provenance, superseded_by    */
+.metadata-property[data-property-key="requires"] .metadata-property-key,
+.metadata-property[data-property-key="belongs_to"] .metadata-property-key,
+.metadata-property[data-property-key="relates"] .metadata-property-key,
+.metadata-property[data-property-key="provenance"] .metadata-property-key,
+.metadata-property[data-property-key="superseded_by"] .metadata-property-key {
+  color: var(--link-color);
+}
+
+/* ---- 6. DEPRECATED DOCS: dim the entire note view --------- */
+/* When status is deprecated, apply a subtle visual dim.
+   We use cssclasses — see the note in the report; this requires
+   docs to have cssclasses: [deprecated] or a CSS trick.
+   As a fallback, we dim via the properties panel indicator:   */
+.metadata-property[data-property-key="status"][data-property-value="deprecated"]
+  ~ .metadata-property .metadata-property-value {
+  opacity: 0.75;
+}
+
+/* ---- 7. GENERAL PROPERTIES PANEL IMPROVEMENTS ------------- */
+/* Reduce vertical padding for dense frontmatter */
+.metadata-container {
+  padding-top: 8px;
+}
+
+.metadata-property {
+  padding: 3px 0;
+}
+
+/* Make property keys slightly smaller / dimmer for less visual noise */
+.metadata-property-key-input {
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+/* ---- 8. FILE EXPLORER: de-emphasize timestamp filenames ---- */
+/* The file titles in the explorer are the opaque IDs.
+   We can't show the frontmatter title without a plugin,
+   but we can at least style them as monospace to signal
+   they are machine IDs, not human names.                      */
+.nav-file-title-content {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Style the kb/02-docs folder distinctly */
+.nav-folder-title[data-path="kb/02-docs"] .nav-folder-title-content {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+/* ---- 9. READING VIEW: make the frontmatter block tighter --- */
+/* By default showFrontmatter=false hides it in reading view,
+   which is what we set in app.json — but in source/live-preview
+   the properties panel shows above the content.              */

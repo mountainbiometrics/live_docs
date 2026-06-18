@@ -1,0 +1,12 @@
+{
+  "theme": "",
+  "cssTheme": "",
+  "enabledCssSnippets": [
+    "livedocs"
+  ],
+  "baseFontSize": 16,
+  "baseFontSizeAction": false,
+  "textFontFamily": "",
+  "monospaceFontFamily": "",
+  "nativeMenus": false
+}

@@ -1,0 +1,27 @@
+filters:
+  and:
+    - file.path.startsWith("kb/reviews/")
+properties:
+  note.created:
+    displayName: Created
+  note.signoffs:
+    displayName: Signoffs
+  note.touched:
+    displayName: Docs Touched
+views:
+  - type: table
+    name: All Reviews (newest first)
+    order:
+      - file.name
+      - created
+      - touched
+      - signoffs
+  - type: table
+    name: Unsigned Reviews
+    filters:
+      and:
+        - note.signoffs == ""
+    order:
+      - file.name
+      - created
+      - touched
