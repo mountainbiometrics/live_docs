@@ -7,6 +7,8 @@ Stdlib only. No external dependencies.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,9 +21,74 @@ from pathlib import Path
 # scripts/livedocs/model.py → scripts/livedocs/ → scripts/ → repo_root
 _SCRIPTS_DIR: Path = Path(__file__).resolve().parent.parent
 REPO_ROOT: Path = _SCRIPTS_DIR.parent
-DOCS_DIR: Path = REPO_ROOT / "docs"
-RAW_DIR: Path = REPO_ROOT / "raw"
-REVIEWS_DIR: Path = REPO_ROOT / "reviews"
+
+# Built-in defaults reproduce TODAY's layout exactly (docs/, raw/, reviews/ at
+# repo root; inbox/ alongside; the index cache lives under docs/.index).
+_DEFAULT_PATHS = {
+    "docs": "docs",
+    "raw": "raw",
+    "reviews": "reviews",
+    "inbox": "inbox",
+    "index": None,  # None → derived as <docs>/.index
+}
+
+# Optional config file at repo root. Keys are any subset of the above; values
+# are paths relative to repo root (or absolute). Parsed with stdlib json only.
+_CONFIG_FILE = REPO_ROOT / "livedocs.config.json"
+
+# Per-key env var overrides (win over the config file).
+_ENV_VARS = {
+    "docs": "LIVEDOCS_DOCS_DIR",
+    "raw": "LIVEDOCS_RAW_DIR",
+    "reviews": "LIVEDOCS_REVIEWS_DIR",
+    "inbox": "LIVEDOCS_INBOX_DIR",
+}
+
+
+def _load_config() -> dict:
+    """Read livedocs.config.json if present; return {} on absence or parse error.
+
+    Parse errors are swallowed deliberately: a malformed override must never
+    break the store; the built-in defaults always remain a safe fallback.
+    """
+    if not _CONFIG_FILE.is_file():
+        return {}
+    try:
+        data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (ValueError, OSError):
+        return {}
+
+
+def _resolve_path(value: str) -> Path:
+    """Resolve a configured path string relative to REPO_ROOT (absolute kept as-is)."""
+    p = Path(value)
+    return p if p.is_absolute() else (REPO_ROOT / p)
+
+
+def _resolve_dir(key: str, config: dict) -> Path:
+    """Resolve one directory by precedence: env var > config file > built-in default."""
+    env_name = _ENV_VARS.get(key)
+    if env_name and os.environ.get(env_name):
+        return _resolve_path(os.environ[env_name])
+    if key in config and config[key]:
+        return _resolve_path(str(config[key]))
+    return REPO_ROOT / _DEFAULT_PATHS[key]
+
+
+_config = _load_config()
+
+DOCS_DIR: Path = _resolve_dir("docs", _config)
+RAW_DIR: Path = _resolve_dir("raw", _config)
+REVIEWS_DIR: Path = _resolve_dir("reviews", _config)
+INBOX_DIR: Path = _resolve_dir("inbox", _config)
+
+# Index cache is derived under docs by default; an explicit `index` key
+# (config only — no env var) overrides it.
+if _config.get("index"):
+    INDEX_DIR: Path = _resolve_path(str(_config["index"]))
+else:
+    INDEX_DIR: Path = DOCS_DIR / ".index"
 
 
 # ---------------------------------------------------------------------------

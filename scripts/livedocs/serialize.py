@@ -45,12 +45,12 @@ def _yaml_wikilink_list(items: list) -> str:
 # ---------------------------------------------------------------------------
 
 # Canonical order for ALL doc types (baseline)
-# Spec: id, title, label, type, status, level, belongs_to, requires, relates,
-#       provenance, superseded_by, tags, created, history
+# Spec: id, title, label, summary, type, status, level, belongs_to, requires,
+#       relates, provenance, superseded_by, domain, scope, created, history
 CANONICAL_FIELD_ORDER = [
-    "id", "title", "label", "type", "status", "level",
+    "id", "title", "label", "summary", "type", "status", "level",
     "belongs_to", "requires", "relates", "provenance", "superseded_by",
-    "tags", "created", "history",
+    "domain", "scope", "created", "history",
 ]
 
 # Edge fields that use wikilink-wrapped lists on disk.
@@ -238,7 +238,8 @@ def parse_doc(path: Path) -> dict:
       relates       — list of id strings (absent if empty)
       provenance    — list of id strings (absent if empty)
       superseded_by — list of id strings (absent if empty)
-      tags          — dict with keys 'domain' and 'scope' (each a list)
+      domain        — list of domain tag strings (absent if none)
+      scope         — list of scope tag strings (absent if none)
       created       — ISO 8601 string
       history       — list of {at, summary} dicts (may be empty list or absent)
       body          — the text after the closing '---'
@@ -287,15 +288,22 @@ def parse_doc(path: Path) -> dict:
     elif not isinstance(hist, list):
         fm["history"] = []
 
-    # Normalize tags to always be a dict with domain/scope lists
-    tags = fm.get("tags")
-    if not isinstance(tags, dict):
-        fm["tags"] = {"domain": [], "scope": []}
-    else:
-        if not isinstance(tags.get("domain"), list):
-            tags["domain"] = []
-        if not isinstance(tags.get("scope"), list):
-            tags["scope"] = []
+    # Normalize domain/scope to flat top-level lists.
+    # Read the legacy nested `tags:` form (tags.domain / tags.scope) when the
+    # flat fields are absent, so old on-disk docs expose the same in-memory
+    # shape during the transition. The nested `tags` key is then discarded.
+    legacy_tags = fm.pop("tags", None)
+    legacy = legacy_tags if isinstance(legacy_tags, dict) else {}
+    for tag_key in ("domain", "scope"):
+        flat = fm.get(tag_key)
+        if isinstance(flat, list):
+            fm[tag_key] = flat
+        elif flat is not None:
+            # tolerate a stray scalar by wrapping it
+            fm[tag_key] = [flat]
+        elif isinstance(legacy.get(tag_key), list):
+            fm[tag_key] = legacy[tag_key]
+        # else: leave absent — callers use .get(key, [])
 
     # Canonical id from filename (authoritative)
     fm["id"] = path.stem
@@ -332,21 +340,16 @@ def _emit_field(key: str, value: Any) -> list[str]:
     - Edge fields (belongs_to, requires, relates, provenance, superseded_by):
       omitted entirely when empty.
     - history: omitted entirely when empty.
-    - tags: omitted when both domain and scope are empty.
+    - domain / scope: flat inline lists, omitted entirely when empty.
     """
     if value is None:
         return []
 
-    # Tags: nested mapping — omit entirely when both domain and scope are empty
-    if key == "tags" and isinstance(value, dict):
-        domain = value.get("domain", [])
-        scope = value.get("scope", [])
-        if not domain and not scope:
+    # domain / scope: flat inline tag lists — omitted entirely when empty
+    if key in ("domain", "scope") and isinstance(value, list):
+        if not value:
             return []
-        lines = ["tags:"]
-        lines.append(f"  domain: {_yaml_list(domain)}")
-        lines.append(f"  scope: {_yaml_list(scope)}")
-        return lines
+        return [f"{key}: {_yaml_list(value)}"]
 
     # History: block sequence of mappings — omit entirely when empty
     if key == "history" and isinstance(value, list):
@@ -389,14 +392,14 @@ def dump_doc(frontmatter: dict, body: str) -> str:
     Serialize a doc back to its on-disk format.
 
     Emits frontmatter fields in canonical order:
-      id, title, label, type, status, level,
+      id, title, label, summary, type, status, level,
       belongs_to, requires, relates, provenance, superseded_by,
-      tags, created, history
+      domain, scope, created, history
     Then appends reference-type extras (kind, source, imported) if present.
 
     Empty-list edge fields (belongs_to, requires, relates, provenance,
     superseded_by) and empty history are omitted entirely.
-    Tags are omitted when both domain and scope are empty.
+    domain / scope are flat inline lists, omitted when empty.
 
     Body is preserved byte-for-byte; only the frontmatter block is reconstructed.
     Returns the full file text ready to write.

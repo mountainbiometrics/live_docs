@@ -160,11 +160,13 @@ def cmd_get(kb: KB, args) -> int:
         print(f"id:     {result['id']}")
         print(f"label:  {result['label']}")
         print(f"title:  {result['display']}")
+        summary = fm.get("summary", "")
+        if summary:
+            print(f"summary: {summary}")
         print(f"type:   {fm.get('type', '')}")
         print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}")
         print(f"created: {fm.get('created', '')}")
-        tags = fm.get("tags", {})
-        print(f"tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
+        print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', [])}")
         hist = fm.get("history", [])
         print(f"history: {len(hist)} entries")
 
@@ -234,10 +236,12 @@ def cmd_show(kb: KB, args) -> int:
         print(f"  {result['display']}")
         print(f"  id:     {result['id']}")
         print(f"  label:  {result['label']}")
+        summary = fm.get("summary", "")
+        if summary:
+            print(f"  summary: {summary}")
         print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
               f"level: {fm.get('level','')}")
-        tags = fm.get("tags", {})
-        print(f"  tags:   domain={tags.get('domain',[])}  scope={tags.get('scope',[])}")
+        print(f"  domain: {fm.get('domain',[])}  scope: {fm.get('scope',[])}")
         print(f"  created: {fm.get('created','')}")
         print(f"{'='*60}")
         print()
@@ -547,6 +551,8 @@ def cmd_new(kb: KB, args) -> int:
         print(f"  type:    {args.type}")
         print(f"  title:   {args.title}")
         print(f"  label:   {label}")
+        if args.summary:
+            print(f"  summary: {args.summary}")
         print(f"  level:   {args.level}")
         print(f"  status:  {args.status}")
         for field, refs in edges.items():
@@ -562,6 +568,7 @@ def cmd_new(kb: KB, args) -> int:
             type=args.type,
             title=args.title,
             label=args.label or "",
+            summary=args.summary or "",
             level=args.level,
             status=args.status,
             **edges,
@@ -584,6 +591,8 @@ def cmd_set(kb: KB, args) -> int:
     fields = {}
     if args.title is not None:
         fields["title"] = args.title
+    if args.summary is not None:
+        fields["summary"] = args.summary
     if args.label is not None:
         label = args.label.strip()
         if not LABEL_RE.match(label):
@@ -607,7 +616,7 @@ def cmd_set(kb: KB, args) -> int:
         new_body = body_arg
 
     if not fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --level, --status, --type, or --body.")
+        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, or --body.")
         return 1
 
     # --dry-run preview
@@ -1082,6 +1091,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title", required=True)
     p.add_argument("--label", default="",
                    help="Short Title-Case label; auto-derived from title if omitted.")
+    p.add_argument("--summary", default="",
+                   help="2–5 sentence overview of the doc's concept (omitted if empty).")
     p.add_argument("--level", default="incidental", choices=VALID_LEVELS_SORTED)
     p.add_argument("--status", default="living", choices=VALID_STATUSES_SORTED)
     p.add_argument("--requires", default="",
@@ -1107,6 +1118,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("set", help="Update frontmatter fields or body of a doc.")
     p.add_argument("ref", help="id | label | title")
     p.add_argument("--title", default=None)
+    p.add_argument("--summary", default=None,
+                   help="Replace the summary scalar (empty string removes it).")
     p.add_argument("--label", default=None)
     p.add_argument("--level", default=None, choices=VALID_LEVELS_SORTED)
     p.add_argument("--status", default=None, choices=VALID_STATUSES_SORTED)

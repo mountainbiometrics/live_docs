@@ -94,11 +94,17 @@ def _extract_body_section(body: str, headings: tuple[str, ...]) -> str:
 
 
 def _format_addition_entry(link: str, doc: dict) -> list[str]:
-    """Render one Additions list item with nested Context/Overview content."""
-    section = _extract_body_section(doc.get("body", "") or "", ("Context", "Overview"))
+    """Render one Additions list item with a nested per-doc blurb.
+
+    Prefer the doc's frontmatter `summary` when present; fall back to the
+    body's Context/Overview section so reviews built before the summary field
+    existed still render their blurb.
+    """
+    summary = (doc.get("summary") or "").strip()
+    blurb = summary or _extract_body_section(doc.get("body", "") or "", ("Context", "Overview"))
     lines = [f"- {link}"]
-    if section:
-        for line in section.splitlines():
+    if blurb:
+        for line in blurb.splitlines():
             lines.append(f"  {line}")
     return lines
 

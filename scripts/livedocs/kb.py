@@ -22,6 +22,22 @@ from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, s
 
 
 # ---------------------------------------------------------------------------
+# Tag access — flat domain/scope with legacy nested-tags fallback
+# ---------------------------------------------------------------------------
+
+def _doc_tag_list(doc: dict, key: str) -> list:
+    """Return a doc's `domain` or `scope` list, reading the flat field first and
+    falling back to the legacy nested `tags:` mapping for un-migrated docs."""
+    flat = doc.get(key)
+    if isinstance(flat, list):
+        return flat
+    legacy = doc.get("tags")
+    if isinstance(legacy, dict) and isinstance(legacy.get(key), list):
+        return legacy[key]
+    return []
+
+
+# ---------------------------------------------------------------------------
 # Public: load all docs
 # ---------------------------------------------------------------------------
 
@@ -263,10 +279,11 @@ class KB:
             if status and doc.get("status") != status:
                 continue
 
-            tags = doc.get("tags", {})
-            if scope and scope not in tags.get("scope", []):
+            doc_scope = _doc_tag_list(doc, "scope")
+            doc_domain = _doc_tag_list(doc, "domain")
+            if scope and scope not in doc_scope:
                 continue
-            if domain and domain not in tags.get("domain", []):
+            if domain and domain not in doc_domain:
                 continue
 
             # Build searchable text fields
@@ -442,6 +459,7 @@ class KB:
         type: str,
         title: str,
         label: str = "",
+        summary: str = "",
         level: str = "incidental",
         status: str = "living",
         requires: list[str] = None,
@@ -489,12 +507,20 @@ class KB:
             "type": type,
             "status": status,
             "level": level,
-            "tags": {
-                "domain": list(tags_domain or []),
-                "scope": list(tags_scope or []),
-            },
             "created": created,
         }
+
+        # Summary: scalar, omitted when empty (matches serialize emission rule)
+        if summary:
+            fm["summary"] = summary
+
+        # Flat domain/scope tags: omitted entirely when empty (per schema)
+        domain = list(tags_domain or [])
+        scope = list(tags_scope or [])
+        if domain:
+            fm["domain"] = domain
+        if scope:
+            fm["scope"] = scope
 
         # Only include edge fields when non-empty (omit empty lists per spec)
         for field, ids in edge_ids.items():
@@ -513,11 +539,12 @@ class KB:
 
     def set(self, ref: str, **fields) -> None:
         """
-        Update scalar frontmatter fields: title, label, level, status, type.
+        Update scalar frontmatter fields: title, label, summary, level, status, type.
 
-        Resolves ref, loads doc, updates fields, writes back.
+        Resolves ref, loads doc, updates fields, writes back. Setting `summary`
+        to an empty string removes it (it is omitted on disk when empty).
         """
-        allowed = {"title", "label", "level", "status", "type"}
+        allowed = {"title", "label", "summary", "level", "status", "type"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -525,7 +552,10 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
         for k, v in fields.items():
-            fm[k] = v
+            if k == "summary" and not v:
+                fm.pop("summary", None)
+            else:
+                fm[k] = v
         self._write_doc(doc_id, fm, body)
 
     def link(

@@ -108,6 +108,15 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     # Note: `state` field is REMOVED from the schema. If present in a doc it has
     # not been migrated yet — tolerate it silently (doc migration is a separate pass).
 
+    # Tags: schema is now flat top-level `domain:`/`scope:` lists. parse_doc
+    # transparently migrates any legacy nested `tags:` mapping into these flat
+    # fields on read, so a doc that still has nested tags on disk is tolerated
+    # (no error here) — on-disk doc migration is a separate pass.
+    for tag_field in ("domain", "scope"):
+        val = doc.get(tag_field)
+        if val is not None and not isinstance(val, list):
+            errors.append(f"{prefix}  `{tag_field}` is not a list")
+
     # 5a-5b, 5d-5e. Hard/navigation edge resolution (errors are blocking)
     for edge_field in ("requires", "belongs_to", "relates", "superseded_by"):
         val = doc.get(edge_field, [])
@@ -154,6 +163,13 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
                 f"{prefix}  status `deprecated` but `superseded_by` is empty — "
                 f"add a superseded_by edge pointing to the replacement doc(s)"
             )
+
+    # Summary: non-reference docs should carry a 2–5 sentence summary. WARNING
+    # only for now; this becomes required after on-disk doc migration.
+    if doc_type != "reference" and not (doc.get("summary") or "").strip():
+        warnings.append(
+            f"{prefix}  no `summary` (will become required after migration)"
+        )
 
     # 8. Provenance rule (warning only)
     # A doc with non-trivial level should have SOME link to its basis:
