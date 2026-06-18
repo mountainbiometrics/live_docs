@@ -138,7 +138,9 @@ Every doc in `kb/02-docs/` must have: `id`, `title`, `label`, `type`, `status`, 
 |-------|--------|------|
 | `label` | Title Case, 2–5 words | Short identifier; used by ldoc for ref resolution |
 | `title` | Sentence-length phrase | The authoritative human name of the concept |
-| `summary` | 2–5 sentences | Overview; required for index rollups to be useful |
+| `summary` | 1–3 sentences, ≤ ~50 words | Tight overview mirroring the doc's opening; surfaced verbatim in reviews/search/index maps |
+
+**Summary convention:** keep it to 1–3 sentences (≤ ~50 words) — the gist a reader needs to decide whether to open the doc, written like the doc's opening statement (its Decision/Statement/Context), not a recap of the whole doc. No run-on sentences (cramming everything into one long sentence is not "fewer sentences"). It is shown verbatim in review snapshots, search results, and index maps, so it must stay scannable. When the doc's opening is already tight, the summary can essentially be that opening, lightly condensed.
 
 ### Canonical field order
 

@@ -41,6 +41,19 @@ report.
 
 ---
 
+## Summary field convention (every doc you write)
+
+When you set a doc's `summary`, keep it **tight: 1–3 sentences, ≤ ~50 words**. It
+is the gist a reader needs to decide whether to open the doc — write it like the
+doc's opening statement (its Decision/Statement/Context), NOT a recap of the whole
+body. Do not pack everything into one run-on sentence (that is not "fewer
+sentences"). When the doc's opening is already tight, the summary can be that
+opening, lightly condensed. The summary is surfaced verbatim in review snapshots,
+search results, and index maps, so it must stay scannable. `ldoc validate` warns
+when a summary exceeds ~60 words.
+
+---
+
 ## Inputs (supplied by the orchestrator)
 
 - **The plan** — the impact set / conflict map (each affected doc with a verdict

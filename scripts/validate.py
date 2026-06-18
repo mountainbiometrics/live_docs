@@ -164,12 +164,21 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
                 f"add a superseded_by edge pointing to the replacement doc(s)"
             )
 
-    # Summary: non-reference docs should carry a 2–5 sentence summary. WARNING
-    # only for now; this becomes required after on-disk doc migration.
-    if doc_type != "reference" and not (doc.get("summary") or "").strip():
-        warnings.append(
-            f"{prefix}  no `summary` (will become required after migration)"
-        )
+    # Summary: non-reference docs should carry a tight summary — 1–3 sentences,
+    # ~50 words, mirroring the doc's opening. WARN on missing or over-long.
+    summary_text = (doc.get("summary") or "").strip()
+    if doc_type != "reference":
+        if not summary_text:
+            warnings.append(
+                f"{prefix}  no `summary` (1–3 sentence overview expected)"
+            )
+        else:
+            wc = len(summary_text.split())
+            if wc > 60:
+                warnings.append(
+                    f"{prefix}  `summary` is {wc} words — aim for ≤ ~50 "
+                    f"(1–3 tight sentences, not a run-on)"
+                )
 
     # 8. Provenance rule (warning only)
     # A doc with non-trivial level should have SOME link to its basis:

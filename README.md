@@ -74,7 +74,7 @@ If a ref is already in `kb/01-raw/`, `ldoc promote` will tell you to run the `in
 id:           "<14-digit timestamp, matches filename>"
 title:        "<sentence-length human name>"
 label:        "<Title Case 2–5 word identifier>"
-summary:      "<2–5 sentence overview of this doc's concept>"
+summary:      "<1–3 sentence (≤~50 word) overview, mirroring the doc's opening>"
 type:         <see enums below>
 status:       <see enums below>
 level:        <see enums below>
@@ -104,7 +104,7 @@ Every doc has three human-facing descriptors with distinct roles:
 |-------|--------|---------|
 | `label` | 2–5 words, Title Case | Short identifier for display and CLI ref resolution |
 | `title` | Sentence-length | Human-readable name; the authoritative name of the concept |
-| `summary` | 2–5 sentences | Overview; used in review snapshots and search snippets |
+| `summary` | 1–3 sentences, ≤ ~50 words | Tight overview mirroring the doc's opening; verbatim in review snapshots, search, and index maps |
 
 ### Enums
 
