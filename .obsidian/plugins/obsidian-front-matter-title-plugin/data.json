@@ -3,7 +3,7 @@
   "templates": {
     "common": {
       "main": "{{ type }}: {{ label }}",
-      "fallback": "fallback_title"
+      "fallback": "label"
     }
   },
   "rules": {
@@ -32,7 +32,7 @@
       }
     },
     "explorer": {
-      "enabled": false,
+      "enabled": true,
       "sort": false,
       "templates": {
         "main": "",
@@ -40,14 +40,14 @@
       }
     },
     "tab": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
       }
     },
     "header": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
@@ -61,28 +61,28 @@
       }
     },
     "bookmarks": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
       }
     },
     "search": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
       }
     },
     "suggest": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
       }
     },
     "inlineTitle": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
@@ -96,14 +96,14 @@
       }
     },
     "backlink": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""
       }
     },
     "windowFrame": {
-      "enabled": false,
+      "enabled": true,
       "templates": {
         "main": "",
         "fallback": ""

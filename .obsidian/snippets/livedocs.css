@@ -82,3 +82,53 @@
    {type}: {label} title needs the Front Matter Title plugin —
    see the report.)                                             */
 .nav-file-title-content { font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   SUPERCHARGED LINKS — per-type and per-status link coloring
+   Requires: Supercharged Links plugin with targetAttributes
+   ["type","status"]. The plugin injects data-link-type and
+   data-link-status onto every internal <a> element whose
+   target note has those frontmatter fields.
+
+   Color palette is aligned with graph.json colorGroups so that
+   the same type reads the same color in the graph and inline.
+
+   These rules are intentionally display-only; the plugin never
+   writes to files.
+   ============================================================ */
+
+/* -- Type colors (match graph.json colorGroups palette) ------ */
+a[data-link-type="decision"]    { color: #FF4747 !important; }  /* graph rgb 16729927 */
+a[data-link-type="principle"]   { color: #FF8000 !important; }  /* graph rgb 16746496 */
+a[data-link-type="goal"]        { color: #FFD700 !important; }  /* graph rgb 16766720 */
+a[data-link-type="constraint"]  { color: #00FFFF !important; }  /* graph rgb 65535    */
+a[data-link-type="requirement"] { color: #00FFFF !important; }
+a[data-link-type="use-case"]    { color: #9AABCC !important; }  /* graph rgb 10053324 */
+a[data-link-type="guide"]       { color: #3377FF !important; }  /* graph rgb 3381759  */
+a[data-link-type="component"]   { color: #00CC34 !important; }  /* graph rgb 52308    */
+a[data-link-type="reference"]   { color: #888888 !important; }  /* graph rgb 8947848  */
+a[data-link-type="index"]       { color: #FFFFFF !important; }  /* graph rgb 16777215 */
+a[data-link-type="type"]        { color: #CCCCFF !important; }  /* graph rgb 13434879 */
+
+/* -- Status colors ------------------------------------------ */
+/* living = default link color; no override needed             */
+a[data-link-status="target"] {
+  color: var(--color-green) !important;
+  font-style: italic;
+}
+a[data-link-status="deprecated"] {
+  color: var(--text-muted) !important;
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+/* status:reference = subdued but readable */
+a[data-link-status="reference"] {
+  color: var(--text-faint) !important;
+}
+
+/* -- File-list / Explorer: dim deprecated entries ----------- */
+.nav-file[data-link-status="deprecated"] .nav-file-title-content,
+.tree-item[data-link-status="deprecated"] .tree-item-inner {
+  opacity: 0.55;
+  text-decoration: line-through;
+}

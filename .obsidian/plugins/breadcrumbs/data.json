@@ -1,115 +1,71 @@
 {
   "is_dirty": false,
   "edge_fields": [
-    {
-      "label": "up"
-    },
-    {
-      "label": "down"
-    },
-    {
-      "label": "same"
-    },
-    {
-      "label": "next"
-    },
-    {
-      "label": "prev"
-    }
+    { "label": "belongs_to" },
+    { "label": "requires" },
+    { "label": "relates" },
+    { "label": "provenance" },
+    { "label": "superseded_by" }
   ],
   "edge_field_groups": [
     {
-      "label": "ups",
-      "fields": [
-        "up"
-      ]
+      "label": "parents",
+      "fields": ["belongs_to"]
     },
     {
-      "label": "downs",
-      "fields": [
-        "down"
-      ]
+      "label": "children",
+      "fields": []
     },
     {
-      "label": "sames",
-      "fields": [
-        "same"
-      ]
+      "label": "dependencies",
+      "fields": ["requires"]
     },
     {
-      "label": "nexts",
-      "fields": [
-        "next"
-      ]
+      "label": "siblings",
+      "fields": ["relates"]
     },
     {
-      "label": "prevs",
-      "fields": [
-        "prev"
-      ]
+      "label": "sources",
+      "fields": ["provenance"]
+    },
+    {
+      "label": "successors",
+      "fields": ["superseded_by"]
     }
   ],
   "implied_relations": {
     "transitive": [
       {
-        "name": "",
+        "name": "implied-child",
         "rounds": 1,
         "chain": [
-          {
-            "field": "up"
-          }
+          { "field": "belongs_to" }
         ],
-        "close_field": "down",
+        "close_field": "belongs_to",
         "close_reversed": true
       },
       {
-        "name": "",
+        "name": "implied-relates-symmetric",
         "rounds": 1,
         "chain": [
-          {
-            "field": "down"
-          }
+          { "field": "relates" }
         ],
-        "close_field": "up",
+        "close_field": "relates",
         "close_reversed": true
       },
       {
-        "name": "",
+        "name": "implied-supersedes",
         "rounds": 1,
         "chain": [
-          {
-            "field": "same"
-          }
+          { "field": "superseded_by" }
         ],
-        "close_field": "same",
-        "close_reversed": true
-      },
-      {
-        "name": "",
-        "rounds": 1,
-        "chain": [
-          {
-            "field": "next"
-          }
-        ],
-        "close_field": "prev",
-        "close_reversed": true
-      },
-      {
-        "name": "",
-        "rounds": 1,
-        "chain": [
-          {
-            "field": "prev"
-          }
-        ],
-        "close_field": "next",
+        "close_field": "superseded_by",
         "close_reversed": true
       }
     ]
   },
   "self_is_sibling": [
-    "same"
+    "relates"
   ],
   "explicit_edge_sources": {
     "typed_link": {},
@@ -117,62 +73,62 @@
       "default_neighbour_field": ""
     },
     "tag_note": {
-      "default_field": "up",
+      "default_field": "belongs_to",
       "default_sibling_field": ""
     },
     "regex_note": {
-      "default_field": "up"
+      "default_field": "belongs_to"
     },
     "dendron_note": {
       "enabled": false,
       "delimiter": ".",
-      "default_field": "up",
+      "default_field": "belongs_to",
       "default_sibling_field": "",
       "display_trimmed": false
     },
     "johnny_decimal_note": {
       "enabled": false,
       "delimiter": ".",
-      "default_field": "up",
+      "default_field": "belongs_to",
       "default_sibling_field": ""
     },
     "date_note": {
       "enabled": false,
       "date_format": "yyyy-MM-dd",
-      "default_field": "next",
+      "default_field": "relates",
       "stretch_to_existing": false,
       "week_start": "monday",
       "week": {
         "enabled": false,
         "date_format": "kkkk-'W'WW",
         "folder": "",
-        "next_field": "next",
-        "up_field": "up"
+        "next_field": "relates",
+        "up_field": "belongs_to"
       },
       "month": {
         "enabled": false,
         "date_format": "yyyy-MM",
         "folder": "",
-        "next_field": "next",
-        "up_field": "up"
+        "next_field": "relates",
+        "up_field": "belongs_to"
       },
       "quarter": {
         "enabled": false,
         "date_format": "yyyy-'Q'q",
         "folder": "",
-        "next_field": "next",
-        "up_field": "up"
+        "next_field": "relates",
+        "up_field": "belongs_to"
       },
       "year": {
         "enabled": false,
         "date_format": "yyyy",
         "folder": "",
-        "next_field": "next",
-        "up_field": "up"
+        "next_field": "relates",
+        "up_field": "belongs_to"
       }
     },
     "traverse_note": {
-      "default_field": "up"
+      "default_field": "belongs_to"
     }
   },
   "views": {
@@ -189,7 +145,7 @@
         "show_controls": true,
         "merge_fields": false,
         "field_group_labels": [
-          "ups"
+          "parents"
         ],
         "show_node_options": {
           "ext": false,
@@ -198,19 +154,15 @@
         }
       },
       "prev_next": {
-        "enabled": true,
+        "enabled": false,
         "show_node_options": {
           "ext": false,
           "folder": false,
           "alias": false
         },
         "field_group_labels": {
-          "prev": [
-            "prevs"
-          ],
-          "next": [
-            "nexts"
-          ]
+          "prev": [],
+          "next": []
         },
         "period_rows": {
           "week": false,
@@ -240,11 +192,12 @@
           "round"
         ],
         "field_group_labels": [
-          "ups",
-          "downs",
-          "sames",
-          "nexts",
-          "prevs"
+          "parents",
+          "children",
+          "dependencies",
+          "siblings",
+          "sources",
+          "successors"
         ],
         "lock_view": false,
         "lock_path": ""
@@ -257,8 +210,8 @@
         "lock_view": false,
         "lock_path": "",
         "field_group_labels": [
-          "ups",
-          "downs"
+          "parents",
+          "children"
         ],
         "edge_sort_id": {
           "field": "basename",
@@ -271,7 +224,7 @@
         },
         "find_root": true,
         "find_root_field_group_labels": [
-          "ups"
+          "parents"
         ]
       }
     },
