@@ -25,13 +25,9 @@ The two coexist in this repo by design: the spec is proven by eating its own coo
 
 ## How to read this repo
 
-The knowledge base lives entirely in `kb/`. Start at the root index document:
+The knowledge base lives entirely in `kb/`. The flat `kb/02-docs/` store has no canonical "front page" yet — the root index doc (`kb/02-docs/20260615090011.md`) is currently a stub, intended to become the top-level index of the system's highest-level MOCs once that (agentic) concept is built.
 
-```
-kb/02-docs/20260615090011.md   — live_docs: Root Index
-```
-
-Filenames are opaque timestamp IDs (Zettelkasten/"Kiste" style); the human-readable name lives only in the `title` frontmatter field. Navigate by following typed edges or by reading index-doc children rollups.
+Filenames are opaque timestamp IDs (Zettelkasten/"Kiste" style); the human-readable name lives only in the `title` frontmatter field. Navigate with `ldoc find` / `ldoc ls`, or by following typed edges from any doc you land on.
 
 The authoritative source of truth is always the flat `*.md` files in `kb/02-docs/`. Generated artifacts under `kb/02-docs/.index/` are caches — rebuildable, never hand-edited.
 
@@ -108,7 +104,7 @@ Every doc has three human-facing descriptors with distinct roles:
 |-------|--------|---------|
 | `label` | 2–5 words, Title Case | Short identifier for display and CLI ref resolution |
 | `title` | Sentence-length | Human-readable name; the authoritative name of the concept |
-| `summary` | 2–5 sentences | Overview; used in index rollups and search snippets |
+| `summary` | 2–5 sentences | Overview; used in review snapshots and search snippets |
 
 ### Enums
 
@@ -118,7 +114,7 @@ Every doc has three human-facing descriptors with distinct roles:
 | `status` | `living` (current), `target` (intended-but-not-yet-built), `deprecated` (retired), `reference` (frozen supporting material) |
 | `level` | `incidental` (calcified without a decision), `trial`, `preference`, `requirement` |
 
-The `type` values above are the taxonomy — 11 types defined in `model.py`. Per-type definition docs are not yet written (known gap).
+The 11 `type` values are the taxonomy, defined as enum values in `model.py`. (There are no separate per-type definition docs — earlier ones were removed as non-weight-bearing orphans, so the taxonomy lives in code, not as docs.)
 
 The old `state: actual|target` field has been folded into `status` (`target` = intended-but-unbuilt; `living` = current reality). The old separate `state` field is stale schema.
 
@@ -294,7 +290,7 @@ Exits 0 if clean, 1 if errors. Use `garden consistency` for fix proposals.
 - `hierarchy.md` — human-readable children rollup per index doc
 - `orphans.txt` — docs with no hard graph edges in either direction
 
-Also injects a generated children block (with summaries) into each `type: index` doc body, between `<!-- BEGIN GENERATED CHILDREN -->` / `<!-- END GENERATED CHILDREN -->` markers. Run `reindex` after bulk doc changes or before a cascade-check if you want a pre-built reverse map on hand.
+Run `reindex` after bulk doc changes, or before a cascade-check if you want a pre-built reverse map on hand. (`reindex` only writes derived caches under `.index/`; it does not edit doc bodies.)
 
 ### reviews
 
