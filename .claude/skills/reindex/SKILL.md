@@ -31,13 +31,13 @@ python3 scripts/ldoc.py reindex
 python3 scripts/reindex.py [docs_dir]
 ```
 
-`docs_dir` defaults to `docs/` relative to the repo root.
+`docs_dir` defaults to the configured docs store (`kb/02-docs/` in this repo) relative to the repo root.
 
-The script creates `docs/.index/` if it doesn't exist, then writes:
-- `docs/.index/dependents.json`
-- `docs/.index/provenance_sources.json`
-- `docs/.index/hierarchy.md`
-- `docs/.index/orphans.txt`
+The script creates the index dir (`<docs>/.index/`) if it doesn't exist, then writes:
+- `<docs>/.index/dependents.json`
+- `<docs>/.index/referenced_by.json`
+- `<docs>/.index/hierarchy.md`
+- `<docs>/.index/orphans.txt`
 
 ---
 
@@ -61,7 +61,7 @@ Every doc id present in the store appears as a key, even if its value is an
 empty list. This lets callers check membership without a key-existence guard.
 
 `provenance` edges (immutable derivation / source links) are navigation-only and
-do NOT cascade; they get their own reverse map in `provenance_sources.json` (same
+do NOT cascade; they get their own reverse map in `referenced_by.json` (same
 format), which records for each doc which other docs cite it as provenance.
 
 ### hierarchy.md

@@ -3,75 +3,311 @@
 **sinai** is both the definition and the first live instance of **live_docs**, a self-documenting atomic-documentation system.
 
 - **live_docs** is the portable system specification. Its defining documents are tagged `scope: [live_docs]`.
-- **sinai** is MTN's instance of that system. Organisation-specific documents are tagged `scope: [sinai]` or a more specific domain tag.
+- **sinai** is MTN's instance of that system. Organisation-specific documents are tagged `scope: [sinai]` or a more specific domain.
 
 The two coexist in this repo by design: the spec is proven by eating its own cooking.
 
+---
+
+## Contents
+
+- [How to read this repo](#how-to-read-this-repo)
+- [kb/ layout](#kb-layout)
+- [Inbox → raw → docs pipeline](#inbox--raw--docs-pipeline)
+- [Frontmatter schema](#frontmatter-schema)
+- [Edge types](#edge-types)
+- [ldoc CLI](#ldoc-cli)
+- [Skills](#skills)
+- [cascade / validate / reindex / reviews](#cascade--validate--reindex--reviews)
+- [Other directories](#other-directories)
+
+---
+
 ## How to read this repo
 
-Start at the root index document:
+The knowledge base lives entirely in `kb/`. Start at the root index document:
 
 ```
-docs/20260615090011.md   — live_docs: Root Index
+kb/02-docs/20260615090011.md   — live_docs: Root Index
 ```
 
-Every document lives as `docs/<id>.md` — a flat store with no subfolders. Filenames are opaque timestamps (Zettelkasten/"Kiste" style); the human-readable title lives only in the `title` frontmatter field. Navigate by following `depends_on` edges or by consulting index docs.
+Filenames are opaque timestamp IDs (Zettelkasten/"Kiste" style); the human-readable name lives only in the `title` frontmatter field. Navigate by following typed edges or by reading index-doc children rollups.
 
-The type taxonomy (what each document type means, its required fields, and its cascade behaviour) is defined by the 11 type documents listed in the root index.
+The authoritative source of truth is always the flat `*.md` files in `kb/02-docs/`. Generated artifacts under `kb/02-docs/.index/` are caches — rebuildable, never hand-edited.
 
-## CLI setup (`ldoc`)
+---
 
-This repo uses [mise](https://mise.jdx.dev/) to put `ldoc` on your `PATH` while you're inside the tree.
+## kb/ layout
 
-```bash
-mise trust          # once per machine, when you first enter this repo
-ldoc --help
+```
+kb/
+  00-inbox/      # drop-point — instant, no-processing capture (gate 0)
+  01-raw/        # verbatim clippings — accepted but not yet decomposed (gate 1)
+  02-docs/       # the atomic graph — every doc is 02-docs/<id>.md
+    .index/      # generated artifacts: dependents.json, referenced_by.json,
+                 #   hierarchy.md, orphans.txt  (do not hand-edit)
+  reviews/       # review ledger — post-hoc episode summaries
 ```
 
-Without mise, invoke the script directly: `python3 scripts/ldoc.py …`
+Paths are configured in `livedocs.config.json` at the repo root. Per-key `LIVEDOCS_*_DIR` environment variables override the config file; the built-in defaults fall back to a root-layout if neither is set. A deployment can relocate any box without touching code.
 
-## How to create a document
+---
 
-```bash
-ldoc new --type <type> --title "<title>" [options]
-```
+## Inbox → raw → docs pipeline
 
-Common options:
+Capture is frictionless; ingestion is deliberate. Three gates:
 
-| flag | default | description |
+| Gate | Command | What happens |
 |------|---------|-------------|
-| `--type` | required | one of: type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference, index |
-| `--title` | required | human-readable title |
-| `--level` | `incidental` | adoption ladder: incidental \| trial \| preference \| requirement |
-| `--state` | `actual` | actual \| target |
-| `--status` | `living` | living \| historical |
-| `--depends-on` | | comma-separated ids this doc is influenced by |
-| `--tags-scope` | | comma-separated scope tags (e.g. `live_docs,sinai`) |
-| `--body` | | body text, or `-` to read from stdin |
-| `--kind` | `clipping` | reference subtype: brainstorm \| plan \| clipping \| external |
-| `--source` | | for reference docs: where it came from |
+| **0 — capture** | `ldoc inbox add` | Material dropped into `kb/00-inbox/` verbatim, no processing |
+| **1 — accept** | `ldoc promote <ref>` | Inbox item moved to `kb/01-raw/` with raw-clipping frontmatter |
+| **2 — ingest** | `ingest-reference` skill | Raw item decomposed into atomic docs in `kb/02-docs/` |
 
-The command prints the new doc's `id` and `path`. All other flags are described in `ldoc new --help`.
+Gate 0 is instant: use it whenever you want to capture something without stopping to process it. Gate 1 is a conscious acceptance gate. Gate 2 is where atomicity is produced — it must not be skipped (a raw blob ingested as a single doc is a liability).
 
-## Directory layout
+If a ref is already in `kb/01-raw/`, `ldoc promote` will tell you to run the `ingest-reference` skill instead.
 
+---
+
+## Frontmatter schema
+
+### Canonical field order
+
+```yaml
+---
+id:           "<14-digit timestamp, matches filename>"
+title:        "<sentence-length human name>"
+label:        "<Title Case 2–5 word identifier>"
+summary:      "<2–5 sentence overview of this doc's concept>"
+type:         <see enums below>
+status:       <see enums below>
+level:        <see enums below>
+belongs_to:   ["[[<id>]]", ...]   # omit when empty
+requires:     ["[[<id>]]", ...]   # omit when empty
+relates:      ["[[<id>]]", ...]   # omit when empty
+provenance:   ["[[<id>]]", ...]   # omit when empty
+superseded_by: ["[[<id>]]", ...]  # omit when empty
+domain:       [tag, ...]          # flat list; omit when empty
+scope:        [tag, ...]          # flat list; omit when empty
+created:      "<ISO 8601 UTC>"
+history:                          # omit when empty; changes only, never creation
+  - at: "<ISO 8601>"
+    summary: "<what changed>"
+---
 ```
-docs/              # flat store — every doc is docs/<id>.md
-  .index/          # generated artifacts (do not hand-edit)
-templates/         # one markdown template per type
-bin/
-  ldoc             # symlink → scripts/ldoc.py (on PATH via mise)
-scripts/
-  ldoc.py          # unified porcelain CLI — create/query/mutate docs (stdlib only)
-  livedocs/        # shared KB layer (all logic lives here)
-mise.toml          # adds bin/ to PATH in this tree
-.claude/skills/    # Claude Code skills for cascade-check, validate, reindex, ingest-reference, garden
+
+Edge lists are stored as quoted wikilinks (`"[[<id>]]"`) for Obsidian graph compatibility. The tooling unwraps them to bare IDs in memory. Empty edge lists, empty `history`, and empty `domain`/`scope` are omitted entirely from the file — writing `[]` is wrong.
+
+`reference` type docs also carry `kind`, `source`, and `imported` fields (appended after `history`).
+
+### Three descriptors
+
+Every doc has three human-facing descriptors with distinct roles:
+
+| Field | Length | Purpose |
+|-------|--------|---------|
+| `label` | 2–5 words, Title Case | Short identifier for display and CLI ref resolution |
+| `title` | Sentence-length | Human-readable name; the authoritative name of the concept |
+| `summary` | 2–5 sentences | Overview; used in index rollups and search snippets |
+
+### Enums
+
+| Field | Valid values |
+|-------|-------------|
+| `type` | `type`, `principle`, `goal`, `decision`, `constraint`, `requirement`, `use-case`, `guide`, `component`, `reference`, `index` |
+| `status` | `living` (current), `target` (intended-but-not-yet-built), `deprecated` (retired), `reference` (frozen supporting material) |
+| `level` | `incidental` (calcified without a decision), `trial`, `preference`, `requirement` |
+
+The `type` values above are the taxonomy — 11 types defined in `model.py`. Per-type definition docs are not yet written (known gap).
+
+The old `state: actual|target` field has been folded into `status` (`target` = intended-but-unbuilt; `living` = current reality). The old separate `state` field is stale schema.
+
+---
+
+## Edge types
+
+| Edge | Direction | Cascade? | Semantics |
+|------|-----------|----------|-----------|
+| `requires` | outbound | **hard** | Existential dependency — this doc is meaningless without the target |
+| `belongs_to` | outbound | **hard** | Structural parent — this doc is a child of the target (index → member) |
+| `relates` | outbound | soft | Symmetric clustering / see-also; navigation only |
+| `provenance` | outbound | soft | Immutable derivation lineage — "was derived from / informed by"; may point at `kb/01-raw/` |
+| `superseded_by` | outbound | — | Deprecation pointer; required when `status: deprecated` |
+
+**Reverse edges** (`dependents`, `provenance_of`) are generated by `reindex` and stored in `kb/02-docs/.index/`. Never hand-author them.
+
+Cascade-hard edges (`requires` + `belongs_to`) drive `cascade-check` and the reverse-dependency map. `relates` and `provenance` are never cascade inputs.
+
+**Deprecation rule**: setting `status: deprecated` is only valid if (a) `superseded_by` is non-empty AND (b) the doc body has a `## Correction` section explaining why it is wrong and what replaced it.
+
+---
+
+## ldoc CLI
+
+`ldoc` is the porcelain CLI. It lives in `scripts/ldoc.py`. On PATH via mise:
+
+```bash
+mise trust          # once per machine, first time in this repo
+ldoc help           # grouped verb overview with copy-pasteable examples
 ```
 
-## Key concepts
+Without mise: `python3 scripts/ldoc.py <verb> ...`
 
-- **Opaque ids** — filenames carry no meaning; titles live in frontmatter only. This avoids filename-drift when titles change.
-- **depends_on** — single-direction edges written by hand. Reverse edges (dependents) are generated by the `reindex` skill, never hand-authored.
-- **level** — the adoption ladder (`incidental → trial → preference → requirement`) records how deliberately a doc's content was chosen. `incidental` means it calcified without a conscious decision.
-- **state** — `actual` (where we are) vs `target` (where we want to be). Both can coexist as separate docs on the same topic.
-- **cascade-check** — when a doc changes, the skill checks its dependents for staleness. A wide cascade is a design smell: the changed doc was carrying more than one responsibility.
+All ref arguments accept `id`, `label`, or `title` (exact or unique substring). Most read verbs accept multiple refs space-separated; pass `-` as the sole ref to read from stdin.
+
+### Verb groups
+
+**Reads**
+
+| Verb | What it does |
+|------|-------------|
+| `get <ref...>` | Frontmatter summary (id, label, title, type, status, level, history count) |
+| `body <ref...>` | Print the body text |
+| `show <ref...>` | Full doc: frontmatter + all resolved edge lists + history + body |
+| `resolve <ref...>` | Resolve ref(s) to canonical id(s) |
+| `label <ref...>` | Print `<Type>: <Title>` display string |
+| `neighbors <ref...>` | All neighbors, optionally filtered by `--kind` |
+
+**Search / list**
+
+| Verb | What it does |
+|------|-------------|
+| `find [terms...] [--or] [--regex PAT]` | Full-text search + filter by `--type`, `--level`, `--status`, `--scope`, `--domain` |
+| `ls [--type T]` | List all docs (optionally filtered by type) |
+| `log [--since ISO] [--limit N]` | Recent changes view (created/edited, newest first) |
+| `count` | Doc and edge count statistics by type / level / status |
+
+**Graph**
+
+| Verb | What it does |
+|------|-------------|
+| `graph <ref> [--depth N] [--direction up\|down\|both]` | BFS traversal |
+| `edges [--json]` | Full forward and reverse edge maps; `dangling` key lists broken refs |
+
+**Mutations**
+
+| Verb | What it does |
+|------|-------------|
+| `new --type T --title T [options]` | Create a new doc (validates edge refs before writing) |
+| `set <ref> [--title] [--label] [--summary] [--level] [--status] [--type] [--body -\|TEXT]` | Update frontmatter fields or body |
+| `edit <ref>` | Alias for `set <ref> --body -` (replace body from stdin) |
+| `link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
+| `unlink <ref> [same edge flags]` | Remove edges |
+| `history <ref> --add "summary"` | Append a history entry (changes only — never a creation entry) |
+| `ingest-raw --source S [--from-file P\|--body T\|-]` | Write verbatim content to `kb/01-raw/` |
+
+**Inbox pipeline**
+
+| Verb | What it does |
+|------|-------------|
+| `inbox add [--from-file P\|--body T\|-] [--title T] [--source S]` | Drop material into `kb/00-inbox/` instantly |
+| `inbox list` | List items currently in the inbox |
+| `promote <ref>` | Gate 1: move inbox item → `kb/01-raw/` with raw-clipping frontmatter |
+| `promote --all` | Drain the entire inbox |
+
+**Maintenance**
+
+| Verb | What it does |
+|------|-------------|
+| `validate` | Read-only structural integrity check (see below) |
+| `reindex` | Rebuild `kb/02-docs/.index/` artifacts |
+| `edges [--json]` | Print full forward/reverse edge map |
+| `review new\|list\|show\|sign` | Manage review summaries in the `kb/reviews/` ledger |
+
+Most mutation verbs accept `--dry-run` to preview what would happen without writing.
+
+### Quick examples
+
+```bash
+# Read a doc
+ldoc show "Living over Stale"
+ldoc get root-index batch-operations --json
+
+# Search
+ldoc find porcelain
+ldoc find --type decision --status living
+ldoc ls --type principle
+
+# Create and link
+ldoc new --type decision --title "Use UTC for all timestamps" --level preference
+ldoc link <id> --requires <dep-id>
+
+# Inbox pipeline
+echo "rough idea" | ldoc inbox add --body - --title "Rough idea"
+ldoc inbox list
+ldoc promote <inbox-id>   # gate 1: inbox → raw
+# then run /ingest-reference for gate 2
+
+# Maintenance
+ldoc validate
+ldoc reindex
+ldoc review new --since 2026-06-15T00:00:00Z
+ldoc review sign <review-id> --as "Your Name"
+```
+
+---
+
+## Skills
+
+Skills are AI-agent procedures in `.claude/skills/*/SKILL.md`. They are thin wrappers that invoke the shared `ldoc` CLI and `scripts/` logic; judgment lives in the skill, not the script.
+
+| Skill | When to use |
+|-------|-------------|
+| **apply-to-docs** | Landing a user request or design plan into the KB: extracts concepts, maps blast radius across the graph, batch-synthesizes a coherent new state for all affected docs |
+| **ingest-reference** | Bringing external material (meeting notes, RFCs, research, URLs) into the store: creates a raw clipping, a normalized reference doc, then decomposes into single-responsibility atomic docs |
+| **revise-doc** | Editing an existing doc with full discipline: dedup/conflict scan, history entry, cascade-check for substantive changes |
+| **cascade-check** | After one or more docs change, walk the dependency graph in both directions and decide which neighbors need updates; the primary consistency-enforcement mechanism |
+| **garden** | Periodic maintenance: enforces Single Responsibility (decompose hot files), catches staleness, repairs orphans, normalizes schema drift |
+| **validate** | Read-only mechanical integrity check — reports errors/warnings but fixes nothing; use before releases or after bulk edits |
+| **reindex** | Rebuild `kb/02-docs/.index/` derived artifacts after bulk doc creation/deletion or graph restructuring |
+
+---
+
+## cascade / validate / reindex / reviews
+
+### cascade-check
+
+When any doc changes, `cascade-check` walks `requires` and `belongs_to` edges in both directions (upstream dependencies and downstream dependents) and issues a verdict per neighbor: `inconsequential`, `cascade`, `incompatible`, or `context-request`. The write pass is always batched after the full read pass — no interleaving.
+
+A wide cascade (> 3 docs from one edit) is a design smell: the changed doc may carry more than one responsibility. The skill suggests running the `garden single-responsibility` pass.
+
+### validate
+
+`ldoc validate` checks:
+- Required fields (`id`, `title`, `label`, `type`, `status`, `level`, `created`)
+- Label format and uniqueness (case-insensitive across the store)
+- Valid enum values for `type`, `status`, `level`
+- `id` matches filename
+- All `requires`, `belongs_to`, `relates`, `superseded_by` refs resolve to existing docs
+- `provenance` refs that don't resolve are warnings (may point at `kb/01-raw/`)
+- `reference` docs have `kind`, `source`, `imported`
+- `deprecated` docs have non-empty `superseded_by`
+
+Exits 0 if clean, 1 if errors. Use `garden consistency` for fix proposals.
+
+### reindex
+
+`ldoc reindex` rebuilds `kb/02-docs/.index/`:
+
+- `dependents.json` — reverse map of `requires` + `belongs_to` edges (the cascade input)
+- `referenced_by.json` — reverse map of `provenance` edges (navigation only)
+- `hierarchy.md` — human-readable children rollup per index doc
+- `orphans.txt` — docs with no hard graph edges in either direction
+
+Also injects a generated children block (with summaries) into each `type: index` doc body, between `<!-- BEGIN GENERATED CHILDREN -->` / `<!-- END GENERATED CHILDREN -->` markers. Run `reindex` after bulk doc changes or before a cascade-check if you want a pre-built reverse map on hand.
+
+### reviews
+
+The review ledger (`kb/reviews/`) holds post-hoc episode summaries. Skills emit one summary per episode via `ldoc review new --since "$START"`. Reviews are non-gating — they never block a change; they record it for later signoff. Sign with `ldoc review sign <id> --as "Your Name"`.
+
+---
+
+## Other directories
+
+| Path | Contents |
+|------|----------|
+| `scripts/` | All shared tooling: `ldoc.py` (porcelain CLI), `livedocs/` (KB layer), `validate.py`, `reindex.py` |
+| `bin/` | `ldoc` symlink → `scripts/ldoc.py`; added to PATH via `mise.toml` |
+| `.claude/skills/` | AI-agent skill definitions (see Skills above) |
+| `reports/` | Design analyses and research artifacts (not part of the KB graph) |
+| `.obsidian/` | Obsidian vault configuration for visual graph navigation |
