@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>live_docs viewer</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #2b2b2b;
+    --muted: #777;
+    --faint: #9a9a9a;
+    --line: #e4e2dc;
+    --accent: #5b6e8c;
+    --accent-soft: #eef1f6;
+    --link: #3f5e8f;
+    --broken: #b03a3a;
+    --tag-bg: #eceae4;
+    --warn: #b07a2a;
+    --warn-bg: #fbf3e2;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  header.topnav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 4px;
+    padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header.topnav .brand { font-weight: 700; margin-right: 18px; letter-spacing: .3px; }
+  header.topnav .brand small { color: var(--faint); font-weight: 400; }
+  nav button {
+    background: none; border: 1px solid transparent; border-radius: 6px;
+    padding: 5px 12px; font-size: 14px; color: var(--muted); cursor: pointer;
+  }
+  nav button:hover { background: var(--accent-soft); color: var(--ink); }
+  nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { padding: 0; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* generic */
+  h1.pagetitle { font-size: 20px; margin: 22px 24px 6px; }
+  .sub { color: var(--muted); margin: 0 24px 18px; font-size: 13px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .grid { display: grid; gap: 12px; }
+  a.dl { color: var(--link); text-decoration: none; cursor: pointer; border-bottom: 1px dotted var(--link); }
+  a.dl:hover { background: var(--accent-soft); }
+  a.dl.broken { color: var(--broken); border-bottom-color: var(--broken); }
+  a.dl.broken::after { content: " (broken)"; font-size: 11px; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px;
+    background: var(--tag-bg); color: var(--muted); margin-left: 4px; vertical-align: middle;
+  }
+  .pill.deprecated { background: #f3e0e0; color: var(--broken); }
+  .pill.target { background: var(--warn-bg); color: var(--warn); }
+  .pill.reference { background: #e4ecf3; color: var(--accent); }
+
+  /* dashboard */
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 24px 18px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; min-width: 110px; }
+  .stat .n { font-size: 26px; font-weight: 700; }
+  .stat .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .dash-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 24px 24px; }
+  .dash-cols h3 { font-size: 14px; margin: 0 0 8px; color: var(--accent); }
+  @media (max-width: 820px) { .dash-cols { grid-template-columns: 1fr; } }
+  ul.tight { margin: 0; padding-left: 0; list-style: none; }
+  ul.tight li { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  ul.tight li:last-child { border-bottom: none; }
+
+  /* reader */
+  .reader { display: grid; grid-template-columns: 290px 1fr; min-height: calc(100vh - 49px); }
+  .tree { border-right: 1px solid var(--line); background: var(--panel); padding: 12px 8px; overflow-y: auto; max-height: calc(100vh - 49px); position: sticky; top: 49px; }
+  .tree details { margin-bottom: 2px; }
+  .tree summary { cursor: pointer; padding: 3px 6px; border-radius: 5px; font-weight: 600; font-size: 13px; color: var(--accent); list-style: none; }
+  .tree summary::-webkit-details-marker { display: none; }
+  .tree summary:hover { background: var(--accent-soft); }
+  .tree .leaf { padding: 3px 6px 3px 22px; font-size: 13px; cursor: pointer; border-radius: 5px; color: var(--ink); }
+  .tree .leaf:hover { background: var(--accent-soft); }
+  .tree .leaf.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .content { padding: 22px 28px; max-width: 820px; overflow-x: hidden; }
+  .content h1.doctitle { font-size: 22px; margin: 0 0 2px; }
+  .meta-line { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .doc-summary { color: var(--muted); font-style: italic; border-left: 3px solid var(--line); padding-left: 12px; margin: 0 0 18px; }
+  .md { line-height: 1.6; }
+  .md h2 { font-size: 17px; margin: 22px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  .md h3 { font-size: 15px; margin: 18px 0 6px; }
+  .md code { background: var(--tag-bg); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+  .md pre { background: #2b2b2b; color: #f0f0f0; padding: 12px; border-radius: 8px; overflow-x: auto; }
+  .md pre code { background: none; color: inherit; padding: 0; }
+  .md blockquote { border-left: 3px solid var(--line); margin: 0; padding-left: 12px; color: var(--muted); }
+  .md table { border-collapse: collapse; }
+  .md td, .md th { border: 1px solid var(--line); padding: 4px 8px; }
+
+  /* inline expand (accordion) */
+  .expand { margin: 6px 0 6px 0; border-left: 3px solid var(--accent-soft); background: #fafaf8; border-radius: 0 6px 6px 0; padding: 8px 12px; }
+  .expand .eh { font-size: 12px; color: var(--faint); margin-bottom: 4px; }
+  .transclude { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; background: #fafaf8; }
+  .transclude .th { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+
+  /* relationships panel */
+  .rels { margin-top: 28px; border-top: 2px solid var(--line); padding-top: 14px; }
+  .rels h2 { font-size: 15px; margin: 0 0 10px; }
+  .relgroup { margin-bottom: 10px; }
+  .relgroup .rt { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--faint); margin-bottom: 3px; }
+  .relgroup ul { margin: 0; padding-left: 16px; }
+
+  /* index compose */
+  .compose-btn { margin: 14px 0; }
+  button.act { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
+  button.act:hover { opacity: .9; }
+  button.act.ghost { background: var(--accent-soft); color: var(--accent); }
+  .member-sec { margin: 18px 0; padding-top: 8px; border-top: 1px solid var(--line); }
+  .member-sec > h2.mtitle { font-size: 17px; }
+
+  /* catalog */
+  .catalog-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 24px 12px; }
+  .catalog-tools select, .catalog-tools input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; background: var(--panel); }
+  .preset { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line); border-radius: 14px; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+  .preset:hover { background: var(--accent); color: #fff; }
+  table.catalog { width: calc(100% - 48px); margin: 0 24px 40px; border-collapse: collapse; background: var(--panel); }
+  table.catalog th, table.catalog td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: top; }
+  table.catalog th { position: sticky; top: 49px; background: var(--panel); cursor: pointer; user-select: none; }
+  table.catalog tr.grouphdr td { background: var(--accent-soft); font-weight: 600; color: var(--accent); }
+  .count-note { color: var(--faint); font-size: 12px; margin: 0 24px 8px; }
+
+  /* reviews */
+  .review { }
+  .review .rid { font-family: var(--mono); font-size: 13px; }
+  .review .unsigned { border-left: 4px solid var(--warn); }
+  .review .signed { border-left: 4px solid #6a9a5b; }
+  .review .badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; }
+  .review .badge.unsigned { background: var(--warn-bg); color: var(--warn); }
+  .review .badge.signed { background: #e6f1e2; color: #4d7a3f; }
+  .snippet { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .snippet code { background: #2b2b2b; color: #f0f0f0; padding: 6px 10px; border-radius: 6px; font-family: var(--mono); font-size: 12px; }
+  .copybtn { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+  .copybtn:hover { background: var(--accent); color: #fff; }
+
+  /* tooltip */
+  #tooltip {
+    position: fixed; z-index: 200; max-width: 340px; pointer-events: none;
+    background: #1f1f1f; color: #f2f2f2; border-radius: 8px; padding: 10px 12px;
+    font-size: 12.5px; line-height: 1.45; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    display: none;
+  }
+  #tooltip .tt-label { font-weight: 700; margin-bottom: 3px; }
+  #tooltip .tt-meta { color: #b9c2d0; font-size: 11px; margin-bottom: 5px; }
+  #tooltip .tt-sum { color: #ddd; }
+</style>
+</head>
+<body>
+<header class="topnav">
+  <div class="brand">live_docs <small>viewer · read-only</small></div>
+  <nav>
+    <button data-page="home" class="active">Home</button>
+    <button data-page="reader">Reader</button>
+    <button data-page="catalog">Catalog</button>
+    <button data-page="reviews">Reviews</button>
+  </nav>
+</header>
+<main>
+  <section id="page-home" class="page active"></section>
+  <section id="page-reader" class="page"></section>
+  <section id="page-catalog" class="page"></section>
+  <section id="page-reviews" class="page"></section>
+</main>
+<div id="tooltip"></div>
+
+<script>
+/* ---- inlined data (the export contract: frontmatter + body) ---- */
+const DOCS = /*__DOCS_JSON__*/;
+const REVIEWS = /*__REVIEWS_JSON__*/;
+</script>
+<script>
+/* ---- vendored markdown renderer (marked, MIT) ---- */
+/*__MARKED_JS__*/
+</script>
+<script>
+"use strict";
+marked.setOptions({ gfm: true, breaks: false });
+
+/* ===== build in-memory maps ===== */
+const byId = new Map();
+DOCS.forEach(d => byId.set(String(d.id), d));
+
+// normalize an edge value: either "[[id]]" or bare id or "id.md" -> bare id
+function edgeId(v) {
+  if (v == null) return null;
+  let s = String(v).trim();
+  const m = s.match(/\[\[([0-9]+)\]\]/);
+  if (m) return m[1];
+  const mf = s.match(/^([0-9]{6,})(?:\.md)?$/);
+  if (mf) return mf[1];
+  return s;
+}
+function edgeList(d, field) {
+  const v = d[field];
+  if (!v) return [];
+  const arr = Array.isArray(v) ? v : [v];
+  return arr.map(edgeId).filter(Boolean);
+}
+
+// reverse edges, computed client-side
+const requiredBy = new Map();   // id -> [ids that require it]
+const children = new Map();      // index id -> [member ids that belong_to it]
+DOCS.forEach(d => {
+  edgeList(d, "requires").forEach(t => {
+    if (!requiredBy.has(t)) requiredBy.set(t, []);
+    requiredBy.get(t).push(d.id);
+  });
+  edgeList(d, "belongs_to").forEach(t => {
+    if (!children.has(t)) children.set(t, []);
+    children.get(t).push(d.id);
+  });
+});
+
+function labelOf(id) {
+  const d = byId.get(String(id));
+  if (!d) return null;
+  return d.label || d.title || d.id;
+}
+
+/* ===== THE RESOLVER — one pass, used by every surface =====
+   Renders raw markdown to HTML, with wiki-links and md-links resolved to labels.
+   - [[id]]   -> <a> showing label, hover tooltip, click=expand, dblclick=navigate
+   - ![[id]]  -> transclude body inline
+   - [text](id.md) -> same resolved link (index "Map" bodies use this form)
+   Unresolved ids render as visible broken links. */
+
+function linkHtml(id, overrideText) {
+  const sid = String(id);
+  const d = byId.get(sid);
+  if (!d) {
+    return `<a class="dl broken" data-broken="1">${overrideText || sid}</a>`;
+  }
+  const text = overrideText || d.label || d.title || sid;
+  return `<a class="dl" data-ref="${sid}" tabindex="0">${escapeHtml(text)}</a>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// Pre-process markdown: replace link syntaxes with placeholder tokens, render md,
+// then swap tokens for resolved anchors/transclusions. This keeps marked from
+// mangling our custom links and lets transclusions become block elements.
+function renderMarkdown(src, depth) {
+  depth = depth || 0;
+  if (src == null) return "";
+  const tokens = [];
+  let s = src;
+
+  // ![[id]] transclusion
+  s = s.replace(/!\[\[([0-9]+)\]\]/g, (_, id) => {
+    const i = tokens.length;
+    tokens.push({ kind: "trans", id });
+    return `\n\nTOKEN${i}TOKEN\n\n`;
+  });
+  // [[id]] wiki-link
+  s = s.replace(/\[\[([0-9]+)\]\]/g, (_, id) => {
+    const i = tokens.length;
+    tokens.push({ kind: "link", id });
+    return `TOKEN${i}TOKEN`;
+  });
+  // [text](14digits.md) markdown link -> resolved link using the doc's label
+  s = s.replace(/\[([^\]]*)\]\(([0-9]{6,})\.md\)/g, (_, text, id) => {
+    const i = tokens.length;
+    tokens.push({ kind: "link", id, text: byId.has(id) ? null : text }); // prefer canonical label
+    return `TOKEN${i}TOKEN`;
+  });
+
+  let html = marked.parse(s);
+
+  html = html.replace(/TOKEN(\d+)TOKEN/g, (_, n) => {
+    const t = tokens[+n];
+    if (!t) return "";
+    if (t.kind === "link") return linkHtml(t.id, t.text || null);
+    if (t.kind === "trans") {
+      const d = byId.get(String(t.id));
+      if (!d) return `<span class="dl broken">${t.id}</span>`;
+      const inner = depth < 4 ? renderMarkdown(d.body, depth + 1) : "<em>(transclusion depth limit)</em>";
+      return `<div class="transclude"><div class="th">transcluded · ${escapeHtml(d.label || d.id)}</div>${inner}</div>`;
+    }
+    return "";
+  });
+  return html;
+}
+
+/* ===== tooltip + link interactions (delegated) ===== */
+const tooltip = document.getElementById("tooltip");
+function showTip(el) {
+  const id = el.getAttribute("data-ref");
+  const d = byId.get(String(id));
+  if (!d) return;
+  const status = d.status ? `<span class="pill ${d.status}">${d.status}</span>` : "";
+  tooltip.innerHTML =
+    `<div class="tt-label">${escapeHtml(d.label || d.title || id)}</div>` +
+    `<div class="tt-meta">${escapeHtml(d.type || "")} ${status}</div>` +
+    `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
+  tooltip.style.display = "block";
+}
+function moveTip(e) {
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const r = tooltip.getBoundingClientRect();
+  if (x + r.width > window.innerWidth) x = e.clientX - r.width - pad;
+  if (y + r.height > window.innerHeight) y = e.clientY - r.height - pad;
+  tooltip.style.left = x + "px"; tooltip.style.top = y + "px";
+}
+function hideTip() { tooltip.style.display = "none"; }
+
+document.addEventListener("mouseover", e => {
+  const a = e.target.closest("a.dl[data-ref]");
+  if (a) showTip(a);
+});
+document.addEventListener("mousemove", e => {
+  if (tooltip.style.display === "block") moveTip(e);
+});
+document.addEventListener("mouseout", e => {
+  if (e.target.closest("a.dl[data-ref]")) hideTip();
+});
+
+// single click = expand in place (accordion); double click = navigate
+let clickTimer = null;
+document.addEventListener("click", e => {
+  const a = e.target.closest("a.dl[data-ref]");
+  if (!a) return;
+  e.preventDefault();
+  if (clickTimer) return; // wait to see if it becomes a dblclick
+  clickTimer = setTimeout(() => {
+    clickTimer = null;
+    toggleExpand(a);
+  }, 220);
+});
+document.addEventListener("dblclick", e => {
+  const a = e.target.closest("a.dl[data-ref]");
+  if (!a) return;
+  e.preventDefault();
+  if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+  hideTip();
+  location.hash = "#/" + a.getAttribute("data-ref");
+});
+
+function toggleExpand(a) {
+  hideTip();
+  const id = a.getAttribute("data-ref");
+  const d = byId.get(String(id));
+  if (!d) return;
+  // toggle: if next sibling is our expand block, remove it
+  const nxt = a.nextElementSibling;
+  if (nxt && nxt.classList && nxt.classList.contains("expand") && nxt.getAttribute("data-for") === id) {
+    nxt.remove(); return;
+  }
+  const box = document.createElement("span");
+  box.className = "expand"; box.setAttribute("data-for", id);
+  box.style.display = "block";
+  box.innerHTML = `<div class="eh">${escapeHtml(d.label || id)} · ${escapeHtml(d.type || "")} — single-click again to collapse, double-click to open in Reader</div>`
+    + `<div class="md">${renderMarkdown(d.body, 1)}</div>`;
+  a.insertAdjacentElement("afterend", box);
+}
+
+/* ===== nav / routing ===== */
+const pages = ["home", "reader", "catalog", "reviews"];
+function activate(page) {
+  pages.forEach(p => {
+    document.getElementById("page-" + p).classList.toggle("active", p === page);
+  });
+  document.querySelectorAll("header.topnav nav button").forEach(b =>
+    b.classList.toggle("active", b.getAttribute("data-page") === page));
+}
+document.querySelectorAll("header.topnav nav button").forEach(b => {
+  b.addEventListener("click", () => {
+    const p = b.getAttribute("data-page");
+    if (p === "reader") location.hash = location.hash.startsWith("#/") ? location.hash : "#/reader";
+    else location.hash = "#" + p;
+  });
+});
+
+function route() {
+  const h = location.hash || "#home";
+  if (h.startsWith("#/")) {
+    const id = h.slice(2);
+    activate("reader");
+    renderReader(id && byId.has(id) ? id : null);
+  } else {
+    const p = h.slice(1);
+    activate(pages.includes(p) ? p : "home");
+  }
+}
+window.addEventListener("hashchange", route);
+
+/* ===== HOME / DASHBOARD ===== */
+function renderHome() {
+  const el = document.getElementById("page-home");
+  const byType = {}, byStatus = {};
+  DOCS.forEach(d => {
+    byType[d.type || "?"] = (byType[d.type || "?"] || 0) + 1;
+    byStatus[d.status || "?"] = (byStatus[d.status || "?"] || 0) + 1;
+  });
+  const indexes = DOCS.filter(d => d.type === "index");
+  const orphans = DOCS.filter(d => d.type !== "index" && edgeList(d, "belongs_to").length === 0);
+  const deprecated = DOCS.filter(d => d.status === "deprecated");
+  const hot = DOCS.filter(d => Array.isArray(d.history) && d.history.length > 0)
+    .sort((a, b) => (b.history.length) - (a.history.length)).slice(0, 8);
+
+  const statBox = (n, l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  const li = id => `<li>${linkHtml(id)} <span class="pill">${escapeHtml(byId.get(String(id)).type||"")}</span><div class="sub" style="margin:2px 0 0">${escapeHtml(byId.get(String(id)).summary||"")}</div></li>`;
+
+  let html = `<h1 class="pagetitle">Dashboard</h1><div class="sub">Orientation for the live_docs store — every link below resolves to a label; hover for summary, single-click to expand, double-click to open in Reader.</div>`;
+  html += `<div class="stats">`;
+  html += statBox(DOCS.length, "total docs");
+  Object.keys(byType).sort().forEach(t => html += statBox(byType[t], t));
+  html += `</div>`;
+  html += `<div class="stats">`;
+  Object.keys(byStatus).sort().forEach(s => html += statBox(byStatus[s], "status: " + s));
+  html += `</div>`;
+
+  html += `<div class="dash-cols">`;
+  // entry points
+  html += `<div class="card"><h3>Entry points — indexes (${indexes.length})</h3><ul class="tight">`;
+  indexes.forEach(d => html += li(d.id));
+  html += `</ul></div>`;
+
+  // hot docs
+  html += `<div class="card"><h3>Hot docs (most history entries)</h3><ul class="tight">`;
+  hot.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${d.history.length} changes</span></li>`);
+  html += `</ul></div>`;
+
+  // orphans
+  html += `<div class="card"><h3>Orphans — no belongs_to, not an index (${orphans.length})</h3><ul class="tight">`;
+  if (!orphans.length) html += `<li class="sub">none</li>`;
+  orphans.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${escapeHtml(d.type||"")}</span></li>`);
+  html += `</ul></div>`;
+
+  // deprecated -> superseded_by
+  html += `<div class="card"><h3>Deprecated → superseded by (${deprecated.length})</h3><ul class="tight">`;
+  if (!deprecated.length) html += `<li class="sub">none</li>`;
+  deprecated.forEach(d => {
+    const sup = edgeList(d, "superseded_by");
+    const supHtml = sup.length ? sup.map(linkHtml).join(", ") : `<span class="dl broken">(no superseded_by!)</span>`;
+    html += `<li>${linkHtml(d.id)} → ${supHtml}</li>`;
+  });
+  html += `</ul></div>`;
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+/* ===== READER ===== */
+function buildTree() {
+  // indexes are folders; members (belongs_to) are leaves; nested indexes nest.
+  const indexes = DOCS.filter(d => d.type === "index");
+  const indexIds = new Set(indexes.map(d => d.id));
+  // roots = indexes whose belongs_to points to no index (or nothing)
+  const roots = indexes.filter(d => {
+    const parents = edgeList(d, "belongs_to").filter(p => indexIds.has(p));
+    return parents.length === 0;
+  });
+
+  function renderNode(idx, seen) {
+    seen = seen || new Set();
+    if (seen.has(idx.id)) return ""; // guard cycles
+    seen = new Set(seen); seen.add(idx.id);
+    const memberIds = (children.get(idx.id) || []);
+    const childIndexes = memberIds.filter(m => indexIds.has(m)).map(m => byId.get(m));
+    const leaves = memberIds.filter(m => !indexIds.has(m));
+    let h = `<details open><summary data-ref="${idx.id}">${escapeHtml(idx.label || idx.title)}</summary>`;
+    childIndexes.forEach(ci => h += renderNode(ci, seen));
+    leaves.forEach(lid => {
+      const d = byId.get(lid);
+      h += `<div class="leaf" data-id="${lid}">${escapeHtml(d.label || d.title || lid)}</div>`;
+    });
+    h += `</details>`;
+    return h;
+  }
+
+  let h = "";
+  roots.forEach(r => h += renderNode(r));
+
+  // Ungrouped catch-all: non-index docs that belong to nothing
+  const ungrouped = DOCS.filter(d => d.type !== "index" && edgeList(d, "belongs_to").length === 0);
+  if (ungrouped.length) {
+    h += `<details><summary>Ungrouped (${ungrouped.length})</summary>`;
+    ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${escapeHtml(d.label || d.title || d.id)}</div>`);
+    h += `</details>`;
+  }
+  return h;
+}
+
+let readerTreeHtml = null;
+function renderReader(focusId) {
+  const el = document.getElementById("page-reader");
+  if (readerTreeHtml === null) readerTreeHtml = buildTree();
+  el.innerHTML = `<div class="reader"><div class="tree">${readerTreeHtml}</div><div class="content" id="reader-content"></div></div>`;
+
+  // wire tree clicks
+  el.querySelectorAll(".tree .leaf").forEach(n =>
+    n.addEventListener("click", () => { location.hash = "#/" + n.getAttribute("data-id"); }));
+  el.querySelectorAll(".tree summary[data-ref]").forEach(s =>
+    s.addEventListener("dblclick", e => { e.preventDefault(); location.hash = "#/" + s.getAttribute("data-ref"); }));
+
+  const content = document.getElementById("reader-content");
+  if (!focusId) {
+    content.innerHTML = `<h1 class="doctitle">Reader</h1><div class="sub">Pick a doc from the tree on the left, or double-click any link anywhere to focus it here.</div>`;
+    return;
+  }
+  el.querySelectorAll(".tree .leaf").forEach(n =>
+    n.classList.toggle("active", n.getAttribute("data-id") === focusId));
+  renderFocusDoc(content, focusId);
+}
+
+function metaLine(d) {
+  const bits = [];
+  if (d.type) bits.push(d.type);
+  if (d.status) bits.push(`<span class="pill ${d.status}">${d.status}</span>`);
+  if (d.level) bits.push("level: " + d.level);
+  if (d.created) bits.push("created " + String(d.created).slice(0, 10));
+  bits.push(`<code>${d.id}</code>`);
+  return bits.join(" · ");
+}
+
+function relGroup(title, ids) {
+  if (!ids || !ids.length) return "";
+  return `<div class="relgroup"><div class="rt">${title}</div><ul>` +
+    ids.map(id => `<li>${linkHtml(id)}</li>`).join("") + `</ul></div>`;
+}
+
+function renderFocusDoc(content, id) {
+  const d = byId.get(String(id));
+  if (!d) { content.innerHTML = `<div class="sub">No doc with id ${escapeHtml(id)}.</div>`; return; }
+
+  let html = `<h1 class="doctitle">${escapeHtml(d.label || d.title || id)}</h1>`;
+  html += `<div class="meta-line">${metaLine(d)}</div>`;
+  if (d.summary) html += `<div class="doc-summary">${escapeHtml(d.summary)}</div>`;
+
+  if (d.type === "index") {
+    // default to guide-only; one click to inline members
+    html += `<div class="md" id="index-guide">${renderMarkdown(d.body)}</div>`;
+    html += `<div class="compose-btn"><button class="act" id="composeBtn">Expand — inline all member docs</button></div>`;
+    html += `<div id="composed"></div>`;
+    content.innerHTML = html;
+    const members = (children.get(d.id) || []);
+    document.getElementById("composeBtn").addEventListener("click", function () {
+      const target = document.getElementById("composed");
+      if (target.innerHTML) { target.innerHTML = ""; this.textContent = "Expand — inline all member docs"; return; }
+      let m = "";
+      members.forEach(mid => {
+        const md = byId.get(mid);
+        if (!md) return;
+        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid)} <span class="pill ${md.status||''}">${escapeHtml(md.type||'')}</span></h2>`;
+        m += `<div class="md">${renderMarkdown(md.body)}</div></div>`;
+      });
+      target.innerHTML = m || `<div class="sub">No member docs.</div>`;
+      this.textContent = "Collapse members";
+    });
+    return;
+  }
+
+  // leaf doc: body + relationships panel
+  html += `<div class="md">${renderMarkdown(d.body)}</div>`;
+  html += `<div class="rels"><h2>Relationships</h2>`;
+  html += relGroup("belongs to", edgeList(d, "belongs_to"));
+  html += relGroup("requires", edgeList(d, "requires"));
+  html += relGroup("required by", requiredBy.get(d.id));
+  html += relGroup("relates", edgeList(d, "relates"));
+  html += relGroup("provenance", edgeList(d, "provenance"));
+  html += relGroup("superseded by", edgeList(d, "superseded_by"));
+  html += relGroup("children", children.get(d.id));
+  const anyRel = ["belongs_to","requires","relates","provenance","superseded_by"].some(f => edgeList(d,f).length)
+    || (requiredBy.get(d.id)||[]).length || (children.get(d.id)||[]).length;
+  if (!anyRel) html += `<div class="sub">No edges.</div>`;
+  html += `</div>`;
+  content.innerHTML = html;
+}
+
+/* ===== CATALOG ===== */
+const catalogState = { type: "", status: "", level: "", q: "", group: "", sort: "label", dir: 1 };
+function renderCatalog() {
+  const el = document.getElementById("page-catalog");
+  const types = [...new Set(DOCS.map(d => d.type).filter(Boolean))].sort();
+  const statuses = [...new Set(DOCS.map(d => d.status).filter(Boolean))].sort();
+  const levels = [...new Set(DOCS.map(d => d.level).filter(Boolean))].sort();
+  const opt = (arr, sel) => `<option value="">all</option>` + arr.map(v => `<option ${v===sel?"selected":""}>${v}</option>`).join("");
+
+  let html = `<h1 class="pagetitle">Catalog</h1><div class="sub">Every doc as a row. Filter, group, and sort — the "query like rows" view.</div>`;
+  html += `<div class="catalog-tools">`;
+  html += `<span class="preset" data-preset="decisions">Decisions</span>`;
+  html += `<span class="preset" data-preset="principles">Principles</span>`;
+  html += `<span class="preset" data-preset="living">Living</span>`;
+  html += `<span class="preset" data-preset="clear">Clear</span>`;
+  html += `&nbsp; type <select id="f-type">${opt(types, catalogState.type)}</select>`;
+  html += ` status <select id="f-status">${opt(statuses, catalogState.status)}</select>`;
+  html += ` level <select id="f-level">${opt(levels, catalogState.level)}</select>`;
+  html += ` group by <select id="f-group"><option value="">none</option>`
+    + ["type","status","level"].map(g => `<option ${g===catalogState.group?"selected":""}>${g}</option>`).join("") + `</select>`;
+  html += ` <input id="f-q" placeholder="search label/title…" value="${escapeHtml(catalogState.q)}">`;
+  html += `</div>`;
+  html += `<div class="count-note" id="cat-count"></div>`;
+  html += `<table class="catalog"><thead><tr>`;
+  ["label","title","type","status","level","created"].forEach(c =>
+    html += `<th data-sort="${c}">${c}${catalogState.sort===c?(catalogState.dir>0?" ▲":" ▼"):""}</th>`);
+  html += `</tr></thead><tbody id="cat-body"></tbody></table>`;
+  el.innerHTML = html;
+
+  const draw = () => {
+    let rows = DOCS.filter(d =>
+      (!catalogState.type || d.type === catalogState.type) &&
+      (!catalogState.status || d.status === catalogState.status) &&
+      (!catalogState.level || d.level === catalogState.level) &&
+      (!catalogState.q || ((d.label||"")+" "+(d.title||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
+    const s = catalogState.sort;
+    rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
+    document.getElementById("cat-count").textContent = `${rows.length} of ${DOCS.length} docs`;
+    const body = document.getElementById("cat-body");
+    const cell = d => `<td>${linkHtml(d.id)}</td><td>${escapeHtml(d.title||"")}</td><td>${escapeHtml(d.type||"")}</td>`
+      + `<td><span class="pill ${d.status||''}">${escapeHtml(d.status||"")}</span></td><td>${escapeHtml(d.level||"")}</td><td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`;
+    if (catalogState.group) {
+      const groups = {};
+      rows.forEach(d => { const k = d[catalogState.group]||"(none)"; (groups[k]=groups[k]||[]).push(d); });
+      body.innerHTML = Object.keys(groups).sort().map(k =>
+        `<tr class="grouphdr"><td colspan="6">${escapeHtml(catalogState.group)}: ${escapeHtml(k)} (${groups[k].length})</td></tr>`
+        + groups[k].map(d => `<tr>${cell(d)}</tr>`).join("")).join("");
+    } else {
+      body.innerHTML = rows.map(d => `<tr>${cell(d)}</tr>`).join("");
+    }
+  };
+
+  el.querySelector("#f-type").addEventListener("change", e => { catalogState.type = e.target.value; draw(); });
+  el.querySelector("#f-status").addEventListener("change", e => { catalogState.status = e.target.value; draw(); });
+  el.querySelector("#f-level").addEventListener("change", e => { catalogState.level = e.target.value; draw(); });
+  el.querySelector("#f-group").addEventListener("change", e => { catalogState.group = e.target.value; draw(); });
+  el.querySelector("#f-q").addEventListener("input", e => { catalogState.q = e.target.value; draw(); });
+  el.querySelectorAll("th[data-sort]").forEach(th => th.addEventListener("click", () => {
+    const c = th.getAttribute("data-sort");
+    if (catalogState.sort === c) catalogState.dir *= -1; else { catalogState.sort = c; catalogState.dir = 1; }
+    renderCatalog();
+  }));
+  el.querySelectorAll(".preset").forEach(p => p.addEventListener("click", () => {
+    const k = p.getAttribute("data-preset");
+    Object.assign(catalogState, { type: "", status: "", level: "", q: "", group: "" });
+    if (k === "decisions") catalogState.type = "decision";
+    else if (k === "principles") catalogState.type = "principle";
+    else if (k === "living") catalogState.status = "living";
+    renderCatalog();
+  }));
+  draw();
+}
+
+/* ===== REVIEWS ===== */
+function renderReviews() {
+  const el = document.getElementById("page-reviews");
+  const revs = REVIEWS.slice().sort((a,b) => String(b.id).localeCompare(String(a.id))); // newest first
+  let html = `<h1 class="pagetitle">Reviews</h1><div class="sub">The review queue, newest first. Unsigned reviews are highlighted. The viewer never writes — copy the sign command and run it in a terminal.</div>`;
+  if (!revs.length) html += `<div class="sub" style="margin-left:24px">No reviews.</div>`;
+  html += `<div style="margin:0 24px 40px">`;
+  revs.forEach(r => {
+    const signed = Array.isArray(r.signoffs) && r.signoffs.length > 0;
+    const touched = (r.touched || []).map(t => linkHtml(edgeId(t))).join(", ");
+    const cmd = `ldoc review sign ${r.id}`;
+    html += `<div class="card review ${signed?"signed":"unsigned"}">`;
+    html += `<div><span class="rid">${escapeHtml(String(r.id))}</span> `
+      + `<span class="badge ${signed?"signed":"unsigned"}">${signed?"signed":"unsigned"}</span></div>`;
+    html += `<div class="sub" style="margin:4px 0">created ${escapeHtml(String(r.created||"?"))}</div>`;
+    html += `<div><strong>docs touched (${(r.touched||[]).length}):</strong> ${touched || "<span class='sub'>none</span>"}</div>`;
+    html += `<div style="margin-top:4px"><strong>signoffs:</strong> ${signed ? escapeHtml(JSON.stringify(r.signoffs)) : "<span class='sub'>none</span>"}</div>`;
+    html += `<div class="snippet"><code id="cmd-${r.id}">${escapeHtml(cmd)}</code>`
+      + `<button class="copybtn" data-cmd="${escapeHtml(cmd)}">copy</button></div>`;
+    if (r.body) html += `<details style="margin-top:8px"><summary class="sub">change summary</summary><div class="md">${renderMarkdown(r.body)}</div></details>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+  el.querySelectorAll(".copybtn").forEach(b => b.addEventListener("click", () => {
+    const cmd = b.getAttribute("data-cmd");
+    navigator.clipboard?.writeText(cmd).then(() => { b.textContent = "copied!"; setTimeout(() => b.textContent = "copy", 1200); })
+      .catch(() => { b.textContent = "copy failed"; });
+  }));
+}
+
+/* ===== boot ===== */
+renderHome();
+renderCatalog();
+renderReviews();
+route();
+</script>
+</body>
+</html>

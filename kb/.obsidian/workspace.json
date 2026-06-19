@@ -13,22 +13,13 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02-docs/20260615100004.md",
+                "file": "02-docs/20260619204840.md",
                 "mode": "source",
                 "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
+                "backlinks": false
               },
               "icon": "lucide-file",
-              "title": "20260615100004"
+              "title": "20260619204840"
             }
           }
         ]
@@ -63,7 +54,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "componen",
+                "query": "20260616200133",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -104,7 +95,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02-docs/20260618230216.md",
+                "file": "02-docs/20260619204840.md",
                 "collapseAll": true,
                 "extraContext": true,
                 "sortOrder": "alphabetical",
@@ -114,7 +105,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for 20260618230216"
+              "title": "Backlinks for 20260619204840"
             }
           },
           {
@@ -123,11 +114,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "02-docs/20260618230215.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from 20260618230215"
             }
           },
           {
@@ -165,21 +157,20 @@
             "state": {
               "type": "outline",
               "state": {
+                "file": "02-docs/20260618230215.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of 20260618230215"
             }
           }
-        ],
-        "currentTab": 2
+        ]
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -195,6 +186,27 @@
   },
   "active": "3ce45d9e7eabfef4",
   "lastOpenFiles": [
+    "02-docs/20260619204822.md",
+    "02-docs/20260619204821.md",
+    "02-docs/20260619204840.md",
+    "02-docs/20260619204849.md",
+    "02-docs/20260619204904.md",
+    "02-docs/20260619204918.md",
+    "02-docs/20260619204930.md",
+    "02-docs/20260616200133.md",
+    "Home.md",
+    "reviews/20260619205050.md",
+    "02-docs/20260619204803.md",
+    "02-docs/20260619204802.md",
+    "02-docs/20260619204742.md",
+    "02-docs/20260619204727.md",
+    "02-docs/20260619204653.md",
+    "01-raw/20260619204643.md",
+    "02-docs/20260618230214.md",
+    "02-docs/20260615090011.md",
+    "02-docs/20260618230215.md",
+    "02-docs/20260617144556.md",
+    "02-docs/20260615100004.md",
     "live-docs-browser.base",
     "review-queue.base",
     "02-docs/20260617212613.md",
@@ -202,26 +214,6 @@
     "02-docs/20260616181843.md",
     "02-docs/20260616200145.md",
     "02-docs/20260616200300.md",
-    "02-docs/20260617144333.md",
-    "02-docs/20260618000251.md",
-    "02-docs/20260616181719.md",
-    "reviews/20260618230635.md",
-    "02-docs/20260618230226.md",
-    "reviews/20260617152500.md",
-    "02-docs/20260618230214.md",
-    "02-docs/20260615090011.md",
-    "02-docs/20260618230225.md",
-    "Untitled.md",
-    "02-docs/20260615100004.md",
-    "02-docs/20260615100007.md",
-    "reviews/20260616200323.md",
-    "reviews/20260617224908.md",
-    "02-docs/20260615203858.md",
-    "02-docs/20260617212538.md",
-    "02-docs/20260617212550.md",
-    "02-docs/20260615100009.md",
-    "kb/02-docs/20260618230214.md",
-    "kb/02-docs/20260615100000.md",
     "Untitled.base",
     "Untitled 1.base",
     "kb/review-queue.base",

@@ -167,7 +167,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": true
+          "alias": false
         }
       },
       "prev_next": {
@@ -175,7 +175,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": true
+          "alias": false
         },
         "field_group_labels": {
           "prev": [],
@@ -201,7 +201,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": true
+          "alias": false
         },
         "show_attributes": [
           "source",
@@ -237,7 +237,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": true
+          "alias": false
         },
         "find_root": true,
         "find_root_field_group_labels": [
@@ -249,7 +249,7 @@
       "show_node_options": {
         "ext": false,
         "folder": false,
-        "alias": true
+        "alias": false
       }
     }
   },
@@ -274,7 +274,7 @@
         },
         "show_node_options": {
           "ext": false,
-          "alias": true,
+          "alias": false,
           "folder": false
         }
       }
@@ -283,7 +283,7 @@
       "default_options": {
         "destination": "frontmatter",
         "included_fields": [],
-        "use_alias": true
+        "use_alias": false
       }
     },
     "thread": {

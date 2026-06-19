@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "viewer", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "http.server", "8731", "--directory", "build"], "port": 8731 }
+  ]
+}
