@@ -73,50 +73,48 @@ point, but read the body when the summary is thin or stale:
 python3 scripts/ldoc.py show <member-id>
 ```
 
-Skip `deprecated` members from the active Map (they are no longer part of what
-the grouping currently contains); if a deprecated doc is structurally still a
-member, you may note it as superseded rather than listing it as live content.
+Skip `deprecated` members from the guide (they are no longer part of what the
+grouping currently contains); if a deprecated doc is structurally still a member,
+you may note it as superseded rather than describing it as live content.
 
 ---
 
-## Step 2 — Write the body orientation guide (the main deliverable)
+## Step 2 — Write the body: the orientation guide (prose only)
 
-This is the real synthesis work, and it has **no length limit** — it is the bulk
-of an index doc. Write the orientation a reader needs before diving into the
-members:
+The index body is **only** the synthesized orientation guide — LLM-authored
+prose, no length limit. It is your synthesis and your framing of the grouping.
+
+**Do NOT author or generate a `## Map`, a member list, or any structured
+enumeration of members.** Membership lives in the `belongs_to` reverse-edge and
+is rendered for the reader by consumers (the viewer renders the member list from
+the edges); it is never duplicated in the body. There is no Map section. If a
+prior run or `curate-grouping` left a `## Map` (or any member enumeration) in the
+body, drop it — write the guide prose alone.
+
+Write the orientation a reader needs:
 
 - **What this grouping is** — the throughline that makes these docs one subject.
 - **The members and how each contributes** — characterize each member in the
   context of the grouping (your framing, not a copy of its summary), and how it
   relates to the others: what builds on what, what tensions or trade-offs sit
-  between them, where the weight is, what's missing.
+  between them, where the weight is, what's missing. You are encouraged to
+  reference specific members inline and elaborate on their gist freely — refer to
+  any member you discuss via a resolvable `[[<member-id>]]` wiki-link (never a
+  typed-out title) so the link resolves to the live label. This is prose
+  referencing members, NOT a structured list of them.
 - **Where to start** — the natural entry points and a sensible reading order.
 
-Structure it however serves the grouping — usually a short narrative followed by
-a member map. Skip `deprecated` members from the live guide (note them as
-superseded if structurally still attached). The test: a reader of the body alone
-can predict what each member holds and decide which to open.
+Skip `deprecated` members from the live guide (note them as superseded if
+structurally still attached). The test: a reader of the body alone can predict
+what each member holds and decide which to open.
 
-Load the current body, then write the full new body (the orientation guide
-replaces the one-line placeholder curate-grouping left):
+Load the current body, then write the full new body (the guide prose only),
+replacing whatever `curate-grouping` or a prior run left:
 
 ```bash
 python3 scripts/ldoc.py show <index-id>            # read current body
 python3 scripts/ldoc.py set <index-id> --body -    # then pipe the full new body on stdin
 ```
-
-A typical member-map block within the guide:
-
-```
-## Map
-
-- [<Label>](<member-id>.md) — <one-clause gist of this member in context>
-- [<Label>](<member-id>.md) — <one-clause gist>
-- …
-```
-
-The map mirrors current membership exactly — add new members, drop members no
-longer belonging.
 
 ---
 
@@ -157,18 +155,20 @@ Address any ERRORs before finishing.
 
 ## Cascade-sensitivity (read this — it is the point)
 
-This overview is **derived from the members**, so it goes stale the moment a
+This guide is **derived from the members**, so it goes stale the moment a
 member changes substantively. The staleness is real, not cosmetic: an index
-whose Map describes a member's old claim actively misleads a navigator.
+whose guide describes a member's old claim actively misleads a navigator.
+(Membership itself never goes stale in the body — it isn't stored there; the
+viewer renders the member list live from `belongs_to`.)
 
 - **Re-run this skill on the parent index whenever any member is substantively
-  edited** (title, body, type, status, or its membership changes). The aggregated
-  summary and Map must be regenerated to track the new member state.
+  edited** (title, body, type, status, or its membership changes). The guide
+  prose must be regenerated to track the new member state.
 - `cascade-check` enforces this automatically: when a doc that `belongs_to` a
   `type: index` parent changes, cascade-check emits a `cascade` verdict on the
   parent index with the recommended fix "re-run `summarize-descendants` on the
   parent index" (see cascade-check's index-summary rule). The fix for that
-  cascade verdict is to invoke this skill, not to hand-patch the Map.
+  cascade verdict is to invoke this skill, not to hand-patch the body.
 - Membership changes from `curate-grouping` (a new member, a moved member) are
   likewise substantive — re-run this skill on every index whose membership
   changed.
