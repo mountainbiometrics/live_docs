@@ -1,15 +1,18 @@
 {
-  "targetAttributes": ["type", "status"],
+  "targetAttributes": [
+    "type",
+    "status"
+  ],
   "targetTags": false,
   "getFromInlineField": false,
+  "enableTabHeader": true,
   "activateSnippet": true,
   "enableEditor": true,
-  "enableTabHeader": false,
   "enableFileList": true,
   "enableBacklinks": true,
   "enableQuickSwitcher": true,
   "enableSuggestor": true,
-  "enableBases": false,
+  "enableBases": true,
   "selectors": [
     {
       "type": "attribute",

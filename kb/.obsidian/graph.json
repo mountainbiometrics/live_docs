@@ -1,11 +1,11 @@
 {
   "collapse-filter": false,
-  "search": "path:kb/02-docs ",
-  "showTags": false,
-  "showAttachments": false,
-  "hideUnresolved": false,
+  "search": "path:02-docs ",
+  "showTags": true,
+  "showAttachments": true,
+  "hideUnresolved": true,
   "showOrphans": true,
-  "collapse-color-groups": false,
+  "collapse-color-groups": true,
   "colorGroups": [
     {
       "query": "[type:decision]",
@@ -94,14 +94,14 @@
   ],
   "collapse-display": false,
   "showArrow": true,
-  "textFadeMultiplier": 0,
-  "nodeSizeMultiplier": 1,
-  "lineSizeMultiplier": 1,
+  "textFadeMultiplier": -1,
+  "nodeSizeMultiplier": 0.978767361111111,
+  "lineSizeMultiplier": 1.11466579861111,
   "collapse-forces": true,
-  "centerStrength": 0.518713248970312,
+  "centerStrength": 0,
   "repelStrength": 10,
-  "linkStrength": 1,
+  "linkStrength": 0.664756944444444,
   "linkDistance": 250,
-  "scale": 0.6734587848972856,
+  "scale": 0.2993150155099063,
   "close": true
 }

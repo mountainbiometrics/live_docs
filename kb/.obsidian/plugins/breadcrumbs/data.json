@@ -19,23 +19,14 @@
   ],
   "edge_field_groups": [
     {
-      "label": "parents",
+      "label": "dependencies",
       "fields": [
+        "requires",
         "belongs_to"
       ]
     },
     {
-      "label": "children",
-      "fields": []
-    },
-    {
-      "label": "dependencies",
-      "fields": [
-        "requires"
-      ]
-    },
-    {
-      "label": "siblings",
+      "label": "similar",
       "fields": [
         "relates"
       ]
@@ -164,19 +155,19 @@
       },
       "trail": {
         "enabled": true,
-        "format": "grid",
+        "format": "path",
         "selection": "all",
-        "default_depth": 999,
+        "default_depth": 4,
         "no_path_message": "",
         "show_controls": true,
-        "merge_fields": false,
+        "merge_fields": true,
         "field_group_labels": [
           "parents"
         ],
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": false
+          "alias": true
         }
       },
       "prev_next": {
@@ -184,7 +175,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": false
+          "alias": true
         },
         "field_group_labels": {
           "prev": [],
@@ -210,7 +201,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": false
+          "alias": true
         },
         "show_attributes": [
           "source",
@@ -221,7 +212,7 @@
           "parents",
           "children",
           "dependencies",
-          "siblings",
+          "similar",
           "sources",
           "successors"
         ],
@@ -246,7 +237,7 @@
         "show_node_options": {
           "ext": false,
           "folder": false,
-          "alias": false
+          "alias": true
         },
         "find_root": true,
         "find_root_field_group_labels": [
@@ -258,7 +249,7 @@
       "show_node_options": {
         "ext": false,
         "folder": false,
-        "alias": false
+        "alias": true
       }
     }
   },

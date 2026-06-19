@@ -111,11 +111,45 @@
       "noneType": "/",
       "showOnGraph": true,
       "enableByDefault": false
-    }
-  },
-  "additionalProperties": {
+    },
     "type": {
-      "colormap": "hsv",
+      "colormap": "rainbow",
+      "colors": [],
+      "unselected": [],
+      "excludeRegex": {
+        "regex": "",
+        "flags": ""
+      },
+      "noneType": "none",
+      "showOnGraph": true,
+      "enableByDefault": true
+    },
+    "scope": {
+      "colormap": "rainbow",
+      "colors": [],
+      "unselected": [],
+      "excludeRegex": {
+        "regex": "",
+        "flags": ""
+      },
+      "noneType": "none",
+      "showOnGraph": true,
+      "enableByDefault": true
+    },
+    "status": {
+      "colormap": "rainbow",
+      "colors": [],
+      "unselected": [],
+      "excludeRegex": {
+        "regex": "",
+        "flags": ""
+      },
+      "noneType": "none",
+      "showOnGraph": true,
+      "enableByDefault": true
+    },
+    "level": {
+      "colormap": "rainbow",
       "colors": [],
       "unselected": [],
       "excludeRegex": {
@@ -127,14 +161,32 @@
       "enableByDefault": true
     }
   },
+  "additionalProperties": {
+    "type": {
+      "graph": true,
+      "localgraph": true
+    },
+    "scope": {
+      "graph": true,
+      "localgraph": true
+    },
+    "status": {
+      "graph": true,
+      "localgraph": true
+    },
+    "level": {
+      "graph": true,
+      "localgraph": true
+    }
+  },
   "backupGraphOptions": {
     "collapse-filter": false,
-    "search": "path:kb/02-docs ",
-    "showTags": false,
-    "showAttachments": false,
-    "hideUnresolved": false,
+    "search": "path:02-docs ",
+    "showTags": true,
+    "showAttachments": true,
+    "hideUnresolved": true,
     "showOrphans": true,
-    "collapse-color-groups": false,
+    "collapse-color-groups": true,
     "colorGroups": [
       {
         "query": "[type:decision]",
@@ -223,15 +275,15 @@
     ],
     "collapse-display": false,
     "showArrow": true,
-    "textFadeMultiplier": 0,
-    "nodeSizeMultiplier": 1,
-    "lineSizeMultiplier": 1,
+    "textFadeMultiplier": -1,
+    "nodeSizeMultiplier": 0.978767361111111,
+    "lineSizeMultiplier": 1.11466579861111,
     "collapse-forces": true,
-    "centerStrength": 0.518713248970312,
+    "centerStrength": 0,
     "repelStrength": 10,
-    "linkStrength": 1,
+    "linkStrength": 0.664756944444444,
     "linkDistance": 250,
-    "scale": 0.4935233711441712,
+    "scale": 0.2993150155099063,
     "close": true
   },
   "openInNewTab": false,
@@ -260,10 +312,25 @@
         "linkStrength": 1,
         "repelStrength": 10
       },
-      "toggleTypes": {},
-      "logicTypes": {},
+      "toggleTypes": {
+        "tag": [],
+        "link": [],
+        "folder": []
+      },
+      "logicTypes": {
+        "tag": "OR",
+        "link": "OR",
+        "folder": "OR"
+      },
       "enableLayers": false,
-      "currentLayerLevel": 0
+      "currentLayerLevel": 0,
+      "pinNodes": {},
+      "hiddenLegendRows": [
+        "status",
+        "scope",
+        "level"
+      ],
+      "collapsedLegendRows": []
     }
   ],
   "startingStateID": "default-vault",
@@ -295,7 +362,7 @@
   "focusScaleFactor": 1.8,
   "highlightOpenNodes": false,
   "highlightSearchResults": false,
-  "maxNodes": 20,
+  "maxNodes": 500,
   "delay": 500,
   "revertAction": false,
   "enableCSS": false,
@@ -395,13 +462,16 @@
   "allowMultipleLinkTypes": false,
   "disableSource": false,
   "disableTarget": false,
-  "excludedSourcesFolder": [],
+  "excludedSourcesFolder": [
+    "reviews",
+    "01-raw"
+  ],
   "excludedTargetsFolder": [],
   "curvedLinks": false,
   "curvedFactor": 1,
   "outlineLinks": false,
-  "displayLinkTypeLabel": true,
-  "colorLinkTypeLabel": true,
+  "displayLinkTypeLabel": false,
+  "colorLinkTypeLabel": false,
   "noLineHighlight": false,
   "folderShowFullPath": true,
   "invertArrows": false,
@@ -421,9 +491,7 @@
   "nameVerticalOffset": 0,
   "dynamicVerticalOffset": false,
   "showNamesWhenNeighborHighlighted": false,
-  "iconProperties": [
-    ""
-  ],
+  "iconProperties": [],
   "usePluginForIcon": true,
   "usePluginForIconColor": true,
   "useParentIcon": false,
@@ -431,7 +499,7 @@
   "useIconColorForBackgroud": true,
   "borderWidthWithIcon": 0,
   "layerProperties": [
-    "layer"
+    "type"
   ],
   "numberOfActiveLayers": 4,
   "layersOrder": "ASC",
@@ -448,11 +516,32 @@
   "useLeftClickToSelect": true,
   "selectNodeModifier": "Shift",
   "filterAbstractFiles": [],
-  "ignoreInlineLinks": false,
+  "ignoreInlineLinks": true,
   "collapseState": true,
-  "collapseLegend": true,
+  "collapseLegend": false,
   "resetAfterChanges": false,
-  "collapsedSettings": {},
+  "collapsedSettings": {
+    "automation": true,
+    "tags": false,
+    "properties": false,
+    "links": false,
+    "arrows": false,
+    "folders": true,
+    "images": false,
+    "icons": false,
+    "focus": false,
+    "shapes": false,
+    "layers": false,
+    "elements-stats": false,
+    "names": false,
+    "zoom": false,
+    "local-graph": true,
+    "display": true,
+    "filter": true,
+    "inputs": false,
+    "performances": false,
+    "beta": true
+  },
   "selectionMode": "replace",
   "exportSVGOptions": {
     "asImage": true,

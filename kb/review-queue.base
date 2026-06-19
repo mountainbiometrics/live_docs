@@ -1,6 +1,6 @@
 filters:
   and:
-    - file.path.startsWith("kb/reviews/")
+    - file.path.startsWith("reviews/")
 properties:
   note.created:
     displayName: Created

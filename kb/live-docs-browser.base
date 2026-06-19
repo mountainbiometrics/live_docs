@@ -1,6 +1,6 @@
 filters:
   and:
-    - file.path.startsWith("kb/02-docs/")
+    - file.path.startsWith("02-docs/")
 properties:
   note.title:
     displayName: Title
@@ -23,12 +23,22 @@ views:
       property: type
       direction: ASC
     order:
-      - type
-      - status
-      - title
       - label
+      - title
       - level
+      - status
       - created
+    sort:
+      - property: file.path
+        direction: ASC
+      - property: label
+        direction: ASC
+      - property: title
+        direction: ASC
+      - property: type
+        direction: ASC
+    columnSize:
+      note.title: 352
   - type: table
     name: By Status
     groupBy:

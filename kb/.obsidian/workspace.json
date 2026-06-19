@@ -13,12 +13,22 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "kb/02-docs/20260618230225.md",
+                "file": "02-docs/20260615100004.md",
                 "mode": "source",
-                "source": false
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
               },
               "icon": "lucide-file",
-              "title": "20260618230225"
+              "title": "20260615100004"
             }
           }
         ]
@@ -94,6 +104,7 @@
             "state": {
               "type": "backlink",
               "state": {
+                "file": "02-docs/20260618230216.md",
                 "collapseAll": true,
                 "extraContext": true,
                 "sortOrder": "alphabetical",
@@ -103,7 +114,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for 20260618230216"
             }
           },
           {
@@ -184,32 +195,33 @@
   },
   "active": "3ce45d9e7eabfef4",
   "lastOpenFiles": [
+    "live-docs-browser.base",
+    "review-queue.base",
+    "02-docs/20260617212613.md",
+    "02-docs/20260618230216.md",
+    "02-docs/20260616181843.md",
+    "02-docs/20260616200145.md",
+    "02-docs/20260616200300.md",
+    "02-docs/20260617144333.md",
+    "02-docs/20260618000251.md",
+    "02-docs/20260616181719.md",
+    "reviews/20260618230635.md",
+    "02-docs/20260618230226.md",
+    "reviews/20260617152500.md",
+    "02-docs/20260618230214.md",
+    "02-docs/20260615090011.md",
+    "02-docs/20260618230225.md",
+    "Untitled.md",
+    "02-docs/20260615100004.md",
+    "02-docs/20260615100007.md",
+    "reviews/20260616200323.md",
+    "reviews/20260617224908.md",
+    "02-docs/20260615203858.md",
+    "02-docs/20260617212538.md",
+    "02-docs/20260617212550.md",
+    "02-docs/20260615100009.md",
     "kb/02-docs/20260618230214.md",
     "kb/02-docs/20260615100000.md",
-    "kb/reviews/20260616200323.md",
-    "README.md",
-    "idea_dump.md",
-    "AGENTS.md",
-    "kb/02-docs/20260618214213.md",
-    "kb/02-docs/20260615100007.md",
-    "kb/02-docs/20260617144634.md",
-    "kb/reviews/20260618214514.md",
-    "kb/02-docs/20260618214324.md",
-    "kb/02-docs/20260618214315.md",
-    "kb/02-docs/20260618214306.md",
-    "kb/02-docs/20260618214257.md",
-    "kb/02-docs/20260618214247.md",
-    "kb/02-docs/20260618214238.md",
-    "kb/02-docs/20260618214227.md",
-    "kb/02-docs/20260618214203.md",
-    "kb/02-docs/20260618214152.md",
-    "kb/02-docs/20260618214139.md",
-    "kb/02-docs/20260618214128.md",
-    "kb/02-docs/20260618214113.md",
-    "kb/01-raw/20260618213816.md",
-    "kb/00-inbox/20260618213815.md",
-    "kb/02-docs/20260618213505.md",
-    "kb/02-docs/20260615100013.md",
     "Untitled.base",
     "Untitled 1.base",
     "kb/review-queue.base",
@@ -217,8 +229,6 @@
     "livedocs.config.json",
     "kb/00-inbox",
     "kb/reviews",
-    "kb/01-raw",
-    "kb/02-docs",
-    "kb"
+    "kb/01-raw"
   ]
 }

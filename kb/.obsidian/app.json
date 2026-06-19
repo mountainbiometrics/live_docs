@@ -15,5 +15,6 @@
     "margin": "none",
     "downscaleEmbeddedImages": true
   },
-  "attachmentFolderPath": "kb/00-inbox"
+  "attachmentFolderPath": "00-inbox",
+  "showInlineTitle": false
 }
