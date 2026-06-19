@@ -14,7 +14,7 @@ Record format (reviews/<id>.md):
     ---
     id: "<id>"
     created: "<iso8601>"
-    touched: [<doc_id>, ...]
+    touched: ["[[<doc_id>]]", ...]
     signoffs:
       - who: "<name>"
         at: "<iso8601>"
@@ -42,7 +42,21 @@ from .model import (
     REVIEWS_DIR, generate_id, DOCS_DIR,
     ref_token, render_ref_token, WIKILINK_RE,
 )
-from .serialize import _yaml_str, _yaml_list, _parse_frontmatter_text
+
+
+def _normalize_ref(token: str) -> str:
+    """Reduce a touched-ref token to its bare id.
+
+    Accepts the canonical on-disk form '[[<id>]]' (or '[[<id>|label]]') and
+    the legacy bare-id form, returning just '<id>'. Tolerant of stray
+    whitespace and quoting so it round-trips any pre-migration file.
+    """
+    token = str(token).strip()
+    m = WIKILINK_RE.search(token)
+    if m:
+        return m.group(1)
+    return token
+from .serialize import _yaml_str, _yaml_wikilink_list, _parse_frontmatter_text
 
 
 # ---------------------------------------------------------------------------
@@ -127,11 +141,15 @@ def parse_review(path: Path) -> dict:
     fm = _parse_frontmatter_text(parts[1])
     body = parts[2].lstrip("\n")
 
-    # Normalize touched to list of strings
+    # Normalize touched to a list of bare ids (the in-memory representation).
+    # On disk, touched is stored as canonical "[[<id>]]" wiki-links (matching
+    # the frontmatter edge convention); strip the wrapping here so all
+    # downstream logic — membership checks, counts, body rendering — works on
+    # bare ids regardless of whether a given file predates the migration.
     touched = fm.get("touched", [])
     if not isinstance(touched, list):
         touched = [touched] if touched else []
-    fm["touched"] = touched
+    fm["touched"] = [_normalize_ref(t) for t in touched]
 
     # Normalize signoffs to list of {who, at} dicts
     signoffs = fm.get("signoffs", [])
@@ -160,8 +178,11 @@ def dump_review(fm: dict, body: str) -> str:
     lines.append(f"id: {_yaml_str(fm.get('id', ''))}")
     lines.append(f"created: {_yaml_str(fm.get('created', ''))}")
 
-    touched = fm.get("touched", [])
-    lines.append(f"touched: {_yaml_list(touched)}")
+    # Emit touched as canonical "[[<id>]]" wiki-links, matching the
+    # frontmatter edge convention. Tokens are normalized to bare ids first so
+    # an already-wrapped in-memory value never gets double-wrapped.
+    touched = [_normalize_ref(t) for t in fm.get("touched", [])]
+    lines.append(f"touched: {_yaml_wikilink_list(touched)}")
 
     signoffs = fm.get("signoffs", [])
     if not signoffs:
@@ -293,12 +314,13 @@ class ReviewLedger:
             body = self._build_body_since(since, docs)
             touched = self._collect_touched_since(since, docs)
         elif touched_refs is not None and not body:
-            # Explicit touched list, no --summary provided
-            touched = [r for r in touched_refs if r in docs]
+            # Explicit touched list, no --summary provided. Normalize so callers
+            # may pass bare ids or canonical "[[<id>]]" wiki-links.
+            touched = [r for r in (_normalize_ref(t) for t in touched_refs) if r in docs]
             body = self._build_body_from_touched(touched, docs)
         elif touched_refs is not None:
             # Explicit touched list + explicit body
-            touched = [r for r in touched_refs if r in docs]
+            touched = [r for r in (_normalize_ref(t) for t in touched_refs) if r in docs]
         elif body:
             # Pure explicit body, no touched inference
             touched = []
