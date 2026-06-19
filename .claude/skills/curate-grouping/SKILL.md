@@ -124,7 +124,9 @@ For each grouping decision, propose concretely. Two kinds of proposal:
 
 **(a) New `type: index` doc** for a coherent theme that lacks a signpost:
 
-- Suggested title (a navigational name: "Index: <theme>") and `label`.
+- Suggested title — just the theme itself (e.g. "Foundational Principles"); do
+  NOT put "Index:" in the title field, the type is prepended automatically at
+  display time. Plus a short `label`.
 - One-line statement of what the grouping is — the editorial throughline that
   makes these docs one subject.
 - The list of member ids that would `belongs_to` it.
@@ -178,7 +180,7 @@ Create a new index doc:
 ```bash
 python3 scripts/ldoc.py new \
   --type index \
-  --title "Index: <theme>" \
+  --title "<theme>" \
   --level incidental \
   --status living \
   --belongs-to <root-or-parent-index-id> \

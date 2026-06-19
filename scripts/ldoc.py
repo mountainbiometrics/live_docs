@@ -72,7 +72,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import KB, DOCS_DIR, LABEL_RE, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
+from livedocs import KB, DOCS_DIR, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, REVIEWS_DIR
 from livedocs import INBOX_DIR, RAW_DIR, generate_id
 
@@ -601,10 +601,6 @@ def cmd_set(kb: KB, args) -> int:
         fields["summary"] = args.summary
     if args.label is not None:
         label = args.label.strip()
-        if not LABEL_RE.match(label):
-            _err(f"Invalid label: {args.label!r}. Must match "
-                 f"^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$ (letters/digits, single spaces or hyphens).")
-            return 1
         fields["label"] = label
     if args.level is not None:
         fields["level"] = args.level
@@ -1351,7 +1347,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label edge format instead of typed wiki-links.")
 
     # --- graph ---
-    p = sub.add_parser("graph", help="BFS traversal over depends_on edges.")
+    p = sub.add_parser("graph", help="BFS traversal over hard edges (requires + belongs_to).")
     p.add_argument("ref", help="id | label | title")
     p.add_argument("--depth", type=int, default=1)
     p.add_argument("--direction", default="both", choices=["up", "down", "both"])

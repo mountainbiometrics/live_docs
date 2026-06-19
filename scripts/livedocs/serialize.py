@@ -11,7 +11,7 @@ from typing import Any
 
 
 # ---------------------------------------------------------------------------
-# Wikilink helpers for depends_on / references on-disk encoding
+# Wikilink helpers for edge fields on-disk encoding
 # ---------------------------------------------------------------------------
 
 # Matches a bare wikilink id, e.g. [[20260616181728]] or [[20260616181728|alias]]
@@ -244,10 +244,6 @@ def parse_doc(path: Path) -> dict:
       history       — list of {at, summary} dicts (may be empty list or absent)
       body          — the text after the closing '---'
 
-    Old field names (depends_on, references, state) are tolerated on read and
-    normalised transparently: depends_on → requires, references → provenance,
-    state is kept as-is (validate will warn; doc migration removes it).
-
     Fields not present in the file are absent from the dict (no defaults injected).
     The 'id' key is always set from the filename (authoritative).
     """
@@ -263,19 +259,6 @@ def parse_doc(path: Path) -> dict:
 
     fm = _parse_frontmatter_text(fm_raw)
 
-    # --- Transparent backward-compat aliases (old field names) ---
-    # depends_on → requires (if requires not already present)
-    if "depends_on" in fm and "requires" not in fm:
-        fm["requires"] = fm.pop("depends_on")
-    elif "depends_on" in fm:
-        fm.pop("depends_on")  # discard old name if new one already present
-
-    # references → provenance (if provenance not already present)
-    if "references" in fm and "provenance" not in fm:
-        fm["provenance"] = fm.pop("references")
-    elif "references" in fm:
-        fm.pop("references")
-
     # Normalize all edge fields (wikilink unwrap; absent stays absent)
     for edge_key in ("belongs_to", "requires", "relates", "provenance", "superseded_by"):
         _normalize_edge_field(fm, edge_key)
@@ -288,22 +271,16 @@ def parse_doc(path: Path) -> dict:
     elif not isinstance(hist, list):
         fm["history"] = []
 
-    # Normalize domain/scope to flat top-level lists.
-    # Read the legacy nested `tags:` form (tags.domain / tags.scope) when the
-    # flat fields are absent, so old on-disk docs expose the same in-memory
-    # shape during the transition. The nested `tags` key is then discarded.
-    legacy_tags = fm.pop("tags", None)
-    legacy = legacy_tags if isinstance(legacy_tags, dict) else {}
+    # Normalize domain/scope: flat top-level inline lists.
+    # Absent fields are left absent — callers use .get(key, []).
     for tag_key in ("domain", "scope"):
         flat = fm.get(tag_key)
         if isinstance(flat, list):
             fm[tag_key] = flat
         elif flat is not None:
-            # tolerate a stray scalar by wrapping it
+            # Wrap a stray scalar (shouldn't occur in current format)
             fm[tag_key] = [flat]
-        elif isinstance(legacy.get(tag_key), list):
-            fm[tag_key] = legacy[tag_key]
-        # else: leave absent — callers use .get(key, [])
+        # else: leave absent
 
     # Canonical id from filename (authoritative)
     fm["id"] = path.stem

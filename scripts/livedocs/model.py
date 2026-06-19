@@ -103,10 +103,6 @@ VALID_STATUSES = {"living", "target", "deprecated", "reference"}
 VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
-# Label validation pattern: letters/digits, with single spaces or hyphens
-# between tokens (whitespace IS allowed; kebab-case remains valid).
-LABEL_RE = re.compile(r'^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$')
-
 
 # ---------------------------------------------------------------------------
 # Collision-safe ID generation (shared by ldoc new and ingest_raw.py)
@@ -197,6 +193,7 @@ def display_label(doc: dict) -> str:
     t = doc.get("type", "?")
     title = doc.get("title", doc.get("id", "?"))
     return f"{t.capitalize()}: {title}"
+
 
 
 # A stored reference is a bare wiki-link to a doc id: [[20260616181719]].

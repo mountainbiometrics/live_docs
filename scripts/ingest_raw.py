@@ -58,7 +58,7 @@ def build_raw_frontmatter(
 
     Fields emitted:
       id, type, kind, status, original_source, imported
-    and optionally title when non-empty.  No depends_on, no tags, no history —
+    and optionally title when non-empty.  No edge fields, no tags, no history —
     raw files are not graph nodes and do not need those fields.
     """
     lines = ["---", f"id: {_yaml_str(raw_id)}"]

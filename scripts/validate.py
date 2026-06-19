@@ -12,8 +12,7 @@ Stdlib only. No external dependencies.
 
 Checks performed:
   1. Required baseline fields present (id, title, label, type, status, level, created)
-  2. label: present, trimmed, matches ^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$,
-     UNIQUE across store (case-insensitive)
+  2. label: present, trimmed, UNIQUE across store (case-insensitive)
   3. Valid enum values (type, status, level)
   4. id == filename
   5a. requires ids resolve to existing docs (cascade graph — errors blocking)
@@ -38,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import (
-    DOCS_DIR, load_all, dangling_edges, dangling_references, LABEL_RE, doc_prefix,
+    DOCS_DIR, load_all, dangling_edges, dangling_references, doc_prefix,
     VALID_TYPES, VALID_STATUSES, VALID_LEVELS, VALID_REFERENCE_KINDS,
 )
 
@@ -80,17 +79,13 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     if "type" not in doc:
         return errors, warnings
 
-    # 2. Label validation: present, trimmed, valid format (uniqueness checked in main)
+    # 2. Label validation: present and trimmed (uniqueness checked in main).
+    # No character-format restriction — labels are free-form human identifiers.
     label = doc.get("label", "")
     if not label:
         errors.append(f"{prefix}  missing or empty `label`")
     elif label != label.strip():
         errors.append(f"{prefix}  `label` value {label!r} has leading/trailing whitespace")
-    elif not LABEL_RE.match(label):
-        errors.append(
-            f"{prefix}  invalid `label` value {label!r} — "
-            f"must match ^[A-Za-z0-9]+([ -][A-Za-z0-9]+)*$"
-        )
 
     # 3. Valid enum values
     doc_type = doc.get("type", "")
@@ -105,13 +100,7 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     if level and level not in VALID_LEVELS:
         errors.append(f"{prefix}  invalid `level` value `{level}`")
 
-    # Note: `state` field is REMOVED from the schema. If present in a doc it has
-    # not been migrated yet — tolerate it silently (doc migration is a separate pass).
-
-    # Tags: schema is now flat top-level `domain:`/`scope:` lists. parse_doc
-    # transparently migrates any legacy nested `tags:` mapping into these flat
-    # fields on read, so a doc that still has nested tags on disk is tolerated
-    # (no error here) — on-disk doc migration is a separate pass.
+    # Tags: schema uses flat top-level `domain:`/`scope:` lists.
     for tag_field in ("domain", "scope"):
         val = doc.get(tag_field)
         if val is not None and not isinstance(val, list):

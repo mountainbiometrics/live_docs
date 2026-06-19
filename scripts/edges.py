@@ -61,7 +61,7 @@ def main() -> int:
     print(f"Docs: {len(docs)}")
     print()
 
-    print("FORWARD EDGES (doc → depends_on)")
+    print("FORWARD EDGES (doc → requires/belongs_to)")
     for doc_id in sorted(fwd):
         print(f"  {_node(doc_id)}  →  {_node_list(fwd[doc_id])}")
     print()
@@ -72,7 +72,7 @@ def main() -> int:
     print()
 
     if dangling:
-        print("DANGLING EDGES (depends_on targets that do not exist):")
+        print("DANGLING EDGES (hard-edge targets that do not exist):")
         for from_id, missing_id in sorted(dangling):
             from_title = titles.get(from_id, from_id)
             print(f"  [DANGLING] {_node(from_id)} ({from_title!r}) → {missing_id} (missing)")

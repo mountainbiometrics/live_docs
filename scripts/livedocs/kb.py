@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .model import (
-    DOCS_DIR, RAW_DIR, LABEL_RE,
+    DOCS_DIR, RAW_DIR,
     generate_id, title_to_label, unique_label, display_label,
 )
 from .serialize import parse_doc, dump_doc, _yaml_str
@@ -22,19 +22,13 @@ from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, s
 
 
 # ---------------------------------------------------------------------------
-# Tag access — flat domain/scope with legacy nested-tags fallback
+# Tag access — flat top-level domain/scope
 # ---------------------------------------------------------------------------
 
 def _doc_tag_list(doc: dict, key: str) -> list:
-    """Return a doc's `domain` or `scope` list, reading the flat field first and
-    falling back to the legacy nested `tags:` mapping for un-migrated docs."""
+    """Return a doc's `domain` or `scope` list from the flat top-level field."""
     flat = doc.get(key)
-    if isinstance(flat, list):
-        return flat
-    legacy = doc.get("tags")
-    if isinstance(legacy, dict) and isinstance(legacy.get(key), list):
-        return legacy[key]
-    return []
+    return flat if isinstance(flat, list) else []
 
 
 # ---------------------------------------------------------------------------

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "kb/02-docs/20260618230214.md",
+                "file": "kb/02-docs/20260618230225.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20260618230214"
+              "title": "20260618230225"
             }
           }
         ]
@@ -184,6 +184,7 @@
   },
   "active": "3ce45d9e7eabfef4",
   "lastOpenFiles": [
+    "kb/02-docs/20260618230214.md",
     "kb/02-docs/20260615100000.md",
     "kb/reviews/20260616200323.md",
     "README.md",
@@ -209,7 +210,6 @@
     "kb/00-inbox/20260618213815.md",
     "kb/02-docs/20260618213505.md",
     "kb/02-docs/20260615100013.md",
-    "reports/obsidian-plugins.md",
     "Untitled.base",
     "Untitled 1.base",
     "kb/review-queue.base",

@@ -1,29 +1,37 @@
 ---
 name: summarize-descendants
 description: >
-  Given a `type: index` doc and the docs that `belongs_to` it, SYNTHESIZE an
-  aggregated overview of the grouping — a coherent narrative of what the subtree
-  is and what's in it — and write it to the index doc's `summary` field and a
-  body `## Map` section (one line per member: label — one-clause gist). This is
-  synthesis, not concatenation of child summaries: a reader should grasp the
-  shape of the whole subtree without opening each child. Cascade-sensitive: the
-  overview goes stale when any member changes, so re-run it on the parent index
-  whenever a member is substantively edited (cascade-check flags this). Use after
-  curate-grouping wires memberships, or to refresh a stale index summary.
+  Given a `type: index` doc and the docs that `belongs_to` it, write the index's
+  BODY as an orientation guide to the grouping — a synthesis of what the members
+  are, how each contributes to the grouping, and how they interrelate — the thing
+  a reader reads to get oriented before diving into any member. There is no length
+  limit on this body; it is the bulk of an index doc. Separately, set the index's
+  frontmatter `summary` to a tight 1–3 sentence signpost ("groups X; read here for
+  X") — the same summary convention as any doc, NOT the guide in miniature.
+  Synthesize, do not concatenate. Cascade-sensitive: the guide goes stale when a
+  member changes, so re-run it on the parent index whenever a member is
+  substantively edited (cascade-check flags this). Use after curate-grouping wires
+  memberships, or to refresh a stale index.
 ---
 
-# summarize-descendants — Synthesize an index's aggregated overview
+# summarize-descendants — Write an index's orientation guide
 
-The cardinal rule: **synthesize, do not concatenate.** The output is a coherent
-account of *what this grouping is and what it contains* — the kind of overview a
-human editor writes after reading every member, not a stack of the members' own
-summaries glued together. A reader should be able to understand the shape of the
-subtree from the index alone, which is the cognitive-load payoff (see
-`20260615100004`, Cognitive Load Management): navigate by scanning, not by
-absorbing every doc in the branch.
+An index doc has two distinct outputs, and they are NOT the same thing:
 
-This skill writes only to the index doc itself — its `summary` scalar and a
-body `## Map` section. It does not touch the members.
+1. **The body — an orientation guide (the main work, no length limit).** A
+   synthesis of the grouping: what each member is, how it contributes to the
+   grouping, how the members interrelate, where the weight and the tensions are.
+   This is what a reader reads to get oriented *before* diving into any member —
+   the bulk of an index doc's body.
+2. **The frontmatter `summary` — a tight 1–3 sentence signpost.** Exactly like
+   every other doc's summary: "this is the signpost for <macro-concept>; read here
+   if you want <X>." It points at the grouping; it is not the guide condensed.
+
+The cardinal rule for the body: **synthesize, do not concatenate.** Write the
+account a human editor writes after reading every member — not a stack of the
+members' own summaries glued together. The payoff is cognitive-load reduction
+(see `20260615100004`, Cognitive Load Management): a reader gets oriented by
+scanning the index instead of absorbing every doc in the branch.
 
 ---
 
@@ -71,52 +79,33 @@ member, you may note it as superseded rather than listing it as live content.
 
 ---
 
-## Step 2 — Synthesize the aggregated overview
+## Step 2 — Write the body orientation guide (the main deliverable)
 
-This is the judgment step. Having read all members, write a coherent narrative —
-**not** a list of their summaries:
+This is the real synthesis work, and it has **no length limit** — it is the bulk
+of an index doc. Write the orientation a reader needs before diving into the
+members:
 
-- **What the grouping is** — the throughline that makes these docs one subject.
-  What question does a reader come here to answer?
-- **What's in it** — the shape of the subtree: the main sub-themes, how the
-  members relate, where the weight is, any notable tension or gap.
-- **Where to go next** — if some members are the natural entry points, say so.
+- **What this grouping is** — the throughline that makes these docs one subject.
+- **The members and how each contributes** — characterize each member in the
+  context of the grouping (your framing, not a copy of its summary), and how it
+  relates to the others: what builds on what, what tensions or trade-offs sit
+  between them, where the weight is, what's missing.
+- **Where to start** — the natural entry points and a sensible reading order.
 
-Synthesis means: collapse overlap, surface the connective tissue the individual
-docs don't state about each other, and describe the whole at a higher altitude
-than any single member. If two members make the same point from different
-angles, say that once. The test: someone who reads only this overview should be
-able to predict what they'll find inside, and decide which member to open — that
-is impossible from concatenated child summaries.
+Structure it however serves the grouping — usually a short narrative followed by
+a member map. Skip `deprecated` members from the live guide (note them as
+superseded if structurally still attached). The test: a reader of the body alone
+can predict what each member holds and decide which to open.
 
-Keep it to a few sentences (the `summary` field is a 2–5 sentence overview).
-
----
-
-## Step 3 — Write the summary scalar
-
-```bash
-python3 scripts/ldoc.py set <index-id> --summary "<the synthesized overview from Step 2>"
-```
-
----
-
-## Step 4 — Write the `## Map` section in the body
-
-The Map is the navigational directory: one line per live member, in a sensible
-reading order (entry points first, or grouped by sub-theme), each as
-`label — one-clause gist`. The gist is *your* one-clause characterization of the
-member in the context of this grouping, not a copy of its summary.
-
-Load the current body, preserve everything except a prior `## Map` section
-(replace it if present), and write the new body:
+Load the current body, then write the full new body (the orientation guide
+replaces the one-line placeholder curate-grouping left):
 
 ```bash
 python3 scripts/ldoc.py show <index-id>            # read current body
 python3 scripts/ldoc.py set <index-id> --body -    # then pipe the full new body on stdin
 ```
 
-The `## Map` section shape:
+A typical member-map block within the guide:
 
 ```
 ## Map
@@ -126,9 +115,25 @@ The `## Map` section shape:
 - …
 ```
 
-Keep the index doc's existing intro prose (the "what this grouping is"
-statement) above the Map; replace only the Map section. The Map mirrors current
-membership exactly — add new members, drop members no longer belonging.
+The map mirrors current membership exactly — add new members, drop members no
+longer belonging.
+
+---
+
+## Step 3 — Write the frontmatter `summary` (a tight signpost)
+
+The index's `summary` is just a signpost — 1–3 sentences (≤ ~50 words, often one
+is enough) naming the macro-concept and telling a reader what they'll find if
+they descend. It follows the **same summary convention as every doc**; it is NOT
+the orientation guide condensed.
+
+- Model: *"The foundational principles that anchor all our decisions and goals —
+  read here to understand the bedrock the rest of the store builds on."*
+- Name the grouping and its purpose; the contents live in the body guide.
+
+```bash
+python3 scripts/ldoc.py set <index-id> --summary "<the tight signpost>"
+```
 
 ---
 
