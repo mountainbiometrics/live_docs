@@ -97,7 +97,7 @@ else:
 
 VALID_TYPES = {
     "type", "principle", "goal", "decision", "constraint",
-    "requirement", "use-case", "guide", "component", "reference", "index",
+    "requirement", "use-case", "guide", "component", "reference",
 }
 VALID_STATUSES = {"living", "target", "deprecated", "reference"}
 VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}

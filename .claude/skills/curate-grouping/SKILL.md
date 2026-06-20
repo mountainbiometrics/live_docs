@@ -36,8 +36,10 @@ Before beginning, capture the current UTC time (used only if the pass actually
 writes — a pure proposal that writes nothing emits no review summary):
 
 ```bash
-START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+date -u +%Y-%m-%dT%H:%M:%SZ
 ```
+
+Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
 
 ---
 
@@ -254,8 +256,10 @@ A pure proposal that wrote nothing emits no summary. If memberships/indexes were
 written:
 
 ```bash
-python3 scripts/ldoc.py review new --since "$START"
+python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
+
+After it runs, confirm `touched` is non-empty and reflects the episode's changes.
 
 Report the review id. Review is **post-hoc and non-gating** (see
 `review-is-post-hoc`): it records the episode and never blocks the result. If

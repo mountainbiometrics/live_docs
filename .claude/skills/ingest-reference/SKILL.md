@@ -54,8 +54,10 @@ Exactly like cascade-check's "orchestrator owns the episode" contract:
 ## Step 0 — Capture the episode start time
 
 ```bash
-START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+date -u +%Y-%m-%dT%H:%M:%SZ
 ```
+
+Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
 
 This timestamp generates the single review summary at the end of the episode.
 
@@ -235,8 +237,10 @@ Then emit the single review summary for the entire ingest episode. ingest-
 reference owns it (the nested sub-skills never emit one):
 
 ```bash
-python3 scripts/ldoc.py review new --since "$START"
+python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
+
+After it runs, confirm `touched` is non-empty and reflects the episode's changes.
 
 Report the returned review id:
 

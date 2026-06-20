@@ -24,8 +24,10 @@ It never silently rewrites meaning, deletes docs, or merges distinct ideas.
 Before beginning any pass, capture the current UTC time:
 
 ```bash
-START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+date -u +%Y-%m-%dT%H:%M:%SZ
 ```
+
+Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
 
 This is used at the end of the pass to generate a review summary — but only
 if the pass actually applied changes (see "Review summary" below).
@@ -265,8 +267,10 @@ batch write). Garden owns the single summary for the episode.
 After all changes for the pass are applied:
 
 ```bash
-python3 scripts/ldoc.py review new --since "$START"
+python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
+
+After it runs, confirm `touched` is non-empty and reflects the episode's changes.
 
 Report the returned review id to the user:
 

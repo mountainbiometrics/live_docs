@@ -49,8 +49,10 @@ Exactly like cascade-check's "orchestrator owns the episode" contract:
 ## Step 0 — Capture the episode start time
 
 ```bash
-START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+date -u +%Y-%m-%dT%H:%M:%SZ
 ```
+
+Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
 
 Used at the end to generate a single review summary (substantive changes only —
 see Step 7).
@@ -252,8 +254,10 @@ skill owns the single summary for the episode. Emit one only when revise-doc is
 the outermost skill for this editing session.
 
 ```bash
-python3 scripts/ldoc.py review new --since "$START"
+python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
+
+After it runs, confirm `touched` is non-empty and reflects the episode's changes.
 
 Report the returned review id to the user:
 

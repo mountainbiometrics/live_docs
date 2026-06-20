@@ -221,7 +221,47 @@ class KB:
             # Reverse edges
             "dependents": self._edge_list(rev.get(doc_id, [])),
             "provenance_of": self._edge_list(ref_by.get(doc_id, [])),
+            # Topological facet: union of `scope` anchors along the belongs_to
+            # genealogy (own scope included). Read off topology, not stored.
+            "effective_scope": self.effective_scope(doc_id),
         }
+
+    def effective_scope(self, ref: str) -> list[str]:
+        """
+        Return a doc's EFFECTIVE scope: the union of `scope` anchor values along
+        its WHOLE `belongs_to` genealogy — every belongs_to ancestor, plus the
+        doc's own `scope` if set.
+
+        Computed over `belongs_to` ONLY (never `requires`): per the reframe,
+        belonging confers lineage/scope while requiring does not. The walk is
+        cycle-defensive — a `belongs_to` cycle (which validate now rejects as a
+        hard error) cannot make this loop forever.
+
+        Returns a sorted list of distinct scope strings (empty if no anchor in
+        the genealogy sets a scope).
+        """
+        start = self.resolve(ref)
+        scopes: set[str] = set()
+        seen: set[str] = set()
+        stack = [start]
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            doc = self._docs.get(current)
+            if not doc:
+                continue
+            sc = doc.get("scope")
+            if isinstance(sc, str) and sc.strip():
+                scopes.add(sc.strip())
+            elif isinstance(sc, list):
+                # tolerate any legacy list value
+                scopes.update(s.strip() for s in sc if isinstance(s, str) and s.strip())
+            for parent in doc.get("belongs_to", []):
+                if parent not in seen:
+                    stack.append(parent)
+        return sorted(scopes)
 
     def find(
         self,
@@ -273,9 +313,11 @@ class KB:
             if status and doc.get("status") != status:
                 continue
 
-            doc_scope = _doc_tag_list(doc, "scope")
             doc_domain = _doc_tag_list(doc, "domain")
-            if scope and scope not in doc_scope:
+            # scope is now a single string naming a topological zone; match the
+            # filter against the doc's EFFECTIVE scope (own + belongs_to ancestry)
+            # so a scope query finds the whole subtree, not just hand-stamped docs.
+            if scope and scope not in self.effective_scope(doc_id):
                 continue
             if domain and domain not in doc_domain:
                 continue
@@ -533,12 +575,15 @@ class KB:
 
     def set(self, ref: str, **fields) -> None:
         """
-        Update scalar frontmatter fields: title, label, summary, level, status, type.
+        Update scalar frontmatter fields: title, label, summary, level, status,
+        type, scope.
 
         Resolves ref, loads doc, updates fields, writes back. Setting `summary`
-        to an empty string removes it (it is omitted on disk when empty).
+        or `scope` to an empty string removes it (both are omitted on disk when
+        empty). `scope` is a single STRING naming a topological zone — its value
+        applies to this doc and its whole belongs_to subtree (see effective_scope).
         """
-        allowed = {"title", "label", "summary", "level", "status", "type"}
+        allowed = {"title", "label", "summary", "level", "status", "type", "scope"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -546,8 +591,8 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
         for k, v in fields.items():
-            if k == "summary" and not v:
-                fm.pop("summary", None)
+            if k in ("summary", "scope") and not v:
+                fm.pop(k, None)
             else:
                 fm[k] = v
         self._write_doc(doc_id, fm, body)

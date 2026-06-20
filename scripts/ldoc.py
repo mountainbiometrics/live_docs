@@ -38,7 +38,7 @@ Subcommands (grouped):
         [--provenance a,b] [--superseded-by a,b]
         [--tags-domain d] [--tags-scope s]
         [--kind K] [--source S] [--body T|-] [--dry-run]
-    set <ref> [--title] [--label] [--level] [--status] [--type]
+    set <ref> [--title] [--label] [--level] [--status] [--type] [--scope]
               [--body -|TEXT] [--dry-run]
     edit <ref>   (alias: set <ref> --body -)
     link <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
@@ -172,7 +172,7 @@ def cmd_get(kb: KB, args) -> int:
         print(f"type:   {fm.get('type', '')}")
         print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}")
         print(f"created: {fm.get('created', '')}")
-        print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', [])}")
+        print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', '') or '(none)'}")
         hist = fm.get("history", [])
         print(f"history: {len(hist)} entries")
 
@@ -247,7 +247,10 @@ def cmd_show(kb: KB, args) -> int:
             print(f"  summary: {summary}")
         print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
               f"level: {fm.get('level','')}")
-        print(f"  domain: {fm.get('domain',[])}  scope: {fm.get('scope',[])}")
+        own_scope = fm.get('scope', '') or '(none)'
+        eff_scope = result.get('effective_scope', [])
+        print(f"  domain: {fm.get('domain',[])}  scope: {own_scope}")
+        print(f"  effective scope: {eff_scope}")
         print(f"  created: {fm.get('created','')}")
         print(f"{'='*60}")
         print()
@@ -608,6 +611,9 @@ def cmd_set(kb: KB, args) -> int:
         fields["status"] = args.status
     if args.type is not None:
         fields["type"] = args.type
+    if args.scope is not None:
+        # scope is a single string naming a topological zone; empty string clears it
+        fields["scope"] = args.scope
 
     # --body: read new body from stdin or inline
     body_arg = getattr(args, "body", None)
@@ -618,7 +624,7 @@ def cmd_set(kb: KB, args) -> int:
         new_body = body_arg
 
     if not fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, or --body.")
+        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, or --body.")
         return 1
 
     # --dry-run preview
@@ -1118,6 +1124,17 @@ def _review_new(ledger: ReviewLedger, args) -> int:
         _err(str(e))
         return 1
 
+    # Non-gating guardrail: an explicit body with no --since/--touched produces a
+    # record whose `touched` is empty — the body wasn't auto-built from changed
+    # docs, so the ledger can't tie it to the graph. Warn, don't fail.
+    if body and not since and not touched_refs:
+        print(
+            "WARNING: review created with an empty `touched` list — the body was "
+            "taken as-is, not auto-built from changed docs. Consider --since <ISO8601> "
+            "or --touched <refs> so the record links to the docs it covers.",
+            file=sys.stderr,
+        )
+
     print(f"id:   {review_id}")
     print(f"path: {path}")
     return 0
@@ -1415,6 +1432,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--level", default=None, choices=VALID_LEVELS_SORTED)
     p.add_argument("--status", default=None, choices=VALID_STATUSES_SORTED)
     p.add_argument("--type", default=None, choices=VALID_TYPES_SORTED)
+    p.add_argument("--scope", default=None,
+                   help="Single string naming a topological zone; applies to this "
+                        "doc and its whole belongs_to subtree. Empty string clears it.")
     p.add_argument("--body", default=None,
                    help="Replace body: TEXT value or '-' to read from stdin.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",

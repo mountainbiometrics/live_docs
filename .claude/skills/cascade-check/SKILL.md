@@ -28,9 +28,9 @@ episode. Duplicate or overlapping review records violate the one-summary-per-epi
 principle.
 
 Emit a review summary **only when cascade-check is invoked directly by the
-user** (standalone invocation). In that case, capture `START` before Step 1 and
-run `python3 scripts/ldoc.py review new --since "$START"` as the final step
-after Step 7/8. See "Step 9" below.
+user** (standalone invocation). In that case, capture the start timestamp before
+Step 1 and run `python3 scripts/ldoc.py review new --since "<that literal
+timestamp>"` as the final step after Step 7/8. See "Step 9" below.
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): the summary
 records the episode for later review/signoff and never blocks the cascade.
@@ -54,8 +54,10 @@ from within another skill), capture the episode start time before doing anything
 else:
 
 ```bash
-START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+date -u +%Y-%m-%dT%H:%M:%SZ
 ```
+
+Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
 
 If this is a **nested invocation** (called from `ingest-reference`, `revise-doc`,
 `garden`, or `apply-to-docs`), skip this step entirely — the outer skill owns
@@ -287,8 +289,10 @@ a duplicate, overlapping review record.
 For **standalone invocations only**, after the walk and smell-check are complete:
 
 ```bash
-python3 scripts/ldoc.py review new --since "$START"
+python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
+
+After it runs, confirm `touched` is non-empty and reflects the episode's changes.
 
 Report the returned review id to the user:
 

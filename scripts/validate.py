@@ -23,7 +23,9 @@ Checks performed:
   5e. superseded_by ids resolve to existing docs (blocking)
   6. Reference doc extras (kind, source, imported)
   7. deprecated docs MUST have a non-empty superseded_by (error if missing)
-  8. Provenance rule (warning: level > incidental but no hard edges AND no provenance)
+  8. domain is a list; scope is a single string (topological zone)
+  9. Per-edge-type acyclicity: belongs_to (a DAG) must have NO cycles (blocking)
+ 10. summary presence + length guideline for non-reference docs (warnings)
 
 Note: empty edge fields and empty history are VALID (absent == empty).
 Human output always carries the label (and title), never a bare id.
@@ -53,8 +55,10 @@ REQUIRED_BASELINE_FIELDS = {
     "id", "title", "label", "type", "status", "level", "created",
 }
 
-# Levels that require provenance when hard edges are empty (warnings only)
-PROVENANCE_REQUIRED_LEVELS = {"trial", "preference", "requirement"}
+# Edge fields the model treats as DAGs (no cycles permitted). belongs_to is the
+# family-tree edge whose genealogy effective-scope walks, so a cycle there would
+# make that walk non-terminating — hence a hard error.
+DAG_EDGE_FIELDS = ("belongs_to",)
 
 
 # ---------------------------------------------------------------------------
@@ -100,11 +104,15 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     if level and level not in VALID_LEVELS:
         errors.append(f"{prefix}  invalid `level` value `{level}`")
 
-    # Tags: schema uses flat top-level `domain:`/`scope:` lists.
-    for tag_field in ("domain", "scope"):
-        val = doc.get(tag_field)
-        if val is not None and not isinstance(val, list):
-            errors.append(f"{prefix}  `{tag_field}` is not a list")
+    # Tags: `domain` is a flat top-level list; `scope` is now a single STRING
+    # naming a topological zone (per the scope-as-topology reframe). Check each
+    # against its own shape.
+    domain_val = doc.get("domain")
+    if domain_val is not None and not isinstance(domain_val, list):
+        errors.append(f"{prefix}  `domain` is not a list")
+    scope_val = doc.get("scope")
+    if scope_val is not None and not isinstance(scope_val, str):
+        errors.append(f"{prefix}  `scope` is not a string (it now names a single topological zone)")
 
     # 5a-5b, 5d-5e. Hard/navigation edge resolution (errors are blocking)
     for edge_field in ("requires", "belongs_to", "relates", "superseded_by"):
@@ -129,8 +137,6 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
         errors.append(f"{prefix}  provenance is not a list")
 
     # Collect edge lists used in later checks
-    requires = doc.get("requires", [])
-    belongs_to = doc.get("belongs_to", [])
     superseded_by = doc.get("superseded_by", [])
 
     # 6. Reference doc extras
@@ -169,23 +175,74 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
                     f"(1–3 tight sentences, not a run-on)"
                 )
 
-    # 8. Provenance rule (warning only)
-    # A doc with non-trivial level should have SOME link to its basis:
-    # requires, belongs_to, provenance, or a source field.
-    if doc_type != "reference":
-        empty_hard_edges = not requires and not belongs_to
-        empty_provenance = not provenance
-        has_source = bool(doc.get("source"))
-        if (empty_hard_edges and empty_provenance and not has_source
-                and level in PROVENANCE_REQUIRED_LEVELS):
-            warnings.append(
-                f"{prefix}  level `{level}` but requires, belongs_to, provenance, and source "
-                f"are all empty (no provenance — consider adding a provenance or requires edge)"
-            )
-
     # NOTE: empty edge lists and empty history are valid; no check here.
+    #
+    # The former "provenance rule" warning (level ∈ {trial,preference,requirement}
+    # with no requires/belongs_to/provenance/source) was intentionally REMOVED:
+    # the model's rule is "no grounding ⇒ classify as incidental", which is
+    # authoring guidance, not a validation concern.
 
     return errors, warnings
+
+
+# ---------------------------------------------------------------------------
+# Per-edge-type acyclicity (store-wide)
+# ---------------------------------------------------------------------------
+
+def find_cycles(docs: dict, edge_field: str) -> list[list[str]]:
+    """
+    Return a list of cycles found in the directed graph formed by `edge_field`.
+
+    Each cycle is a list of doc ids in traversal order (the repeated node closes
+    it). Only edges whose target exists in docs are followed (dangling edges are
+    a separate check). Uses iterative DFS with a recursion-stack to detect a
+    back-edge; reports each distinct cycle once.
+    """
+    all_ids = set(docs.keys())
+    adj = {
+        doc_id: [t for t in docs[doc_id].get(edge_field, []) if t in all_ids]
+        for doc_id in docs
+    }
+
+    WHITE, GREY, BLACK = 0, 1, 2
+    color = {doc_id: WHITE for doc_id in docs}
+    cycles: list[list[str]] = []
+    seen_cycle_keys: set[frozenset] = set()
+
+    for root in sorted(docs):
+        if color[root] != WHITE:
+            continue
+        # Iterative DFS carrying the active path for cycle reconstruction.
+        # Each stack frame: (node, iterator over its neighbors).
+        stack: list[tuple[str, list[str]]] = [(root, list(adj[root]))]
+        path = [root]
+        on_path = {root}
+        color[root] = GREY
+        while stack:
+            node, neighbors = stack[-1]
+            if neighbors:
+                nxt = neighbors.pop()
+                if color.get(nxt) == GREY and nxt in on_path:
+                    # Back-edge → cycle from nxt forward through the path.
+                    i = path.index(nxt)
+                    cycle = path[i:] + [nxt]
+                    key = frozenset(cycle)
+                    if key not in seen_cycle_keys:
+                        seen_cycle_keys.add(key)
+                        cycles.append(cycle)
+                elif color.get(nxt) == WHITE:
+                    color[nxt] = GREY
+                    on_path.add(nxt)
+                    path.append(nxt)
+                    stack.append((nxt, list(adj[nxt])))
+            else:
+                color[node] = BLACK
+                on_path.discard(node)
+                if path and path[-1] == node:
+                    path.pop()
+                stack.pop()
+
+    return cycles
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +286,17 @@ def main() -> int:
             used_by = ", ".join(doc_prefix(d) for d in docs_with_label)
             all_errors.append(
                 f"label `{label_lower}` is not unique (case-insensitive) — used by: {used_by}"
+            )
+
+    # Per-edge-type acyclicity (store-wide). Each DAG edge must have NO cycles —
+    # a cycle is a hard error. belongs_to in particular is load-bearing: the
+    # effective-scope walk follows its genealogy, so a cycle would never
+    # terminate.
+    for edge_field in DAG_EDGE_FIELDS:
+        for cycle in find_cycles(docs, edge_field):
+            chain = " → ".join(cycle)
+            all_errors.append(
+                f"`{edge_field}` cycle (must be acyclic): {chain}"
             )
 
     if not all_errors and not all_warnings:

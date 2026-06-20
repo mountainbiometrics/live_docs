@@ -271,16 +271,28 @@ def parse_doc(path: Path) -> dict:
     elif not isinstance(hist, list):
         fm["history"] = []
 
-    # Normalize domain/scope: flat top-level inline lists.
-    # Absent fields are left absent — callers use .get(key, []).
-    for tag_key in ("domain", "scope"):
-        flat = fm.get(tag_key)
-        if isinstance(flat, list):
-            fm[tag_key] = flat
-        elif flat is not None:
-            # Wrap a stray scalar (shouldn't occur in current format)
-            fm[tag_key] = [flat]
-        # else: leave absent
+    # Normalize domain: flat top-level inline list.
+    # Absent fields are left absent — callers use .get("domain", []).
+    domain = fm.get("domain")
+    if isinstance(domain, list):
+        fm["domain"] = domain
+    elif domain is not None:
+        # Wrap a stray scalar (shouldn't occur in current format)
+        fm["domain"] = [domain]
+    # else: leave absent
+
+    # Normalize scope: a single STRING naming a topological zone (per the
+    # scope-as-topology reframe). A legacy single-element list (scope: [live_docs])
+    # is unwrapped to its sole string; a multi-element legacy list is joined so no
+    # data is silently dropped. Absent stays absent.
+    scope = fm.get("scope")
+    if isinstance(scope, list):
+        fm["scope"] = scope[0] if len(scope) == 1 else ",".join(str(s) for s in scope)
+        if not fm["scope"]:
+            fm.pop("scope", None)
+    elif scope is not None:
+        fm["scope"] = str(scope)
+    # else: leave absent
 
     # Canonical id from filename (authoritative)
     fm["id"] = path.stem
@@ -322,11 +334,20 @@ def _emit_field(key: str, value: Any) -> list[str]:
     if value is None:
         return []
 
-    # domain / scope: flat inline tag lists — omitted entirely when empty
-    if key in ("domain", "scope") and isinstance(value, list):
+    # domain: flat inline tag list — omitted entirely when empty
+    if key == "domain" and isinstance(value, list):
         if not value:
             return []
         return [f"{key}: {_yaml_list(value)}"]
+
+    # scope: a single string naming a topological zone — omitted when empty.
+    # A legacy list value is unwrapped/joined so old docs still round-trip.
+    if key == "scope":
+        if isinstance(value, list):
+            value = value[0] if len(value) == 1 else ",".join(str(s) for s in value)
+        if not value:
+            return []
+        return [f"scope: {_yaml_str(str(value))}"]
 
     # History: block sequence of mappings — omit entirely when empty
     if key == "history" and isinstance(value, list):

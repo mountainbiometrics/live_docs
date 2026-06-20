@@ -146,6 +146,13 @@ Apply `--requires` (genuine existential dependency) or `--belongs-to`
 (structural parent/child membership) only when that relationship truly exists,
 not for mere topical proximity.
 
+**Level classification**: a doc not grounded in something explicitly stated (no
+`requires`, `belongs_to`, `provenance`, or `source` tying it to a decision,
+parent, or reference) should be classified `level: incidental` — it is a
+legitimate part of the system, just reassessable without challenge. Reserve the
+stronger levels (`trial`, `preference`, `requirement`) for claims that DO rest on
+such an explicit anchor.
+
 **Dedup shortcut**: if a concept merely DUPLICATES or STRENGTHENS an existing
 living doc, do NOT create a new doc — instead link the anchor to that doc's
 provenance:

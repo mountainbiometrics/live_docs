@@ -2,10 +2,11 @@
 name: validate
 description: >
   Read-only mechanical check of the entire docs/ store. Verifies every doc has
-  required fields with valid enum values, that id matches filename, that all
-  requires/belongs_to references resolve, that deprecated docs have a superseded_by
-  edge, and that reference docs have their extra fields. Omitted edge lists and
-  omitted history are valid and normal. Emits a report but does NOT fix anything.
+  required fields with valid enum values, that labels are trimmed and unique, that
+  all requires/belongs_to/relates/provenance references resolve, that each edge type
+  is acyclic, that deprecated docs have a superseded_by edge, that reference docs
+  have their extra fields, and that every doc carries a summary. Omitted edge lists
+  and omitted history are valid and normal. Emits a report but does NOT fix anything.
   Use before a release, after bulk edits, or anytime you want confidence the store
   is structurally sound. To also get fix proposals, use the garden `consistency`
   pass instead.
@@ -49,39 +50,53 @@ No error is emitted for missing optional fields.
 
 Missing any required field → **ERROR: missing field `<field>` in `<id>`**.
 
-### 2. Valid enum values
+### 2. Label well-formed and unique
+
+`label` must be trimmed (no leading or trailing whitespace) →
+**ERROR: `<id>` label has leading/trailing whitespace**.
+
+`label` must be unique across the store; two docs sharing a label is an error →
+**ERROR: duplicate label `<label>` in `<id>` (also in `<other_id>`)**.
+
+### 3. Valid enum values
 
 | Field | Valid values |
 |-------|-------------|
-| `type` | type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference, index |
+| `type` | type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference |
 | `status` | living, target, deprecated, reference |
 | `level` | incidental, trial, preference, requirement |
 
-Note: `state` has been removed from the schema. A doc with `state:` present
-should be flagged → **WARNING: `<id>` has stale `state` field (removed from
-schema; fold into `status`)**.
+`type` no longer includes `index`.
+
+`domain` must be a list when present →
+**ERROR: `<id>` field `domain` must be a list**.
 
 Out-of-enum value → **ERROR: invalid `<field>` value `<value>` in `<id>`**.
 
-### 3. id == filename
-
-The `id` in frontmatter must equal the filename without `.md` extension.
-Mismatch → **ERROR: id/filename mismatch in `<filename>`** (frontmatter says
-`<id>`, filename is `<filename>`).
-
 ### 4. Edge resolution
 
-Every id listed in any doc's `requires`, `belongs_to`, `relates`, `provenance`,
-or `superseded_by` must correspond to an existing `docs/<dep_id>.md` file.
+Every id listed in any doc's `requires`, `belongs_to`, `relates`, or
+`superseded_by` must correspond to an existing `docs/<dep_id>.md` file.
 Broken ref → **ERROR: broken `<field>` edge `<dep_id>` in `<id>`**.
 
-### 5. Reference doc extras
+`provenance` ids must likewise resolve, but an unresolved provenance ref is a
+**WARNING**, not an error → **WARNING: unresolved `provenance` ref `<ref_id>`
+in `<id>`**.
+
+### 5. Per-edge-type acyclicity
+
+Each edge type forms its own graph; none may contain a cycle. `requires`,
+`belongs_to`, and `relates` are each checked independently for cycles.
+A cycle in any one → **ERROR: cycle detected in `<edge_type>` graph:
+`<id>` → … → `<id>`**.
+
+### 6. Reference doc extras
 
 Docs with `type: reference` must also have `kind`, `source`, and `imported`
 fields. `kind` must be one of: brainstorm, plan, clipping, external.
 Missing or invalid → **ERROR: reference doc `<id>` missing/invalid `<field>`**.
 
-### 6. Deprecated docs must have superseded_by
+### 7. Deprecated docs must have superseded_by
 
 A doc with `status: deprecated` must have a non-empty `superseded_by` edge list.
 Missing it → **ERROR: deprecated doc `<id>` has no `superseded_by` edge**.
@@ -89,19 +104,16 @@ Missing it → **ERROR: deprecated doc `<id>` has no `superseded_by` edge**.
 Rationale: deprecation without a successor edge is a dead end in the graph.
 Callers and dependents cannot discover what replaced this doc.
 
-### 7. Provenance rule
+### 8. Summary presence and length
 
-A doc that is not a reference doc and has both empty `requires` and empty
-`belongs_to`, and `level` higher than `incidental`, is flagged.
-Rationale: if a doc makes a strong claim (trial/preference/requirement) but has
-no hard upstream edge, its provenance is suspect — it may have calcified without
-a conscious decision.
-→ **WARNING: `<id>` has level `<level>` but no requires/belongs_to edges (no
-provenance)**.
-This is a warning, not an error; some docs (roots, axioms) legitimately have no
-dependencies.
+Every doc must carry a non-empty `summary` →
+**ERROR: `<id>` has no `summary`**.
 
-### 8. History and edge lists (no check for emptiness)
+The summary is a tight signpost. A summary running long (beyond roughly 60
+words) is flagged as a guideline violation →
+**WARNING: `<id>` summary is long (~<N> words); tighten to a signpost**.
+
+### 9. History and edge lists (no check for emptiness)
 
 History (`history`) and all edge lists (`requires`, `belongs_to`, `relates`,
 `provenance`, `superseded_by`) are optional. Absent or empty means nothing is
@@ -121,10 +133,12 @@ ERRORS (must fix):
   [E] 20260615100001  broken `requires` edge `20260615999999`
   [E] 20260615090009  reference doc missing `imported`
   [E] 20260615110002  deprecated doc has no `superseded_by` edge
+  [E] 20260615090007  cycle detected in `requires` graph
+  [E] 20260615090008  has no `summary`
 
 WARNINGS (should review):
-  [W] 20260615100004  level `requirement` but no requires/belongs_to edges (no provenance)
-  [W] 20260615110005  stale `state` field (removed from schema; fold into `status`)
+  [W] 20260615100004  unresolved `provenance` ref `20260615999998`
+  [W] 20260615110005  summary is long (~84 words); tighten to a signpost
 
 Summary: N errors, N warnings
 Exit code: 1 (errors present)

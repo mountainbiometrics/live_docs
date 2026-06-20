@@ -62,6 +62,14 @@
   .pill.deprecated { background: #f3e0e0; color: var(--broken); }
   .pill.target { background: var(--warn-bg); color: var(--warn); }
   .pill.reference { background: #e4ecf3; color: var(--accent); }
+  /* effective-scope pill: colored per scope name (inline style sets the hue) */
+  .scopepill {
+    display: inline-block; font-size: 10.5px; line-height: 1.5; padding: 0 7px;
+    border-radius: 10px; border: 1px solid transparent; margin-left: 4px;
+    vertical-align: middle; font-weight: 600; letter-spacing: .2px;
+  }
+  #tooltip .scopepill { border-color: transparent; }
+  .meta-line .scopepill { margin-left: 0; margin-right: 2px; }
 
   /* dashboard */
   .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 24px 18px; }
@@ -321,6 +329,93 @@ function labelOf(id) {
   return d.label || d.title || d.id;
 }
 
+/* ===== STRUCTURAL SIGNPOSTS (the retired `index` type, re-derived) =====
+   The `index` doc type is gone: a doc is a signpost STRUCTURALLY, by having
+   descendants via belongs_to. We compute, once:
+     - parentsOf(id)  : the belongs_to targets that actually resolve to a doc
+     - descCount(id)  : transitive descendant count (size of the subtree below id)
+     - isSignpost(id) : has at least one direct child (children map non-empty)
+     - belongsRoots   : docs with no resolving belongs_to parent (topological roots)
+   These replace every former `type === "index"` test in the viewer. */
+function parentsOf(id) {
+  const d = byId.get(String(id));
+  if (!d) return [];
+  return edgeList(d, "belongs_to").filter(p => byId.has(p));
+}
+function isSignpost(id) {
+  const kids = children.get(String(id));
+  return !!(kids && kids.length);
+}
+// transitive descendant count, memoized; cycle-guarded.
+const _descCache = new Map();
+function descCount(id) {
+  const sid = String(id);
+  if (_descCache.has(sid)) return _descCache.get(sid);
+  const seen = new Set();
+  (function walk(n) {
+    (children.get(String(n)) || []).forEach(c => {
+      if (!seen.has(c)) { seen.add(c); walk(c); }
+    });
+  })(sid);
+  _descCache.set(sid, seen.size);
+  return seen.size;
+}
+// belongs_to roots: docs that point at no resolving parent. These are the tops
+// of the topology — entry-point candidates (the big ones) and orphans (the rest).
+const belongsRoots = DOCS.filter(d => parentsOf(d.id).length === 0);
+
+/* ===== EFFECTIVE SCOPE (client-side, no Python helper) =====
+   `scope` is a string naming a topological zone (may also arrive as a 1-element
+   list during migration — we normalize both). A doc's EFFECTIVE scope is the
+   UNION of `scope` values along its belongs_to ancestor chain, including its own.
+   Computed purely from the inlined docs. Memoized; cycle-guarded. If nothing
+   resolves, returns [] and callers render nothing. */
+function ownScopes(d) {
+  const v = d && d.scope;
+  if (v == null) return [];
+  const arr = Array.isArray(v) ? v : [v];
+  return arr.map(x => String(x).trim()).filter(Boolean);
+}
+const _scopeCache = new Map();
+function effectiveScopes(id) {
+  const sid = String(id);
+  if (_scopeCache.has(sid)) return _scopeCache.get(sid);
+  _scopeCache.set(sid, []); // cycle guard: a doc mid-walk contributes nothing yet
+  const acc = new Set();
+  const d = byId.get(sid);
+  if (d) {
+    ownScopes(d).forEach(s => acc.add(s));
+    parentsOf(sid).forEach(p => effectiveScopes(p).forEach(s => acc.add(s)));
+  }
+  const out = [...acc].sort();
+  _scopeCache.set(sid, out);
+  return out;
+}
+
+/* stable color per scope name — hashed hue so distinct scopes read distinctly
+   and the same scope is always the same color across every surface. */
+const _scopeColorCache = new Map();
+function scopeColor(name) {
+  if (_scopeColorCache.has(name)) return _scopeColorCache.get(name);
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = h % 360;
+  const c = { bg: `hsl(${hue} 52% 92%)`, fg: `hsl(${hue} 45% 32%)`, border: `hsl(${hue} 40% 78%)` };
+  _scopeColorCache.set(name, c);
+  return c;
+}
+// render a doc's effective scope as colored pill(s). Empty -> "" (renders nothing).
+function scopePills(id, opts) {
+  opts = opts || {};
+  const scopes = effectiveScopes(id);
+  if (!scopes.length) return "";
+  const title = opts.title ? ` title="effective scope (own + inherited via belongs_to)"` : "";
+  return scopes.map(s => {
+    const c = scopeColor(s);
+    return `<span class="scopepill" style="background:${c.bg};color:${c.fg};border-color:${c.border}"${title}>${escapeHtml(s)}</span>`;
+  }).join("");
+}
+
 // who points AT this doc, by edge type (the reverse/incoming edges). Computed
 // once up-front so every surface — backlinks lists, counts, tooltips — agrees.
 // belongs_to-incoming is the index membership; it's surfaced separately as the
@@ -442,9 +537,10 @@ function showTip(el) {
   // next-hop affordance: show how many connections this doc has so the reader
   // knows there's somewhere to go without opening it.
   const count = edgeBadge(d.id);
+  const scopes = scopePills(d.id);
   tooltip.innerHTML =
     `<div class="tt-label">${escapeHtml(d.label || d.title || id)}</div>` +
-    `<div class="tt-meta">${escapeHtml(d.type || "")} ${status} ${count}</div>` +
+    `<div class="tt-meta">${escapeHtml(d.type || "")} ${status} ${scopes} ${count}</div>` +
     `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
   tooltip.style.display = "block";
 }
@@ -503,12 +599,13 @@ function toggleExpand(a) {
   const box = document.createElement("span");
   box.className = "expand"; box.setAttribute("data-for", id);
   box.style.display = "block";
-  // member list for indexes comes from belongs_to edges, not the body
-  const memberPart = d.type === "index" ? memberListHtml(id) : "";
-  box.innerHTML = `<div class="eh">${escapeHtml(d.label || id)} · ${escapeHtml(d.type || "")} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
+  // member list for SIGNPOSTS (descendant-bearing docs) comes from belongs_to edges
+  const sign = isSignpost(id);
+  const memberPart = sign ? memberListHtml(id) : "";
+  box.innerHTML = `<div class="eh">${escapeHtml(d.label || id)} · ${escapeHtml(d.type || "")} ${scopePills(id)} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
     + `<div class="md">${renderMarkdown(d.body, 1)}</div>`
     + memberPart
-    + connectionsHtml(d, { skipChildren: d.type === "index" });
+    + connectionsHtml(d, { skipChildren: sign });
   a.insertAdjacentElement("afterend", box);
 }
 
@@ -550,14 +647,19 @@ function renderHome() {
     byType[d.type || "?"] = (byType[d.type || "?"] || 0) + 1;
     byStatus[d.status || "?"] = (byStatus[d.status || "?"] || 0) + 1;
   });
-  const indexes = DOCS.filter(d => d.type === "index");
-  const orphans = DOCS.filter(d => d.type !== "index" && edgeList(d, "belongs_to").length === 0);
+  // Entry points are STRUCTURAL now (the `index` type is retired): a signpost is
+  // a doc that bears descendants via belongs_to. Rank by transitive descendant
+  // count so the biggest subtrees float to the top; the root component leads.
+  const signposts = DOCS.filter(d => isSignpost(d.id))
+    .sort((a, b) => descCount(b.id) - descCount(a.id) || String(labelOf(a.id)).localeCompare(String(labelOf(b.id))));
+  // orphans = belongs_to roots that lead nowhere (no descendants, no parent) and
+  // aren't themselves a signpost. These are the docs curation hasn't placed yet.
+  const orphans = belongsRoots.filter(d => !isSignpost(d.id));
   const deprecated = DOCS.filter(d => d.status === "deprecated");
   const hot = DOCS.filter(d => Array.isArray(d.history) && d.history.length > 0)
     .sort((a, b) => (b.history.length) - (a.history.length)).slice(0, 8);
 
   const statBox = (n, l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
-  const li = id => `<li>${linkHtml(id)} <span class="pill">${escapeHtml(byId.get(String(id)).type||"")}</span><div class="sub" style="margin:2px 0 0">${escapeHtml(byId.get(String(id)).summary||"")}</div></li>`;
 
   let html = `<h1 class="pagetitle">Dashboard</h1><div class="sub">Orientation for the live_docs store — every link below resolves to a label; hover for summary, single-click to expand, double-click to open in Reader.</div>`;
   html += `<div class="stats">`;
@@ -568,10 +670,27 @@ function renderHome() {
   Object.keys(byStatus).sort().forEach(s => html += statBox(byStatus[s], "status: " + s));
   html += `</div>`;
 
+  // surface the root component prominently — the single doc whose subtree is the
+  // whole store. (Largest signpost; falls out of the descendant-count ranking.)
+  const root = signposts[0];
+  if (root) {
+    const rsum = byId.get(String(root.id));
+    html += `<div class="card" style="border-left:3px solid var(--accent)">`
+      + `<h3>The store root</h3>`
+      + `<div style="font-size:15px;font-weight:600">${linkHtml(root.id)} ${scopePills(root.id, {title:1})} <span class="edgecount" title="docs in this subtree">⤵ ${descCount(root.id)} descendants</span></div>`
+      + `<div class="sub" style="margin:4px 0 0">${escapeHtml((rsum && rsum.summary) || "")}</div></div>`;
+  }
+
   html += `<div class="dash-cols">`;
-  // entry points
-  html += `<div class="card"><h3>Entry points — indexes (${indexes.length})</h3><ul class="tight">`;
-  indexes.forEach(d => html += li(d.id));
+  // entry points / signposts — descendant-bearing docs, ranked by subtree size.
+  // (Replaces the old type:index list, of which there are now zero.)
+  html += `<div class="card"><h3>Entry points — signposts (${signposts.length})</h3>`
+    + `<div class="sub" style="margin:0 0 6px">Descendant-bearing docs, ranked by subtree size.</div><ul class="tight">`;
+  signposts.forEach(d => {
+    const sub = escapeHtml(d.summary || "");
+    html += `<li>${linkHtml(d.id)} <span class="pill">${escapeHtml(d.type||"")}</span> ${scopePills(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
+      + (sub ? `<div class="sub" style="margin:2px 0 0">${sub}</div>` : "") + `</li>`;
+  });
   html += `</ul></div>`;
 
   // hot docs
@@ -579,10 +698,10 @@ function renderHome() {
   hot.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${d.history.length} changes</span></li>`);
   html += `</ul></div>`;
 
-  // orphans
-  html += `<div class="card"><h3>Orphans — no belongs_to, not an index (${orphans.length})</h3><ul class="tight">`;
+  // orphans — belongs_to roots that bear no descendants (unplaced by curation)
+  html += `<div class="card"><h3>Orphans — no belongs_to, no descendants (${orphans.length})</h3><ul class="tight">`;
   if (!orphans.length) html += `<li class="sub">none</li>`;
-  orphans.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${escapeHtml(d.type||"")}</span></li>`);
+  orphans.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${escapeHtml(d.type||"")}</span> ${scopePills(d.id)}</li>`);
   html += `</ul></div>`;
 
   // deprecated -> superseded_by
@@ -600,26 +719,25 @@ function renderHome() {
 
 /* ===== READER ===== */
 function buildTree() {
-  // indexes are folders; members (belongs_to) are leaves; nested indexes nest.
-  const indexes = DOCS.filter(d => d.type === "index");
-  const indexIds = new Set(indexes.map(d => d.id));
-  // roots = indexes whose belongs_to points to no index (or nothing)
-  const roots = indexes.filter(d => {
-    const parents = edgeList(d, "belongs_to").filter(p => indexIds.has(p));
-    return parents.length === 0;
-  });
+  // Folders are SIGNPOSTS (docs that bear descendants), not type:index — that
+  // type is retired. A member that is itself a signpost nests as a sub-folder;
+  // members with no descendants are leaves. Tree roots = signposts with no
+  // resolving belongs_to parent.
+  const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0)
+    .sort((a, b) => descCount(b.id) - descCount(a.id));
 
   function renderNode(idx, seen) {
     seen = seen || new Set();
     if (seen.has(idx.id)) return ""; // guard cycles
     seen = new Set(seen); seen.add(idx.id);
     const memberIds = (children.get(idx.id) || []);
-    const childIndexes = memberIds.filter(m => indexIds.has(m)).map(m => byId.get(m));
-    const leaves = memberIds.filter(m => !indexIds.has(m));
+    const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean);
+    const leaves = memberIds.filter(m => !isSignpost(m));
     let h = `<details open><summary data-ref="${idx.id}">${escapeHtml(idx.label || idx.title)}</summary>`;
-    childIndexes.forEach(ci => h += renderNode(ci, seen));
+    childSignposts.forEach(ci => h += renderNode(ci, seen));
     leaves.forEach(lid => {
       const d = byId.get(lid);
+      if (!d) return;
       h += `<div class="leaf" data-id="${lid}">${escapeHtml(d.label || d.title || lid)}</div>`;
     });
     h += `</details>`;
@@ -629,8 +747,9 @@ function buildTree() {
   let h = "";
   roots.forEach(r => h += renderNode(r));
 
-  // Ungrouped catch-all: non-index docs that belong to nothing
-  const ungrouped = DOCS.filter(d => d.type !== "index" && edgeList(d, "belongs_to").length === 0);
+  // Ungrouped catch-all: docs that belong to nothing AND bear no descendants
+  // (a signpost with no parent is already a root above, so exclude those).
+  const ungrouped = belongsRoots.filter(d => !isSignpost(d.id));
   if (ungrouped.length) {
     h += `<details><summary>Ungrouped (${ungrouped.length})</summary>`;
     ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${escapeHtml(d.label || d.title || d.id)}</div>`);
@@ -668,7 +787,11 @@ function metaLine(d) {
   if (d.level) bits.push("level: " + d.level);
   if (d.created) bits.push("created " + String(d.created).slice(0, 10));
   bits.push(`<code>${d.id}</code>`);
-  return bits.join(" · ");
+  let line = bits.join(" · ");
+  // effective-scope pills (own + inherited via belongs_to); nothing if unresolved
+  const sp = scopePills(d.id, { title: 1 });
+  if (sp) line += ` · <span class="scope-wrap">${sp}</span>`;
+  return line;
 }
 
 function relGroup(title, ids) {
@@ -686,10 +809,9 @@ function memberListHtml(indexId) {
   if (!members.length) {
     return `<div class="members"><h2>Members</h2><div class="sub">No docs belong to this index yet.</div></div>`;
   }
-  // indexes first (sub-signposts), then the rest, each alpha by label
+  // sub-signposts first (descendant-bearing members), then the rest, alpha by label
   const sorted = members.slice().sort((a, b) => {
-    const da = byId.get(a), db = byId.get(b);
-    const ia = (da && da.type === "index") ? 0 : 1, ib = (db && db.type === "index") ? 0 : 1;
+    const ia = isSignpost(a) ? 0 : 1, ib = isSignpost(b) ? 0 : 1;
     if (ia !== ib) return ia - ib;
     return String(labelOf(a) || a).localeCompare(String(labelOf(b) || b));
   });
@@ -698,7 +820,7 @@ function memberListHtml(indexId) {
     if (!md) return `<li>${linkHtml(mid)}</li>`;
     const pill = md.type ? `<span class="pill ${md.status||''}">${escapeHtml(md.type)}</span>` : "";
     const sum = md.summary ? `<span class="msum">— ${escapeHtml(md.summary)}</span>` : "";
-    return `<li>${linkHtml(mid)} ${pill} ${edgeBadge(mid)}${sum}</li>`;
+    return `<li>${linkHtml(mid)} ${pill} ${scopePills(mid)} ${edgeBadge(mid)}${sum}</li>`;
   }).join("");
   return `<div class="members"><h2>Members (${members.length})</h2><ul>${li}</ul></div>`;
 }
@@ -758,14 +880,16 @@ function renderFocusDoc(content, id) {
   html += `<div class="meta-line">${metaLine(d)}</div>`;
   if (d.summary) html += `<div class="doc-summary">${escapeHtml(d.summary)}</div>`;
 
-  if (d.type === "index") {
-    // index body = the orientation guide only. The member list is rendered by the
-    // VIEWER from belongs_to reverse edges (NOT from a "## Map" in the body).
+  if (isSignpost(d.id)) {
+    // A SIGNPOST (descendant-bearing doc) shows its own body as the orientation
+    // guide, then the member list rendered by the VIEWER from belongs_to reverse
+    // edges (NOT from a "## Map" in the body). The `index` type is retired —
+    // signpost-ness is purely structural now.
     html += `<div class="md" id="index-guide">${renderMarkdown(d.body)}</div>`;
     html += memberListHtml(d.id);
     html += `<div class="compose-btn"><button class="act" id="composeBtn">Expand — inline all member docs</button></div>`;
     html += `<div id="composed"></div>`;
-    // an index still has its own edges (it belongs_to a parent, may require/relate)
+    // a signpost still has its own edges (it belongs_to a parent, may require/relate)
     html += connectionsHtml(d, { skipChildren: true });
     content.innerHTML = html;
     const members = (children.get(d.id) || []);
@@ -776,7 +900,7 @@ function renderFocusDoc(content, id) {
       members.forEach(mid => {
         const md = byId.get(mid);
         if (!md) return;
-        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid)} <span class="pill ${md.status||''}">${escapeHtml(md.type||'')}</span> ${edgeBadge(mid)}</h2>`;
+        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid)} <span class="pill ${md.status||''}">${escapeHtml(md.type||'')}</span> ${scopePills(mid)} ${edgeBadge(mid)}</h2>`;
         m += `<div class="md">${renderMarkdown(md.body)}</div>`;
         m += connectionsHtml(md);   // backlinks/next-hops visible in compose too
         m += `</div>`;
@@ -1006,7 +1130,7 @@ function mountGraph(container, focusId) {
       g.setAttribute("data-nid", n.id);
       const c = document.createElementNS(ns, "circle");
       c.setAttribute("r", n.focus ? 9 : (n.hop === 1 ? 6.5 : 5));
-      c.setAttribute("fill", n.focus ? "#2b2b2b" : (d && d.type === "index" ? "#5b6e8c" : "#a9b4c6"));
+      c.setAttribute("fill", n.focus ? "#2b2b2b" : (isSignpost(n.id) ? "#5b6e8c" : "#a9b4c6"));
       g.appendChild(c);
       const t = document.createElementNS(ns, "text");
       t.setAttribute("x", (n.focus ? 12 : 9)); t.setAttribute("y", 3.5);
@@ -1117,12 +1241,15 @@ function mountGraph(container, focusId) {
 }
 
 /* ===== CATALOG ===== */
-const catalogState = { type: "", status: "", level: "", q: "", group: "", sort: "label", dir: 1 };
+const catalogState = { type: "", status: "", level: "", scope: "", q: "", group: "", sort: "label", dir: 1 };
 function renderCatalog() {
   const el = document.getElementById("page-catalog");
   const types = [...new Set(DOCS.map(d => d.type).filter(Boolean))].sort();
   const statuses = [...new Set(DOCS.map(d => d.status).filter(Boolean))].sort();
   const levels = [...new Set(DOCS.map(d => d.level).filter(Boolean))].sort();
+  // effective-scope facet: the union of every doc's resolved scope set (computed
+  // client-side along belongs_to). This is the axis the Catalog was missing.
+  const scopes = [...new Set(DOCS.flatMap(d => effectiveScopes(d.id)))].sort();
   const opt = (arr, sel) => `<option value="">all</option>` + arr.map(v => `<option ${v===sel?"selected":""}>${v}</option>`).join("");
 
   let html = `<h1 class="pagetitle">Catalog</h1><div class="sub">Every doc as a row. Filter, group, and sort — the "query like rows" view.</div>`;
@@ -1134,14 +1261,18 @@ function renderCatalog() {
   html += `&nbsp; type <select id="f-type">${opt(types, catalogState.type)}</select>`;
   html += ` status <select id="f-status">${opt(statuses, catalogState.status)}</select>`;
   html += ` level <select id="f-level">${opt(levels, catalogState.level)}</select>`;
+  if (scopes.length) html += ` scope <select id="f-scope">${opt(scopes, catalogState.scope)}</select>`;
   html += ` group by <select id="f-group"><option value="">none</option>`
-    + ["type","status","level"].map(g => `<option ${g===catalogState.group?"selected":""}>${g}</option>`).join("") + `</select>`;
+    + ["type","status","level"].concat(scopes.length ? ["scope"] : [])
+        .map(g => `<option ${g===catalogState.group?"selected":""}>${g}</option>`).join("") + `</select>`;
   html += ` <input id="f-q" placeholder="search label/title…" value="${escapeHtml(catalogState.q)}">`;
   html += `</div>`;
   html += `<div class="count-note" id="cat-count"></div>`;
   html += `<table class="catalog"><thead><tr>`;
-  ["label","title","type","status","level","created"].forEach(c =>
+  ["label","title","type","status","level"].forEach(c =>
     html += `<th data-sort="${c}">${c}${catalogState.sort===c?(catalogState.dir>0?" ▲":" ▼"):""}</th>`);
+  html += `<th>scope</th>`;  // effective scope — computed, so not click-sortable
+  html += `<th data-sort="created">created${catalogState.sort==="created"?(catalogState.dir>0?" ▲":" ▼"):""}</th>`;
   html += `</tr></thead><tbody id="cat-body"></tbody></table>`;
   el.innerHTML = html;
 
@@ -1150,18 +1281,29 @@ function renderCatalog() {
       (!catalogState.type || d.type === catalogState.type) &&
       (!catalogState.status || d.status === catalogState.status) &&
       (!catalogState.level || d.level === catalogState.level) &&
+      (!catalogState.scope || effectiveScopes(d.id).includes(catalogState.scope)) &&
       (!catalogState.q || ((d.label||"")+" "+(d.title||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
     const s = catalogState.sort;
     rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
     document.getElementById("cat-count").textContent = `${rows.length} of ${DOCS.length} docs`;
     const body = document.getElementById("cat-body");
     const cell = d => `<td>${linkHtml(d.id)}</td><td>${escapeHtml(d.title||"")}</td><td>${escapeHtml(d.type||"")}</td>`
-      + `<td><span class="pill ${d.status||''}">${escapeHtml(d.status||"")}</span></td><td>${escapeHtml(d.level||"")}</td><td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`;
+      + `<td><span class="pill ${d.status||''}">${escapeHtml(d.status||"")}</span></td><td>${escapeHtml(d.level||"")}</td>`
+      + `<td>${scopePills(d.id, { title: 1 }) || '<span class="sub">—</span>'}</td>`
+      + `<td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`;
     if (catalogState.group) {
+      // grouping by effective scope is multi-valued: a doc lands in every zone it
+      // resolves to (and "(none)" if it resolves to none). Other axes are single.
       const groups = {};
-      rows.forEach(d => { const k = d[catalogState.group]||"(none)"; (groups[k]=groups[k]||[]).push(d); });
+      const push = (k, d) => { (groups[k]=groups[k]||[]).push(d); };
+      rows.forEach(d => {
+        if (catalogState.group === "scope") {
+          const es = effectiveScopes(d.id);
+          if (!es.length) push("(none)", d); else es.forEach(z => push(z, d));
+        } else push(d[catalogState.group]||"(none)", d);
+      });
       body.innerHTML = Object.keys(groups).sort().map(k =>
-        `<tr class="grouphdr"><td colspan="6">${escapeHtml(catalogState.group)}: ${escapeHtml(k)} (${groups[k].length})</td></tr>`
+        `<tr class="grouphdr"><td colspan="7">${escapeHtml(catalogState.group)}: ${escapeHtml(k)} (${groups[k].length})</td></tr>`
         + groups[k].map(d => `<tr>${cell(d)}</tr>`).join("")).join("");
     } else {
       body.innerHTML = rows.map(d => `<tr>${cell(d)}</tr>`).join("");
@@ -1171,6 +1313,8 @@ function renderCatalog() {
   el.querySelector("#f-type").addEventListener("change", e => { catalogState.type = e.target.value; draw(); });
   el.querySelector("#f-status").addEventListener("change", e => { catalogState.status = e.target.value; draw(); });
   el.querySelector("#f-level").addEventListener("change", e => { catalogState.level = e.target.value; draw(); });
+  const scopeSel = el.querySelector("#f-scope");
+  if (scopeSel) scopeSel.addEventListener("change", e => { catalogState.scope = e.target.value; draw(); });
   el.querySelector("#f-group").addEventListener("change", e => { catalogState.group = e.target.value; draw(); });
   el.querySelector("#f-q").addEventListener("input", e => { catalogState.q = e.target.value; draw(); });
   el.querySelectorAll("th[data-sort]").forEach(th => th.addEventListener("click", () => {
@@ -1180,7 +1324,7 @@ function renderCatalog() {
   }));
   el.querySelectorAll(".preset").forEach(p => p.addEventListener("click", () => {
     const k = p.getAttribute("data-preset");
-    Object.assign(catalogState, { type: "", status: "", level: "", q: "", group: "" });
+    Object.assign(catalogState, { type: "", status: "", level: "", scope: "", q: "", group: "" });
     if (k === "decisions") catalogState.type = "decision";
     else if (k === "principles") catalogState.type = "principle";
     else if (k === "living") catalogState.status = "living";

@@ -12,8 +12,9 @@ Generates:
                                      CASCADE INPUT)
     docs/.index/referenced_by.json — reverse-provenance map (provenance field only;
                                      NAVIGATION ONLY, NOT cascade)
-    docs/.index/hierarchy.md       — index doc children rollup
-    docs/.index/orphans.txt        — disconnected docs
+    docs/.index/hierarchy.md       — children rollup under every descendant-bearing
+                                     doc (any doc targeted by belongs_to)
+    docs/.index/orphans.txt        — docs with no belongs_to lineage (hierarchy-based)
 
 Stdlib only. No external dependencies.
 These files are DERIVED. Never hand-edit them; rerun this script instead.
@@ -28,15 +29,54 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import (
-    DOCS_DIR, load_all, forward_edges, reverse_edges, referenced_by, doc_prefix,
+    DOCS_DIR, load_all, reverse_edges, referenced_by, doc_prefix,
 )
 
 
 # ---------------------------------------------------------------------------
-# Types exempt from orphan detection (graph roots by design)
+# Orphan exemption (per 20260619235049 — hierarchy-based, belongs_to lineage)
+# ---------------------------------------------------------------------------
+#
+# With `type:index` retired, orphan-hood is now defined off the belongs_to
+# hierarchy, not off a type marker. A doc with no belongs_to lineage is an
+# orphan ONLY IF it is not a legitimate top-level node:
+#
+#   - `component` docs are legitimate structural roots — the root component and
+#     the structural subsystems each anchor a scope and intentionally sit at the
+#     top of the tree with no belongs_to parent. They are NOT orphans.
+#
+#   - `reference` docs (raw clippings, brainstorms, plans, external material) are
+#     supporting evidence wired into the graph via `provenance`, not `belongs_to`.
+#     They are legitimately edge-light in the hierarchy, so flagging them as
+#     orphans is pure noise. They are NOT orphans.
+#
+# Any OTHER type with no belongs_to lineage (in or out) fell out of the hierarchy
+# by accident and IS an orphan.
+ORPHAN_EXEMPT_TYPES = {"component", "reference"}
+
+
+# ---------------------------------------------------------------------------
+# belongs_to-only edge maps (hierarchy / lineage — NOT requires)
 # ---------------------------------------------------------------------------
 
-ORPHAN_EXEMPT_TYPES = {"index", "type"}
+def belongs_to_forward(docs: dict) -> dict:
+    """Map {id: [belongs_to targets that exist in docs]} — lineage edges only."""
+    all_ids = set(docs.keys())
+    return {
+        doc_id: [t for t in doc.get("belongs_to", []) if t in all_ids]
+        for doc_id, doc in docs.items()
+    }
+
+
+def belongs_to_reverse(docs: dict) -> dict:
+    """Map {id: [ids that belongs_to this doc]} — i.e. each doc's descendants' parents."""
+    all_ids = set(docs.keys())
+    rev: dict = {doc_id: [] for doc_id in all_ids}
+    for doc_id, doc in docs.items():
+        for target in doc.get("belongs_to", []):
+            if target in rev:
+                rev[target].append(doc_id)
+    return rev
 
 
 # ---------------------------------------------------------------------------
@@ -78,31 +118,38 @@ def write_referenced_by_json(ref_by: dict, index_dir: Path) -> None:
 # Generate hierarchy.md
 # ---------------------------------------------------------------------------
 
-def write_hierarchy_md(docs: dict, fwd: dict, index_dir: Path) -> None:
-    """Write index-doc hierarchy rollup to hierarchy.md.
+def write_hierarchy_md(docs: dict, bt_rev: dict, index_dir: Path) -> None:
+    """Write the hierarchy rollup to hierarchy.md.
 
-    Children are docs that have a hard edge (requires or belongs_to) pointing
-    at an index doc.
+    With `type:index` retired, the navigational-signpost role is STRUCTURAL: any
+    doc that has descendants — i.e. is targeted by one or more `belongs_to` edges
+    — plays the signpost role. We therefore roll up children under EVERY
+    descendant-bearing doc (any doc with a non-empty belongs_to reverse list),
+    regardless of its type. Children are the docs that `belongs_to` it.
     """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    index_docs = [d for d in docs.values() if d.get("type") == "index"]
-    index_docs.sort(key=lambda d: d["id"])
+    # Parents = docs that have at least one descendant via belongs_to.
+    parent_docs = [d for d in docs.values() if bt_rev.get(d["id"])]
+    parent_docs.sort(key=lambda d: d["id"])
 
     lines = [
-        "# live_docs Index Hierarchy",
+        "# live_docs Hierarchy",
         f"<!-- Generated: {now} — do not hand-edit. Run reindex.py to regenerate. -->",
+        "",
+        "<!-- Rollup of every descendant-bearing doc (any doc targeted by belongs_to). -->",
         "",
     ]
 
-    for idx_doc in index_docs:
-        idx_id = idx_doc["id"]
-        idx_title = idx_doc.get("title", idx_id)
-        lines.append(f"## {idx_title} (`{idx_id}`)")
+    for parent in parent_docs:
+        p_id = parent["id"]
+        p_type = parent.get("type", "")
+        p_title = parent.get("title", p_id)
+        lines.append(f"## {p_title} (`{p_id}`, {p_type})")
         lines.append("")
 
-        # Children = docs that have a hard edge pointing at this index doc
-        children = [d for d in docs.values() if idx_id in fwd.get(d["id"], [])]
+        # Children = docs that belongs_to this parent.
+        children = [docs[cid] for cid in bt_rev.get(p_id, []) if cid in docs]
         children.sort(key=lambda d: d["id"])
 
         if children:
@@ -131,12 +178,20 @@ def write_hierarchy_md(docs: dict, fwd: dict, index_dir: Path) -> None:
 # Generate orphans.txt
 # ---------------------------------------------------------------------------
 
-def write_orphans_txt(docs: dict, fwd: dict, rev: dict, index_dir: Path) -> None:
-    """Write disconnected doc ids to orphans.txt.
+def write_orphans_txt(docs: dict, bt_fwd: dict, bt_rev: dict, index_dir: Path) -> None:
+    """Write hierarchy-disconnected doc ids to orphans.txt.
 
-    A doc is an orphan if it has no outbound hard edges (requires/belongs_to)
-    and no inbound hard edges (dependents).  Navigation-only edges (relates,
-    provenance, superseded_by) do NOT count for orphan purposes.
+    Per 20260619235049, orphan-hood is now defined off the `belongs_to`
+    hierarchy (lineage), NOT off a type marker:
+
+      A doc with NO belongs_to lineage — no belongs_to parent (outbound) and no
+      descendants (inbound) — is an orphan UNLESS it is a legitimate top-level
+      node. `component` docs (intentional structural roots that anchor scopes)
+      and `reference` docs (supporting evidence wired in via provenance, not
+      belongs_to) are exempt; see ORPHAN_EXEMPT_TYPES.
+
+    requires / relates / provenance / superseded_by do NOT count for orphan
+    purposes — only belongs_to lineage does.
     """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -146,18 +201,19 @@ def write_orphans_txt(docs: dict, fwd: dict, rev: dict, index_dir: Path) -> None
         doc_type = doc.get("type", "")
         if doc_type in ORPHAN_EXEMPT_TYPES:
             continue
-        has_outbound = bool(fwd.get(doc_id))
-        has_inbound = bool(rev.get(doc_id))
-        if not has_outbound and not has_inbound:
+        has_parent = bool(bt_fwd.get(doc_id))      # outbound belongs_to
+        has_descendants = bool(bt_rev.get(doc_id))  # inbound belongs_to
+        if not has_parent and not has_descendants:
             orphans.append(doc)
 
     orphans.sort(key=lambda d: d["id"])
 
     lines = [
-        "# orphans — docs with no hard graph edges",
+        "# orphans — docs with no belongs_to lineage",
         f"# Generated: {now}",
-        "# These docs have no requires, belongs_to edges (outbound or inbound).",
-        "# Consider: add requires/belongs_to edges, or retire to status: deprecated.",
+        "# These docs have no belongs_to parent and no descendants, and are not a",
+        "# legitimate top-level node (component / reference are exempt).",
+        "# Consider: add a belongs_to edge into the hierarchy, or retire to deprecated.",
         "# Format: <id> [<label>] \"<Type>: <Title>\"",
         "#",
         f"# Count: {len(orphans)}",
@@ -193,15 +249,18 @@ def main() -> int:
     docs = load_all(docs_dir)
     print(f"Loaded: {len(docs)} docs")
 
-    # forward_edges and reverse_edges now cover requires + belongs_to (both cascade-hard)
-    fwd = forward_edges(docs)
+    # dependents.json is the CASCADE INPUT — requires + belongs_to (both hard).
     rev = reverse_edges(docs)
     ref_by = referenced_by(docs)  # provenance reverse map (navigation only)
 
+    # hierarchy / orphans are LINEAGE artifacts — belongs_to only, never requires.
+    bt_fwd = belongs_to_forward(docs)
+    bt_rev = belongs_to_reverse(docs)
+
     write_dependents_json(rev, index_dir)
     write_referenced_by_json(ref_by, index_dir)
-    write_hierarchy_md(docs, fwd, index_dir)
-    write_orphans_txt(docs, fwd, rev, index_dir)
+    write_hierarchy_md(docs, bt_rev, index_dir)
+    write_orphans_txt(docs, bt_fwd, bt_rev, index_dir)
 
     print("Done.")
     return 0
