@@ -37,7 +37,11 @@ The script creates the index dir (`<docs>/.index/`) if it doesn't exist, then wr
 - `<docs>/.index/dependents.json`
 - `<docs>/.index/referenced_by.json`
 - `<docs>/.index/hierarchy.md`
-- `<docs>/.index/orphans.txt`
+
+Orphan detection is NOT a reindex artifact. Orphan-hood is pure `belongs_to`
+topology and is computed FRESH on demand via `python3 scripts/ldoc.py orphans`
+(backed by `kb.orphans()`) — the single source of truth — rather than baked into
+a stale `orphans.txt` cache.
 
 ---
 
@@ -84,30 +88,24 @@ Generated: <ISO 8601 timestamp>
 ---
 ```
 
-Docs that do not depend on any index doc are omitted from this file (they may
-appear in `orphans.txt` instead).
+Docs that do not depend on any index doc are omitted from this file.
 
-### orphans.txt
+### Orphans — NOT a reindex artifact
 
-One id per line: docs with NO inbound hard edges (no other doc has them in
-`requires` or `belongs_to`) AND NO outbound hard edges (they require or belong to
-nothing). These are structural orphans — disconnected from the cascade graph
-entirely. (`relates` and `provenance` edges do not count for orphan purposes.)
+Orphan detection used to live here as `orphans.txt`. It does not anymore. A doc
+is an orphan iff it has **no `belongs_to` edge in either direction** — no
+`belongs_to` parent AND no `belongs_to` descendants — so it sits outside the
+navigational hierarchy entirely. (`requires` / `relates` / `provenance` are NOT
+hierarchy and do not count.) That is pure topology with no type exemptions in the
+definition itself; consumers (garden, the viewer) apply their own judgment.
 
-Exempt from orphan reporting:
-- Docs of `type: index` (they are roots by design).
-- Docs of `type: type` (they define vocabulary; they anchor the graph but are
-  rarely cited by other docs).
-
-Format:
+Because it is cheap, exact topology, it is computed FRESH on demand rather than
+cached — query the single source of truth:
+```bash
+python3 scripts/ldoc.py orphans
 ```
-# orphans — docs with no hard graph edges
-# Generated: <timestamp>
-# These docs are disconnected from the dependency graph.
-# Consider: add edges, or retire to status: deprecated.
-20260615XXXXXX
-20260615YYYYYY
-```
+This avoids the stale-cache hazard, consistent with how `cascade-check` uses
+`ldoc neighbors` instead of reading `dependents.json`.
 
 ---
 

@@ -375,6 +375,47 @@ class KB:
 
         return results
 
+    def orphans(self) -> list[dict]:
+        """
+        Return docs that sit OUTSIDE the belongs_to hierarchy entirely.
+
+        Canonical, single-source definition (pure topology, navigability-based):
+        a doc is an orphan iff it has NO `belongs_to` edge in EITHER direction —
+        no `belongs_to` parent (outbound) AND nothing `belongs_to`s it (no
+        descendants, inbound). It is unreachable through the navigational
+        hierarchy.
+
+        `requires` / `relates` / `provenance` / `superseded_by` are NOT hierarchy
+        and do NOT count. There are NO type-based exemptions here — consumers
+        (garden, the viewer) apply their own judgment (e.g. skip frozen/reference
+        docs) on top of this raw topology.
+
+        This is the authoritative orphan computation. It is intentionally NOT a
+        derived cache: callers query it FRESH (cf. cascade-check using
+        `ldoc neighbors` rather than a stale dependents.json).
+
+        Returns [{id, label, display}], sorted by id.
+        """
+        all_ids = set(self._docs.keys())
+
+        # inbound: ids that something belongs_to (i.e. have descendants)
+        has_descendants: set[str] = set()
+        for doc in self._docs.values():
+            for target in doc.get("belongs_to", []):
+                if target in all_ids:
+                    has_descendants.add(target)
+
+        results = []
+        for doc_id, doc in sorted(self._docs.items()):
+            has_parent = any(t in all_ids for t in doc.get("belongs_to", []))
+            if not has_parent and doc_id not in has_descendants:
+                results.append({
+                    "id": doc_id,
+                    "label": doc.get("label", ""),
+                    "display": self.display_label(doc_id),
+                })
+        return results
+
     def ls(self, type: str = None) -> list[dict]:
         """List all docs. Returns [{id, label, display}]."""
         results = []

@@ -3,7 +3,7 @@ name: validate
 description: >
   Read-only mechanical check of the entire docs/ store. Verifies every doc has
   required fields with valid enum values, that labels are trimmed and unique, that
-  all requires/belongs_to/relates/provenance references resolve, that each edge type
+  all requires/belongs_to/relates/provenance references resolve, that `belongs_to`
   is acyclic, that deprecated docs have a superseded_by edge, that reference docs
   have their extra fields, and that every doc carries a summary. Omitted edge lists
   and omitted history are valid and normal. Emits a report but does NOT fix anything.
@@ -83,12 +83,18 @@ Broken ref → **ERROR: broken `<field>` edge `<dep_id>` in `<id>`**.
 **WARNING**, not an error → **WARNING: unresolved `provenance` ref `<ref_id>`
 in `<id>`**.
 
-### 5. Per-edge-type acyclicity
+### 5. Acyclicity — `belongs_to` ONLY
 
-Each edge type forms its own graph; none may contain a cycle. `requires`,
-`belongs_to`, and `relates` are each checked independently for cycles.
-A cycle in any one → **ERROR: cycle detected in `<edge_type>` graph:
+Acyclicity is enforced on **`belongs_to` only** (`DAG_EDGE_FIELDS =
+("belongs_to",)`). `belongs_to` is the scope/lineage DAG that the
+effective-scope walk depends on, so a cycle there is a hard structural error.
+A cycle → **ERROR: cycle detected in `belongs_to` graph:
 `<id>` → … → `<id>`**.
+
+`requires` is **not** enforced acyclic — two decisions can mutually depend on
+each other (each moot without the other), which is legitimate and not
+load-ordered like code. `relates` is symmetric "see-also", so cycles are
+normal there too. Neither is checked for cycles.
 
 ### 6. Reference doc extras
 
@@ -133,7 +139,7 @@ ERRORS (must fix):
   [E] 20260615100001  broken `requires` edge `20260615999999`
   [E] 20260615090009  reference doc missing `imported`
   [E] 20260615110002  deprecated doc has no `superseded_by` edge
-  [E] 20260615090007  cycle detected in `requires` graph
+  [E] 20260615090007  cycle detected in `belongs_to` graph
   [E] 20260615090008  has no `summary`
 
 WARNINGS (should review):

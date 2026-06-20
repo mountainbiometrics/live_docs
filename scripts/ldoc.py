@@ -25,6 +25,7 @@ Subcommands (grouped):
     find [term ...] [--or] [--regex PAT]
          [--type] [--level] [--status] [--scope] [--domain] [--json] [--plain]
     ls [--type] [--json] [--plain]
+    orphans [--json] [--plain]
     log [--since <ISO>] [--limit N] [--json]
     count [--json]
 
@@ -344,6 +345,35 @@ def cmd_ls(kb: KB, args) -> int:
 
     if args.json:
         _json(results)
+        return 0
+
+    for r in results:
+        if plain:
+            label_part = f" [{r['label']}]" if r.get("label") else ""
+            print(f"{r['id']}{label_part}  {r.get('display', '')}")
+        else:
+            doc_id = r["id"]
+            display = r.get("display", "")
+            print(f"[{display}]({doc_id}.md)")
+
+    return 0
+
+
+def cmd_orphans(kb: KB, args) -> int:
+    """List docs outside the belongs_to hierarchy (no belongs_to in or out)."""
+    plain = getattr(args, "plain", False)
+    try:
+        results = kb.orphans()
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    if args.json:
+        _json(results)
+        return 0
+
+    if not results:
+        print("(no orphans)")
         return 0
 
     for r in results:
@@ -1244,6 +1274,7 @@ def cmd_help(kb: KB, args) -> int:
   ldoc find --regex 'batch|multi'
   ldoc find --type decision --status living
   ldoc ls --type principle
+  ldoc orphans                            # docs outside the belongs_to hierarchy
   ldoc log --since 2026-06-15T00:00:00Z --limit 10
   ldoc count
 
@@ -1338,6 +1369,15 @@ def build_parser() -> argparse.ArgumentParser:
     # --- ls ---
     p = sub.add_parser("ls", help="List all docs (optionally filter by type).")
     p.add_argument("--type", default="", choices=VALID_TYPES_SORTED + [""])
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--plain", action="store_true",
+                   help="Plain id/label output instead of typed wiki-links.")
+
+    # --- orphans ---
+    p = sub.add_parser(
+        "orphans",
+        help="List docs outside the belongs_to hierarchy (no belongs_to in OR out).",
+    )
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
@@ -1574,6 +1614,7 @@ COMMANDS = {
     "show": cmd_show,
     "find": cmd_find,
     "ls": cmd_ls,
+    "orphans": cmd_orphans,
     "resolve": cmd_resolve,
     "label": cmd_label,
     "neighbors": cmd_neighbors,

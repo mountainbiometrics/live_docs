@@ -149,12 +149,15 @@ Then complement with graph-level checks:
 1. **Broken hard-edge references**: flagged by `ldoc validate`. For each broken
    `requires` or `belongs_to` ref, propose removing or correcting via
    `ldoc unlink <id> --requires <bad-id>` (or `--belongs-to` as appropriate).
-2. **Orphans**: docs with no outbound AND no inbound edges. Find them:
+2. **Orphans**: docs outside the `belongs_to` hierarchy — no `belongs_to` parent
+   AND no `belongs_to` descendants. Query them FRESH (single source of truth,
+   computed live — never a stale cache):
    ```bash
-   python3 scripts/ldoc.py edges --json   # inspect docs with empty forward+reverse
+   python3 scripts/ldoc.py orphans
    ```
-   Or read `kb/02-docs/.index/orphans.txt` (from the last reindex). Exempt `type: index`
-   and `type: type` docs. For genuine orphans, propose: add edges via `ldoc link`
+   Apply your own judgment on top of this raw topology: skip frozen/`reference`
+   docs (supporting evidence wired via `provenance`, not `belongs_to`) and
+   `type: type` schema docs. For genuine orphans, propose: add edges via `ldoc link`
    or retire with `ldoc set <id> --status deprecated` (plus a `## Correction`
    section and `--superseded-by` if the doc is being superseded, or a plain
    deprecation note if it is simply being removed).

@@ -56,9 +56,15 @@ groupings:
    ```
    and read `kb/02-docs/.index/hierarchy.md` for the current rollup of each
    index's `belongs_to` children.
-2. **Orphans** — disconnected docs are the prime candidates for a home. Read
-   `kb/02-docs/.index/orphans.txt` (from the last reindex); `index`/`type` docs
-   are exempt there by design.
+2. **Orphans** — docs outside the `belongs_to` hierarchy are the prime
+   candidates for a home. Query them FRESH (single source of truth, computed
+   live — not a stale cache):
+   ```bash
+   python3 scripts/ldoc.py orphans
+   ```
+   This is pure `belongs_to` in/out topology with no type exemptions; apply your
+   own judgment (e.g. `reference`/`type` docs are legitimately edge-light and not
+   curation targets).
 3. **Shared `domain` / `scope`** — docs tagged into the same area are a thematic
    cluster signal:
    ```bash
@@ -234,9 +240,10 @@ here yourself — synthesis is that skill's job.
 
 ## Step 6 — Do NOT reindex; surface the staleness
 
-`hierarchy.md` and `orphans.txt` are now stale (new index, new memberships).
-Note this for the user — the orchestrator/reindex run regenerates them. Do not
-call `reindex` from this skill.
+`hierarchy.md` is now stale (new index, new memberships). Note this for the user
+— the orchestrator/reindex run regenerates it. Do not call `reindex` from this
+skill. (Orphan status is not a cached artifact — `ldoc orphans` always computes
+it fresh, so there is nothing to regenerate there.)
 
 ---
 

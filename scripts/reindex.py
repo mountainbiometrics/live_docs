@@ -14,7 +14,10 @@ Generates:
                                      NAVIGATION ONLY, NOT cascade)
     docs/.index/hierarchy.md       — children rollup under every descendant-bearing
                                      doc (any doc targeted by belongs_to)
-    docs/.index/orphans.txt        — docs with no belongs_to lineage (hierarchy-based)
+
+Orphan detection is NOT a derived artifact here. Orphan-hood is pure belongs_to
+topology that consumers must query FRESH, not read from a stale cache. The single
+source of truth is `kb.orphans()` / `ldoc orphans`.
 
 Stdlib only. No external dependencies.
 These files are DERIVED. Never hand-edit them; rerun this script instead.
@@ -29,44 +32,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from livedocs import (
-    DOCS_DIR, load_all, reverse_edges, referenced_by, doc_prefix,
+    DOCS_DIR, load_all, reverse_edges, referenced_by,
 )
-
-
-# ---------------------------------------------------------------------------
-# Orphan exemption (per 20260619235049 — hierarchy-based, belongs_to lineage)
-# ---------------------------------------------------------------------------
-#
-# With `type:index` retired, orphan-hood is now defined off the belongs_to
-# hierarchy, not off a type marker. A doc with no belongs_to lineage is an
-# orphan ONLY IF it is not a legitimate top-level node:
-#
-#   - `component` docs are legitimate structural roots — the root component and
-#     the structural subsystems each anchor a scope and intentionally sit at the
-#     top of the tree with no belongs_to parent. They are NOT orphans.
-#
-#   - `reference` docs (raw clippings, brainstorms, plans, external material) are
-#     supporting evidence wired into the graph via `provenance`, not `belongs_to`.
-#     They are legitimately edge-light in the hierarchy, so flagging them as
-#     orphans is pure noise. They are NOT orphans.
-#
-# Any OTHER type with no belongs_to lineage (in or out) fell out of the hierarchy
-# by accident and IS an orphan.
-ORPHAN_EXEMPT_TYPES = {"component", "reference"}
 
 
 # ---------------------------------------------------------------------------
 # belongs_to-only edge maps (hierarchy / lineage — NOT requires)
 # ---------------------------------------------------------------------------
-
-def belongs_to_forward(docs: dict) -> dict:
-    """Map {id: [belongs_to targets that exist in docs]} — lineage edges only."""
-    all_ids = set(docs.keys())
-    return {
-        doc_id: [t for t in doc.get("belongs_to", []) if t in all_ids]
-        for doc_id, doc in docs.items()
-    }
-
 
 def belongs_to_reverse(docs: dict) -> dict:
     """Map {id: [ids that belongs_to this doc]} — i.e. each doc's descendants' parents."""
@@ -175,59 +147,6 @@ def write_hierarchy_md(docs: dict, bt_rev: dict, index_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Generate orphans.txt
-# ---------------------------------------------------------------------------
-
-def write_orphans_txt(docs: dict, bt_fwd: dict, bt_rev: dict, index_dir: Path) -> None:
-    """Write hierarchy-disconnected doc ids to orphans.txt.
-
-    Per 20260619235049, orphan-hood is now defined off the `belongs_to`
-    hierarchy (lineage), NOT off a type marker:
-
-      A doc with NO belongs_to lineage — no belongs_to parent (outbound) and no
-      descendants (inbound) — is an orphan UNLESS it is a legitimate top-level
-      node. `component` docs (intentional structural roots that anchor scopes)
-      and `reference` docs (supporting evidence wired in via provenance, not
-      belongs_to) are exempt; see ORPHAN_EXEMPT_TYPES.
-
-    requires / relates / provenance / superseded_by do NOT count for orphan
-    purposes — only belongs_to lineage does.
-    """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    orphans = []
-    for doc in docs.values():
-        doc_id = doc["id"]
-        doc_type = doc.get("type", "")
-        if doc_type in ORPHAN_EXEMPT_TYPES:
-            continue
-        has_parent = bool(bt_fwd.get(doc_id))      # outbound belongs_to
-        has_descendants = bool(bt_rev.get(doc_id))  # inbound belongs_to
-        if not has_parent and not has_descendants:
-            orphans.append(doc)
-
-    orphans.sort(key=lambda d: d["id"])
-
-    lines = [
-        "# orphans — docs with no belongs_to lineage",
-        f"# Generated: {now}",
-        "# These docs have no belongs_to parent and no descendants, and are not a",
-        "# legitimate top-level node (component / reference are exempt).",
-        "# Consider: add a belongs_to edge into the hierarchy, or retire to deprecated.",
-        "# Format: <id> [<label>] \"<Type>: <Title>\"",
-        "#",
-        f"# Count: {len(orphans)}",
-        "",
-    ]
-    for doc in orphans:
-        lines.append(doc_prefix(doc))
-
-    out_path = index_dir / "orphans.txt"
-    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"  wrote {out_path}")
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -253,14 +172,12 @@ def main() -> int:
     rev = reverse_edges(docs)
     ref_by = referenced_by(docs)  # provenance reverse map (navigation only)
 
-    # hierarchy / orphans are LINEAGE artifacts — belongs_to only, never requires.
-    bt_fwd = belongs_to_forward(docs)
+    # hierarchy is a LINEAGE artifact — belongs_to reverse map only, never requires.
     bt_rev = belongs_to_reverse(docs)
 
     write_dependents_json(rev, index_dir)
     write_referenced_by_json(ref_by, index_dir)
     write_hierarchy_md(docs, bt_rev, index_dir)
-    write_orphans_txt(docs, bt_fwd, bt_rev, index_dir)
 
     print("Done.")
     return 0
