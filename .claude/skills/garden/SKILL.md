@@ -63,8 +63,8 @@ independent; run them in any order.
    - **New doc A**: what it owns, suggested title and type.
    - **New doc B**: what it owns, suggested title and type.
    - How `requires` (or `belongs_to`) edges would be rewired (which existing docs
-     would now point to A or B instead of the original; the original may become an
-     index or be retired to `status: deprecated`).
+     would now point to A or B instead of the original; the original may become a
+     descendant-bearing signpost over A and B or be retired to `status: deprecated`).
    - The `requires` of A and B (they likely both depend on whatever the original
      depended on, unless that too should be split).
 4. Present the full proposal to the user. On confirmation:
@@ -101,7 +101,7 @@ are prime candidates.
 **Edge-reclassification note**: after any split or edge rewire, opportunistically
 review the `requires` edges on the new docs and reclassify where appropriate:
 - Move to `belongs_to` if the edge expresses structural parent/child membership
-  (index → child, part-of, "this doc lives under that one").
+  (parent → child, part-of, "this doc lives under that one").
 - Move to `relates` if it is symmetric kinship / see-also rather than an
   existential dependency.
 - Keep as `requires` only for genuine existential dependency (the doc is

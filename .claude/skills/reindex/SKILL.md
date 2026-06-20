@@ -70,15 +70,16 @@ format), which records for each doc which other docs cite it as provenance.
 
 ### hierarchy.md
 
-A human-readable rollup of `index` docs and their children. For each doc of
-`type: index`, list every doc that has it as a `belongs_to` or `requires` target.
-Format:
+A human-readable rollup of descendant-bearing docs and their children. The
+signpost role is structural, not a type: for each doc that is the target of
+`belongs_to` edges (regardless of its `type` — the `index` type is retired), list
+every doc that has it as a `belongs_to` or `requires` target. Format:
 
 ```markdown
 # live_docs Index Hierarchy
 Generated: <ISO 8601 timestamp>
 
-## <index doc title> (`<id>`)
+## <signpost doc title> (`<id>`)
 
 | id | title | type | status |
 |----|-------|------|--------|
@@ -88,7 +89,7 @@ Generated: <ISO 8601 timestamp>
 ---
 ```
 
-Docs that do not depend on any index doc are omitted from this file.
+Docs that no other doc depends on (no descendants) are omitted from this file.
 
 ### Orphans — NOT a reindex artifact
 

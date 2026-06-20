@@ -279,7 +279,7 @@ For reference during edits, the canonical frontmatter shape (field order is sign
 | `id` | Must match filename without `.md`. Never change. |
 | `title` | Human-readable name. Substantive change if altered. |
 | `label` | Short slug. |
-| `type` | Enum: type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference, index. Substantive change. |
+| `type` | Enum: type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference. Substantive change. |
 | `status` | `living`, `target`, `deprecated`, or `reference`. Substantive change. |
 | `level` | `incidental`, `trial`, `preference`, `requirement`. Substantive change. |
 | `belongs_to` | List of parent doc ids — structural hierarchy; HARD/cascade edge. Substantive change if altered. Omit when empty. |

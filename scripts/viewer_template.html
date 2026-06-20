@@ -62,6 +62,33 @@
   .pill.deprecated { background: #f3e0e0; color: var(--broken); }
   .pill.target { background: var(--warn-bg); color: var(--warn); }
   .pill.reference { background: #e4ecf3; color: var(--accent); }
+
+  /* type icon — a small inline Lucide glyph rendered immediately BEFORE a label.
+     Conveys the doc's `type` (replacing the old trailing type pill). Sized to the
+     surrounding text, vertically centered, with a subtle per-type color set inline. */
+  .ticon {
+    display: inline-block; width: 1em; height: 1em; vertical-align: -0.13em;
+    margin-right: 0.35em; flex: none;
+  }
+  .ticon svg { width: 100%; height: 100%; display: block; }
+  /* in the dark tooltip the per-type ink can go too dim — lift it a touch */
+  #tooltip .ticon { opacity: .95; }
+  /* type legend (collapsible key, unobtrusive in the top nav) */
+  details.typekey { position: relative; margin-left: 6px; }
+  details.typekey > summary {
+    list-style: none; cursor: pointer; font-size: 13px; color: var(--muted);
+    border: 1px solid transparent; border-radius: 6px; padding: 5px 10px;
+  }
+  details.typekey > summary::-webkit-details-marker { display: none; }
+  details.typekey > summary:hover { background: var(--accent-soft); color: var(--ink); }
+  details.typekey[open] > summary { background: var(--accent-soft); color: var(--accent); }
+  details.typekey .keypanel {
+    position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 60;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 8px 10px; min-width: 180px;
+  }
+  details.typekey .keyrow { display: flex; align-items: center; padding: 3px 2px; font-size: 13px; }
+  details.typekey .keyrow .ticon { margin-right: 8px; }
   /* effective-scope pill: colored per scope name (inline style sets the hue) */
   .scopepill {
     display: inline-block; font-size: 10.5px; line-height: 1.5; padding: 0 7px;
@@ -252,6 +279,11 @@
     <button data-page="catalog">Catalog</button>
     <button data-page="reviews">Reviews</button>
   </nav>
+  <span style="flex:1"></span>
+  <details class="typekey" id="typekey">
+    <summary title="icon → type key">Icon key</summary>
+    <div class="keypanel" id="typekey-panel"></div>
+  </details>
 </header>
 <main>
   <section id="page-home" class="page active"></section>
@@ -468,18 +500,81 @@ const EDGE_TYPES = [
    - [text](id.md) -> same resolved link (index "Map" bodies use this form)
    Unresolved ids render as visible broken links. */
 
-function linkHtml(id, overrideText) {
+// Resolved label-link. When opts.icon is true, the doc's type icon is rendered
+// immediately BEFORE the label (the icon now carries the `type`, replacing the
+// old trailing pill). Default is no icon so inline prose links stay clean; the
+// connections/member/home/catalog/tree/reader surfaces opt in explicitly.
+function linkHtml(id, overrideText, opts) {
+  opts = opts || {};
   const sid = String(id);
   const d = byId.get(sid);
   if (!d) {
     return `<a class="dl broken" data-broken="1">${overrideText || sid}</a>`;
   }
   const text = overrideText || d.label || d.title || sid;
-  return `<a class="dl" data-ref="${sid}" tabindex="0">${escapeHtml(text)}</a>`;
+  const ic = opts.icon ? typeIcon(d.type) : "";
+  return `<a class="dl" data-ref="${sid}" tabindex="0">${ic}${escapeHtml(text)}</a>`;
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+/* ===== TYPE ICONS (inline Lucide, MIT) =====
+   Each doc `type` gets a small Lucide glyph rendered immediately BEFORE its label
+   everywhere a label appears (replacing the old trailing type pill). The SVG path
+   data is inlined verbatim from lucide-icons/lucide so the viewer stays fully
+   self-contained — no CDN, no lucide script. Map is `type -> { svg, color, label }`:
+   `svg` is the icon's inner markup, `color` a subtle per-type stroke hue, `label`
+   the human name for the legend/tooltips. Icons share the Lucide 24x24 viewBox and
+   2px stroke convention; we render with currentColor driven by `color`. */
+const TYPE_ICONS = {
+  // meta/schema — the "type" doc that defines the taxonomy itself: shapes
+  "type":        { color: "#7a6f63", label: "type (meta/schema)",
+    svg: `<path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/>` },
+  // principle — a guiding bearing: compass
+  "principle":   { color: "#5b6e8c", label: "principle",
+    svg: `<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/>` },
+  // goal — what we aim at: target
+  "goal":        { color: "#b07a2a", label: "goal",
+    svg: `<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>` },
+  // decision — a fork in the road that was taken: git-fork
+  "decision":    { color: "#3f7a55", label: "decision",
+    svg: `<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/>` },
+  // constraint — a hard boundary that holds: lock
+  "constraint":  { color: "#b03a3a", label: "constraint",
+    svg: `<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>` },
+  // requirement — a checked-off must: clipboard-check
+  "requirement": { color: "#4d7a3f", label: "requirement",
+    svg: `<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>` },
+  // use-case — an actor's scenario: user
+  "use-case":    { color: "#9a7bb0", label: "use-case",
+    svg: `<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+  // guide — something you read to orient: book-open
+  "guide":       { color: "#a36b2e", label: "guide",
+    svg: `<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>` },
+  // component — a buildable unit/part: box
+  "component":   { color: "#5b6e8c", label: "component",
+    svg: `<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>` },
+  // reference — external/linked material: link
+  "reference":   { color: "#3f5e8f", label: "reference",
+    svg: `<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>` },
+};
+// fallback glyph for any unknown/missing type: a neutral circle (help-circle-ish dot)
+const TYPE_ICON_FALLBACK = { color: "var(--faint)", label: "unknown",
+  svg: `<circle cx="12" cy="12" r="9"/><path d="M12 17h.01"/><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3"/>` };
+
+// render the icon for a doc `type` as an inline <svg>, sized to text via the .ticon
+// wrapper. Returns "" for no type so callers can interpolate unconditionally.
+function typeIcon(type, opts) {
+  opts = opts || {};
+  const t = type ? String(type) : "";
+  if (!t) return "";
+  const def = TYPE_ICONS[t] || TYPE_ICON_FALLBACK;
+  const title = opts.title === false ? "" : ` title="${escapeHtml(def.label || t)}"`;
+  return `<span class="ticon" style="color:${def.color}"${title}>`
+    + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" `
+    + `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.svg}</svg></span>`;
 }
 
 // Pre-process markdown: replace link syntaxes with placeholder tokens, render md,
@@ -538,8 +633,9 @@ function showTip(el) {
   // knows there's somewhere to go without opening it.
   const count = edgeBadge(d.id);
   const scopes = scopePills(d.id);
+  // type icon before the label; the type name still reads in the meta line
   tooltip.innerHTML =
-    `<div class="tt-label">${escapeHtml(d.label || d.title || id)}</div>` +
+    `<div class="tt-label">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)}</div>` +
     `<div class="tt-meta">${escapeHtml(d.type || "")} ${status} ${scopes} ${count}</div>` +
     `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
   tooltip.style.display = "block";
@@ -602,7 +698,7 @@ function toggleExpand(a) {
   // member list for SIGNPOSTS (descendant-bearing docs) comes from belongs_to edges
   const sign = isSignpost(id);
   const memberPart = sign ? memberListHtml(id) : "";
-  box.innerHTML = `<div class="eh">${escapeHtml(d.label || id)} · ${escapeHtml(d.type || "")} ${scopePills(id)} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
+  box.innerHTML = `<div class="eh">${typeIcon(d.type)}${escapeHtml(d.label || id)} · ${escapeHtml(d.type || "")} ${scopePills(id)} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
     + `<div class="md">${renderMarkdown(d.body, 1)}</div>`
     + memberPart
     + connectionsHtml(d, { skipChildren: sign });
@@ -677,7 +773,7 @@ function renderHome() {
     const rsum = byId.get(String(root.id));
     html += `<div class="card" style="border-left:3px solid var(--accent)">`
       + `<h3>The store root</h3>`
-      + `<div style="font-size:15px;font-weight:600">${linkHtml(root.id)} ${scopePills(root.id, {title:1})} <span class="edgecount" title="docs in this subtree">⤵ ${descCount(root.id)} descendants</span></div>`
+      + `<div style="font-size:15px;font-weight:600">${linkHtml(root.id, null, {icon:1})} ${scopePills(root.id, {title:1})} <span class="edgecount" title="docs in this subtree">⤵ ${descCount(root.id)} descendants</span></div>`
       + `<div class="sub" style="margin:4px 0 0">${escapeHtml((rsum && rsum.summary) || "")}</div></div>`;
   }
 
@@ -688,20 +784,20 @@ function renderHome() {
     + `<div class="sub" style="margin:0 0 6px">Descendant-bearing docs, ranked by subtree size.</div><ul class="tight">`;
   signposts.forEach(d => {
     const sub = escapeHtml(d.summary || "");
-    html += `<li>${linkHtml(d.id)} <span class="pill">${escapeHtml(d.type||"")}</span> ${scopePills(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
+    html += `<li>${linkHtml(d.id, null, {icon:1})} ${scopePills(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
       + (sub ? `<div class="sub" style="margin:2px 0 0">${sub}</div>` : "") + `</li>`;
   });
   html += `</ul></div>`;
 
   // hot docs
   html += `<div class="card"><h3>Hot docs (most history entries)</h3><ul class="tight">`;
-  hot.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${d.history.length} changes</span></li>`);
+  hot.forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} <span class="pill">${d.history.length} changes</span></li>`);
   html += `</ul></div>`;
 
   // orphans — belongs_to roots that bear no descendants (unplaced by curation)
   html += `<div class="card"><h3>Orphans — no belongs_to, no descendants (${orphans.length})</h3><ul class="tight">`;
   if (!orphans.length) html += `<li class="sub">none</li>`;
-  orphans.forEach(d => html += `<li>${linkHtml(d.id)} <span class="pill">${escapeHtml(d.type||"")}</span> ${scopePills(d.id)}</li>`);
+  orphans.forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${scopePills(d.id)}</li>`);
   html += `</ul></div>`;
 
   // deprecated -> superseded_by
@@ -709,8 +805,8 @@ function renderHome() {
   if (!deprecated.length) html += `<li class="sub">none</li>`;
   deprecated.forEach(d => {
     const sup = edgeList(d, "superseded_by");
-    const supHtml = sup.length ? sup.map(linkHtml).join(", ") : `<span class="dl broken">(no superseded_by!)</span>`;
-    html += `<li>${linkHtml(d.id)} → ${supHtml}</li>`;
+    const supHtml = sup.length ? sup.map(s => linkHtml(s, null, {icon:1})).join(", ") : `<span class="dl broken">(no superseded_by!)</span>`;
+    html += `<li>${linkHtml(d.id, null, {icon:1})} → ${supHtml}</li>`;
   });
   html += `</ul></div>`;
   html += `</div>`;
@@ -733,12 +829,12 @@ function buildTree() {
     const memberIds = (children.get(idx.id) || []);
     const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean);
     const leaves = memberIds.filter(m => !isSignpost(m));
-    let h = `<details open><summary data-ref="${idx.id}">${escapeHtml(idx.label || idx.title)}</summary>`;
+    let h = `<details open><summary data-ref="${idx.id}">${typeIcon(idx.type)}${escapeHtml(idx.label || idx.title)}</summary>`;
     childSignposts.forEach(ci => h += renderNode(ci, seen));
     leaves.forEach(lid => {
       const d = byId.get(lid);
       if (!d) return;
-      h += `<div class="leaf" data-id="${lid}">${escapeHtml(d.label || d.title || lid)}</div>`;
+      h += `<div class="leaf" data-id="${lid}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || lid)}</div>`;
     });
     h += `</details>`;
     return h;
@@ -752,7 +848,7 @@ function buildTree() {
   const ungrouped = belongsRoots.filter(d => !isSignpost(d.id));
   if (ungrouped.length) {
     h += `<details><summary>Ungrouped (${ungrouped.length})</summary>`;
-    ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${escapeHtml(d.label || d.title || d.id)}</div>`);
+    ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`);
     h += `</details>`;
   }
   return h;
@@ -797,7 +893,7 @@ function metaLine(d) {
 function relGroup(title, ids) {
   if (!ids || !ids.length) return "";
   return `<div class="relgroup"><div class="rt">${escapeHtml(title)} (${ids.length})</div><ul>` +
-    ids.map(id => `<li>${linkHtml(id)} ${edgeBadge(id)}</li>`).join("") + `</ul></div>`;
+    ids.map(id => `<li>${linkHtml(id, null, {icon:1})} ${edgeBadge(id)}</li>`).join("") + `</ul></div>`;
 }
 
 // Index member list, derived from the belongs_to reverse edge (children map) —
@@ -818,9 +914,8 @@ function memberListHtml(indexId) {
   const li = sorted.map(mid => {
     const md = byId.get(mid);
     if (!md) return `<li>${linkHtml(mid)}</li>`;
-    const pill = md.type ? `<span class="pill ${md.status||''}">${escapeHtml(md.type)}</span>` : "";
     const sum = md.summary ? `<span class="msum">— ${escapeHtml(md.summary)}</span>` : "";
-    return `<li>${linkHtml(mid)} ${pill} ${scopePills(mid)} ${edgeBadge(mid)}${sum}</li>`;
+    return `<li>${linkHtml(mid, null, {icon:1})} ${scopePills(mid)} ${edgeBadge(mid)}${sum}</li>`;
   }).join("");
   return `<div class="members"><h2>Members (${members.length})</h2><ul>${li}</ul></div>`;
 }
@@ -876,7 +971,7 @@ function renderFocusDoc(content, id) {
   const d = byId.get(String(id));
   if (!d) { content.innerHTML = `<div class="sub">No doc with id ${escapeHtml(id)}.</div>`; return; }
 
-  let html = `<h1 class="doctitle">${escapeHtml(d.label || d.title || id)}</h1>`;
+  let html = `<h1 class="doctitle">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)}</h1>`;
   html += `<div class="meta-line">${metaLine(d)}</div>`;
   if (d.summary) html += `<div class="doc-summary">${escapeHtml(d.summary)}</div>`;
 
@@ -900,7 +995,7 @@ function renderFocusDoc(content, id) {
       members.forEach(mid => {
         const md = byId.get(mid);
         if (!md) return;
-        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid)} <span class="pill ${md.status||''}">${escapeHtml(md.type||'')}</span> ${scopePills(mid)} ${edgeBadge(mid)}</h2>`;
+        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid, null, {icon:1})} ${scopePills(mid)} ${edgeBadge(mid)}</h2>`;
         m += `<div class="md">${renderMarkdown(md.body)}</div>`;
         m += connectionsHtml(md);   // backlinks/next-hops visible in compose too
         m += `</div>`;
@@ -1128,12 +1223,32 @@ function mountGraph(container, focusId) {
       g.setAttribute("class", "gnode" + (n.focus ? " focus" : ""));
       g.setAttribute("transform", `translate(${n.x},${n.y})`);
       g.setAttribute("data-nid", n.id);
+      // node fill is now keyed by the doc's TYPE color (same palette as the type
+      // icons), so the graph reads its taxonomy at a glance. Focus stays dark ink.
+      const tdef = d ? (TYPE_ICONS[String(d.type)] || null) : null;
+      const typeFill = tdef ? tdef.color : (isSignpost(n.id) ? "#5b6e8c" : "#a9b4c6");
       const c = document.createElementNS(ns, "circle");
       c.setAttribute("r", n.focus ? 9 : (n.hop === 1 ? 6.5 : 5));
-      c.setAttribute("fill", n.focus ? "#2b2b2b" : (isSignpost(n.id) ? "#5b6e8c" : "#a9b4c6"));
+      c.setAttribute("fill", n.focus ? "#2b2b2b" : typeFill);
       g.appendChild(c);
+      // a tiny inline type glyph just LEFT of the node label, matching the rest of
+      // the UI. Rendered as a nested SVG using the same Lucide path data.
+      const tdefLbl = d && d.type ? (TYPE_ICONS[String(d.type)] || TYPE_ICON_FALLBACK) : null;
+      const textX = (n.focus ? 12 : 9);
+      if (tdefLbl) {
+        const gi = document.createElementNS(ns, "g");
+        // 11px box, baseline-aligned with the ~10.5px text (y=3.5)
+        gi.setAttribute("transform", `translate(${textX},-5.5) scale(${11/24})`);
+        gi.setAttribute("fill", "none");
+        gi.setAttribute("stroke", tdefLbl.color);
+        gi.setAttribute("stroke-width", "2.4");
+        gi.setAttribute("stroke-linecap", "round");
+        gi.setAttribute("stroke-linejoin", "round");
+        gi.innerHTML = tdefLbl.svg;
+        g.appendChild(gi);
+      }
       const t = document.createElementNS(ns, "text");
-      t.setAttribute("x", (n.focus ? 12 : 9)); t.setAttribute("y", 3.5);
+      t.setAttribute("x", textX + (tdefLbl ? 14 : 0)); t.setAttribute("y", 3.5);
       let lbl = (d && (d.label || d.title || d.id)) || n.id;
       if (lbl.length > 26) lbl = lbl.slice(0, 25) + "…";
       t.textContent = lbl;
@@ -1287,7 +1402,7 @@ function renderCatalog() {
     rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
     document.getElementById("cat-count").textContent = `${rows.length} of ${DOCS.length} docs`;
     const body = document.getElementById("cat-body");
-    const cell = d => `<td>${linkHtml(d.id)}</td><td>${escapeHtml(d.title||"")}</td><td>${escapeHtml(d.type||"")}</td>`
+    const cell = d => `<td>${linkHtml(d.id, null, {icon:1})}</td><td>${escapeHtml(d.title||"")}</td><td>${escapeHtml(d.type||"")}</td>`
       + `<td><span class="pill ${d.status||''}">${escapeHtml(d.status||"")}</span></td><td>${escapeHtml(d.level||"")}</td>`
       + `<td>${scopePills(d.id, { title: 1 }) || '<span class="sub">—</span>'}</td>`
       + `<td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`;
@@ -1387,7 +1502,23 @@ function renderReviews() {
   }));
 }
 
+/* ===== type-icon legend (key) ===== */
+// Build the collapsible key from the same TYPE_ICONS map the rest of the UI uses,
+// so the legend can never drift from the rendered glyphs. Only types that actually
+// occur in the store are shown, in the map's declared (taxonomy) order.
+function renderTypeKey() {
+  const present = new Set(DOCS.map(d => d.type).filter(Boolean));
+  const panel = document.getElementById("typekey-panel");
+  if (!panel) return;
+  const rows = Object.keys(TYPE_ICONS)
+    .filter(t => present.has(t))
+    .map(t => `<div class="keyrow">${typeIcon(t, { title: false })}<span>${escapeHtml(TYPE_ICONS[t].label)}</span></div>`)
+    .join("");
+  panel.innerHTML = rows || `<div class="keyrow sub">no typed docs</div>`;
+}
+
 /* ===== boot ===== */
+renderTypeKey();
 renderHome();
 renderCatalog();
 renderReviews();

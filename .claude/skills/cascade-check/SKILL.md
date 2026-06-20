@@ -182,15 +182,16 @@ Emit exactly one verdict per neighbor edge:
 tangential. Prefer `context-request` over a low-confidence `inconsequential`
 — silent drift is worse than a question. Prefer `incompatible` over a guess.
 
-**Index-summary rule**: if a changed doc `belongs_to` a `type: index` parent,
-that parent's aggregated `summary`/`## Map` is *derived from its members* and is
-now potentially stale (the Map may describe the member's old claim). When the
-member's change is substantive (title, body, type, status, or membership), emit
-`cascade` on the parent index. The recommended fix is **not** a hand-patch:
-re-run the `summarize-descendants` skill on the parent index to re-synthesize its
-overview. Record this in the verdict's reason and apply it as the cascade action
-in Pass 2. (A purely provenance/relates change to the member does not stale the
-overview — prefer `inconsequential`.)
+**Descendant-summary rule**: if a changed doc `belongs_to` a descendant-bearing
+parent (any `belongs_to` parent, regardless of its `type`), that parent's
+aggregated orientation guide is *derived from its members* and is now potentially
+stale (the guide may describe the member's old claim). When the member's change
+is substantive (title, body, type, status, or membership), emit `cascade` on the
+parent. The recommended fix is **not** a hand-patch: re-run the
+`summarize-descendants` skill on the parent to re-synthesize its overview. Record
+this in the verdict's reason and apply it as the cascade action in Pass 2. (A
+purely provenance/relates change to the member does not stale the overview —
+prefer `inconsequential`.)
 
 ---
 
