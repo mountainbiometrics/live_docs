@@ -44,8 +44,13 @@ Exactly like cascade-check's "orchestrator owns the episode" contract:
 ## Step 0 — Capture the episode start time
 
 ```bash
-START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+date -u +%Y-%m-%dT%H:%M:%SZ
 ```
+
+**Record the literal timestamp it prints** (e.g. `2026-06-19T23:48:00Z`) and carry it
+forward yourself — do NOT rely on a `$START` shell variable. Every command runs in a
+fresh shell, so a variable set here is gone by Step 9. You will paste this literal
+value into `review new --since` at the end of the episode.
 
 ---
 
@@ -232,9 +237,18 @@ Validation: <N docs scanned — clean | N errors, N warnings>
 apply-to-docs owns the single review summary for the episode (the nested
 sub-skills never emit one):
 
+Pass the **literal** start timestamp you recorded in Step 0 — not a `$START`
+variable, which did not survive across commands:
+
 ```bash
-python3 scripts/ldoc.py review new --since "$START"
+python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← your Step 0 value
 ```
+
+This auto-classifies Additions/Revisions and populates `touched` from what actually
+changed in the window. Do **not** hand-author the body or pass an explicit
+`--summary`/`--body`: a review with `touched: []` or prose-only is malformed. After it
+runs, confirm `touched` is non-empty and reflects the episode's changes; if it's empty,
+your `--since` value was wrong (likely an unset variable) — fix it and re-run.
 
 Report the review id to the user:
 
