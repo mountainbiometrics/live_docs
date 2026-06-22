@@ -8,106 +8,44 @@ Stdlib only (pathlib, re, datetime). No external dependencies. Import from other
 Store location: resolved by discovery, not by where this code lives. `ldoc` walks
 up from the current working directory for a `.live_docs.toml` marker, falling back
 to ~/.config/live_docs/config.toml. See model.py for the resolution rules.
+
+Exports are lazy so submodules like user_config can load without locating a store.
 """
 
-from .model import (
-    REPO_ROOT,
-    DOCS_DIR,
-    RAW_DIR,
-    REVIEWS_DIR,
-    INBOX_DIR,
-    INDEX_DIR,
-    VALID_TYPES,
-    VALID_STATUSES,
-    VALID_LEVELS,
-    VALID_REFERENCE_KINDS,
-    generate_id,
-    title_to_label,
-    unique_label,
-    display_label,
-    ref_token,
-    render_ref_token,
-    WIKILINK_RE,
-    doc_prefix,
-)
+from __future__ import annotations
 
-from .serialize import (
-    CANONICAL_FIELD_ORDER,
-    REFERENCE_EXTRA_FIELDS,
-    EDGE_FIELDS,
-    parse_doc,
-    dump_doc,
-)
+import importlib
 
-from .graph import (
-    forward_edges,
-    reverse_edges,
-    dangling_edges,
-    reference_edges,
-    referenced_by,
-    dangling_references,
-    relates_edges,
-    superseded_by_edges,
-    id_title_map,
-)
-
-from .kb import (
-    KB,
-    load_all,
-    # KB.set_body, KB.log, KB.count, KB.validate_edge_refs are methods on KB
-)
-
-from .reviews import (
-    ReviewLedger,
-    parse_review,
-    dump_review,
-)
-
-from .viewer import build_viewer
-
-__all__ = [
-    # model
-    "REPO_ROOT",
-    "DOCS_DIR",
-    "RAW_DIR",
-    "REVIEWS_DIR",
-    "INBOX_DIR",
-    "INDEX_DIR",
-    "VALID_TYPES",
-    "VALID_STATUSES",
-    "VALID_LEVELS",
-    "VALID_REFERENCE_KINDS",
-    "generate_id",
-    "title_to_label",
-    "unique_label",
-    "display_label",
-    "ref_token",
-    "render_ref_token",
-    "WIKILINK_RE",
-    "doc_prefix",
-    # serialize
-    "CANONICAL_FIELD_ORDER",
-    "REFERENCE_EXTRA_FIELDS",
-    "EDGE_FIELDS",
-    "parse_doc",
-    "dump_doc",
-    # graph
-    "forward_edges",
-    "reverse_edges",
-    "dangling_edges",
-    "reference_edges",
-    "referenced_by",
-    "dangling_references",
-    "relates_edges",
-    "superseded_by_edges",
-    "id_title_map",
-    # kb
-    "KB",
-    "load_all",
-    # reviews
-    "ReviewLedger",
-    "parse_review",
-    "dump_review",
-    # viewer
-    "build_viewer",
+_EXPORT_MAP = [
+    ("model",     {"REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "INBOX_DIR", "INDEX_DIR",
+                   "VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
+                   "generate_id", "title_to_label", "unique_label", "display_label",
+                   "ref_token", "render_ref_token", "WIKILINK_RE", "doc_prefix"}),
+    ("serialize", {"CANONICAL_FIELD_ORDER", "REFERENCE_EXTRA_FIELDS", "EDGE_FIELDS",
+                   "parse_doc", "dump_doc"}),
+    ("graph",     {"forward_edges", "reverse_edges", "dangling_edges", "reference_edges",
+                   "referenced_by", "dangling_references", "relates_edges",
+                   "superseded_by_edges", "id_title_map"}),
+    ("kb",        {"KB", "load_all"}),
+    ("reviews",   {"ReviewLedger", "parse_review", "dump_review"}),
+    ("viewer",    {"build_viewer"}),
 ]
+
+# Derived from _EXPORT_MAP — single source of truth.
+__all__ = sorted(name for _, names in _EXPORT_MAP for name in names)
+
+# Reverse lookup: name → module string (built once at import time).
+_NAME_TO_MODULE: dict[str, str] = {
+    name: mod for mod, names in _EXPORT_MAP for name in names
+}
+
+
+def __getattr__(name: str):
+    mod_name = _NAME_TO_MODULE.get(name)
+    if mod_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    mod = importlib.import_module(f".{mod_name}", __name__)
+    obj = getattr(mod, name)
+    # Cache on the package so subsequent accesses skip __getattr__ entirely.
+    globals()[name] = obj
+    return obj

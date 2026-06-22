@@ -103,7 +103,27 @@ install_plugin() {
   warn "restart any running Claude Code session to pick up the skills."
 }
 
-# ── 3. (optional) consumer .live_docs.toml ────────────────────────────────
+# ── 3. user config bootstrap ───────────────────────────────────────────────
+bootstrap_user_config() {
+  step "User config (~/.config/live_docs/config.toml)"
+  local ldoc="$BIN_DIR/ldoc"
+  if [ ! -x "$ldoc" ]; then
+    ldoc="python3 $LDOC_SRC"
+  fi
+
+  if "$ldoc" config user.name >/dev/null 2>&1; then
+    ok "user identity already set ($("$ldoc" config signer 2>/dev/null))"
+    return
+  fi
+
+  if "$ldoc" config --bootstrap-from-git; then
+    ok "bootstrapped review sign-off from git config --global"
+  else
+    warn "could not bootstrap user config from git"
+  fi
+}
+
+# ── 4. (optional) consumer .live_docs.toml ────────────────────────────────
 init_store() {
   step "Writing .live_docs.toml in $(pwd)"
   local store
@@ -128,6 +148,7 @@ EOF
 
 # ── run ────────────────────────────────────────────────────────────────────
 [ "$DO_CLI" = 1 ]    && install_cli
+[ "$DO_CLI" = 1 ]    && bootstrap_user_config
 [ "$DO_PLUGIN" = 1 ] && install_plugin
 [ -n "$INIT_STORE" ] && init_store
 

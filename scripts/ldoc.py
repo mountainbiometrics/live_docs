@@ -60,6 +60,7 @@ Subcommands (grouped):
     reindex
     viewer [--out PATH]
     review <new|list|show|sign> ...
+    config [--list] [key] [value]   # user prefs in ~/.config/live_docs/config.toml
 
   ── Help ──
     help
@@ -73,7 +74,13 @@ import sys
 from pathlib import Path
 
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_scripts_dir = Path(__file__).resolve().parent
+sys.path.insert(0, str(_scripts_dir))
+
+# `ldoc config` only touches ~/.config/live_docs/config.toml — no store required.
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "config":
+    from livedocs.user_config import run_config_cli
+    sys.exit(run_config_cli(sys.argv[2:]))
 
 from livedocs import KB, DOCS_DIR, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, REVIEWS_DIR
@@ -1295,17 +1302,23 @@ def _review_show(ledger: ReviewLedger, args) -> int:
 
 
 def _review_sign(ledger: ReviewLedger, args) -> int:
-    if not args.as_who:
-        _err("--as <who> is required.")
+    from livedocs.user_config import get_signer
+
+    as_who = (args.as_who or get_signer() or "").strip()
+    if not as_who:
+        _err(
+            "--as <who> is required when user identity is not configured. "
+            'Set with: ldoc config user.name "Your Name" && ldoc config user.email "you@example.com"'
+        )
         return 1
 
     try:
-        at = ledger.sign(args.ref, args.as_who)
+        at = ledger.sign(args.ref, as_who)
     except ValueError as e:
         _err(str(e))
         return 1
 
-    print(f"Signed {args.ref!r} as {args.as_who!r} at {at}")
+    print(f"Signed {args.ref!r} as {as_who!r} at {at}")
     return 0
 
 
@@ -1318,6 +1331,11 @@ def cmd_edges(kb: KB, args) -> int:
         cmd.append("--json")
     result = subprocess.run(cmd, capture_output=False)
     return result.returncode
+
+
+def cmd_config(_kb: KB, args) -> int:
+    from livedocs.user_config import run_config_cli
+    return run_config_cli(sys.argv[2:])
 
 
 def cmd_help(kb: KB, args) -> int:
@@ -1384,7 +1402,15 @@ def cmd_help(kb: KB, args) -> int:
   ldoc review new --since 2026-06-15T00:00:00Z
   ldoc review list
   ldoc review show <review-id>
-  ldoc review sign <review-id> --as "Your Name"
+  ldoc review sign <review-id>              # uses config user.name + user.email
+  ldoc review sign <review-id> --as "Your Name <you@example.com>"
+
+  # User identity (~/.config/live_docs/config.toml — git-style)
+  ldoc config user.name "Your Name"
+  ldoc config user.email "you@example.com"
+  ldoc config signer                        # "Name <email>" composite
+  ldoc config --list
+  ldoc config --bootstrap-from-git
 """)
     return 0
 
@@ -1695,8 +1721,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_rsg = rev_sub.add_parser("sign", help="Sign a review record.")
     p_rsg.add_argument("ref", help="Review record id (or unique prefix/substring).")
-    p_rsg.add_argument("--as", dest="as_who", required=True,
-                       help="Your name (free-text signature).")
+    p_rsg.add_argument("--as", dest="as_who", default=None,
+                       help="Signature (git author format). Default: user.name + user.email from config.")
+
+    # --- config (user preferences; no store required) ---
+    p_cfg = sub.add_parser(
+        "config",
+        help="Read/write user preferences in ~/.config/live_docs/config.toml.",
+        add_help=False,
+    )
+    p_cfg.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
+    p_cfg.add_argument("--list", "-l", action="store_true",
+                       help="List all user preference keys and values.")
+    p_cfg.add_argument("--unset", metavar="KEY", help="Remove a user preference key.")
+    p_cfg.add_argument("--bootstrap-from-git", action="store_true",
+                       help="Copy user.name/user.email from git config --global if unset.")
+    p_cfg.add_argument("key", nargs="?", help="Preference key (e.g. user.name, signer).")
+    p_cfg.add_argument("value", nargs="?", help="Value to set (omit to read).")
 
     # --- help ---
     sub.add_parser("help", help="Show overview with grouped verbs and copy-pasteable examples.")
@@ -1736,6 +1777,7 @@ COMMANDS = {
     "viewer": cmd_viewer,
     "edges": cmd_edges,
     "review": cmd_review,
+    "config": cmd_config,
     "help": cmd_help,
 }
 

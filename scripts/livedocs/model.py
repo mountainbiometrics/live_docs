@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .toml_flat import read_store_keys
+
 
 # ---------------------------------------------------------------------------
 # Paths — located by DISCOVERY, not by where this code lives
@@ -76,47 +78,6 @@ def _find_config() -> "tuple[Path | None, list[Path]]":
     return None, searched
 
 
-def _parse_toml(text: str) -> dict:
-    """Parse a live_docs config into a flat dict.
-
-    Prefer a real TOML parser when the runtime offers one (`tomllib` on 3.11+,
-    or the `tomli` backport if installed). Otherwise fall back to a minimal
-    flat-key reader that understands exactly what a config needs: top-level
-    `key = "value"` string assignments, `#` comments, and blank lines. The
-    config is deliberately a flat name→path map, so this subset is sufficient
-    and keeps the tool zero-dependency on a stock Python 3.9.
-    """
-    try:
-        import tomllib as _toml  # py3.11+
-    except ModuleNotFoundError:
-        try:
-            import tomli as _toml  # optional backport
-        except ModuleNotFoundError:
-            _toml = None
-    if _toml is not None:
-        return _toml.loads(text)
-
-    out: dict = {}
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or line.startswith("["):
-            continue
-        if "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        key = key.strip()
-        val = val.strip()
-        if val and val[0] in "\"'":
-            quote = val[0]
-            end = val.find(quote, 1)
-            val = val[1:end] if end != -1 else val[1:]
-        else:
-            val = val.split("#", 1)[0].strip()
-        if key:
-            out[key] = val
-    return out
-
-
 def _resolve_path(value: str, base: Path) -> Path:
     """Resolve a configured path string relative to `base` (absolute/~ kept as-is)."""
     p = Path(value).expanduser()
@@ -145,7 +106,7 @@ def _resolve() -> dict:
     else:
         base = config_path.parent
         try:
-            config = _parse_toml(config_path.read_text(encoding="utf-8"))
+            config = read_store_keys(config_path)
         except (OSError, ValueError) as e:
             raise LivedocsConfigError(f"could not read config {config_path}: {e}")
 
