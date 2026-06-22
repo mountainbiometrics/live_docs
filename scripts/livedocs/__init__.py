@@ -63,6 +63,8 @@ from .reviews import (
     dump_review,
 )
 
+from .viewer import build_viewer
+
 __all__ = [
     # model
     "REPO_ROOT",
@@ -106,4 +108,6 @@ __all__ = [
     "ReviewLedger",
     "parse_review",
     "dump_review",
+    # viewer
+    "build_viewer",
 ]

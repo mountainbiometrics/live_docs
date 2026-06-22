@@ -11,6 +11,7 @@ The two coexist in this repo by design: the spec is proven by eating its own coo
 
 ## Contents
 
+- [Install](#install)
 - [How to read this repo](#how-to-read-this-repo)
 - [kb/ layout](#kb-layout)
 - [Inbox → raw → docs pipeline](#inbox--raw--docs-pipeline)
@@ -20,6 +21,57 @@ The two coexist in this repo by design: the spec is proven by eating its own coo
 - [Skills](#skills)
 - [cascade / validate / reindex / reviews](#cascade--validate--reindex--reviews)
 - [Other directories](#other-directories)
+
+---
+
+## Install
+
+live_docs has three independent parts. Only the store differs per project; the CLI and skills are installed once, globally.
+
+| Part | What it is | Scope |
+|------|-----------|-------|
+| `ldoc` CLI | `scripts/ldoc.py`, symlinked onto your PATH | one machine-wide install; works in any terminal |
+| `livedocs` skills | the Claude Code plugin in `.claude-plugin/` (exposes the `.claude/skills/`) | one user-scope install; available in every project |
+| the **store** | the `kb/` graph, located by a `.living_doc.toml` marker | per consumer repo — just the marker file |
+
+### Quick start
+
+From inside this repo:
+
+```bash
+./install.sh                 # ldoc CLI on PATH + livedocs plugin (user scope)
+```
+
+That symlinks `ldoc` into `~/.local/bin` and runs `claude plugin marketplace add` + `claude plugin install livedocs@mtn-livedocs`. It's idempotent — safe to re-run. Restart any running Claude Code session afterward to pick up the skills. Useful flags: `--no-plugin` / `--no-cli` to install just one part, `--bin-dir DIR` to link `ldoc` elsewhere, `--init-store DIR` (see below). Run `./install.sh --help` for the full list.
+
+After installing, the skills are namespaced under the plugin: `/livedocs:garden`, `/livedocs:ingest-reference`, `/livedocs:validate`, and so on.
+
+### Pointing another repo at a store
+
+The CLI and skills are store-agnostic: they operate on whichever store the current directory's `.living_doc.toml` points at. To make a *consumer* repo read/write a shared store (e.g. this one, or a dedicated docs repo), drop a marker file at its root:
+
+```bash
+cd /path/to/consumer-repo
+/path/to/live_docs/install.sh --init-store /path/to/store   # writes .living_doc.toml
+ldoc count                                                  # confirm it resolves
+```
+
+`--init-store` writes absolute paths into the store's `kb/`. You can also hand-write the four-line `.living_doc.toml` (see [kb/ layout](#kb-layout)) — the helper is just convenience.
+
+### Manual / partial setup
+
+If you'd rather not run the script, the two install steps are:
+
+```bash
+# CLI — any PATH dir works; ldoc.py is stdlib-only
+ln -s /path/to/live_docs/scripts/ldoc.py ~/.local/bin/ldoc
+
+# skills plugin
+claude plugin marketplace add /path/to/live_docs
+claude plugin install livedocs@mtn-livedocs        # --scope user is the default
+```
+
+Working *inside this repo*, `ldoc` is also provided via `mise` (`mise trust` once per machine) without any global install.
 
 ---
 
@@ -247,6 +299,8 @@ ldoc review sign <review-id> --as "Your Name"
 
 Skills are AI-agent procedures in `.claude/skills/*/SKILL.md`. They are thin wrappers that invoke the shared `ldoc` CLI and `scripts/` logic; judgment lives in the skill, not the script.
 
+They ship as the **`livedocs` Claude Code plugin** (`.claude-plugin/`), so installing once (see [Install](#install)) makes them available in every project, namespaced as `/livedocs:<skill>` (e.g. `/livedocs:garden`). The table below lists the user-facing entry points; several internal sub-skills (`identify-key-concepts`, `map-concepts-to-docs`, `assess-blast-radius`, `synthesize-doc-changes`) are marked `user-invocable: false` and are driven by the entry points, not run directly.
+
 | Skill | When to use |
 |-------|-------------|
 | **apply-to-docs** | Landing a user request or design plan into the KB: extracts concepts, maps blast radius across the graph, batch-synthesizes a coherent new state for all affected docs |
@@ -304,6 +358,8 @@ The review ledger (`kb/reviews/`) holds post-hoc episode summaries. Skills emit 
 |------|----------|
 | `scripts/` | All shared tooling: `ldoc.py` (porcelain CLI), `livedocs/` (KB layer), `validate.py`, `reindex.py` |
 | `bin/` | `ldoc` symlink → `scripts/ldoc.py`; added to PATH via `mise.toml` |
+| `install.sh` | One-shot installer: `ldoc` on PATH + the `livedocs` plugin (see [Install](#install)) |
+| `.claude-plugin/` | `plugin.json` + `marketplace.json` — packages `.claude/skills/` as the installable `livedocs` plugin |
 | `.claude/skills/` | AI-agent skill definitions (see Skills above) |
 | `reports/` | Design analyses and research artifacts (not part of the KB graph) |
 | `.obsidian/` | Obsidian vault configuration for visual graph navigation |

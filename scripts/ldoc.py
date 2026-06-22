@@ -57,6 +57,7 @@ Subcommands (grouped):
   ── Maintenance ──
     validate
     reindex
+    viewer [--out PATH]
     review <new|list|show|sign> ...
 
   ── Help ──
@@ -1113,6 +1114,26 @@ def cmd_reindex(kb: KB, args) -> int:
     return result.returncode
 
 
+def cmd_viewer(kb: KB, args) -> int:
+    """Build the self-contained read-only HTML viewer."""
+    from livedocs.viewer import build_viewer
+
+    out_path = Path(args.out).resolve() if args.out else None
+    try:
+        path, n_docs, n_reviews = build_viewer(out_path=out_path)
+    except FileNotFoundError as e:
+        _err(str(e))
+        return 1
+    except OSError as e:
+        _err(str(e))
+        return 1
+
+    print(f"Wrote {path}")
+    print(f"  docs:    {n_docs}")
+    print(f"  reviews: {n_reviews}")
+    return 0
+
+
 def cmd_review(kb: KB, args) -> int:
     """Dispatch ldoc review <subverb> commands over the reviews/ ledger."""
     ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
@@ -1302,6 +1323,8 @@ def cmd_help(kb: KB, args) -> int:
   # Maintenance
   ldoc validate
   ldoc reindex
+  ldoc viewer
+  ldoc viewer --out build/viewer.html
   ldoc edges
   ldoc review new --since 2026-06-15T00:00:00Z
   ldoc review list
@@ -1569,6 +1592,18 @@ def build_parser() -> argparse.ArgumentParser:
     # --- reindex ---
     sub.add_parser("reindex", help="Rebuild docs/.index/ artifacts.")
 
+    # --- viewer ---
+    p = sub.add_parser(
+        "viewer",
+        help="Build the self-contained read-only HTML viewer (default: build/viewer.html).",
+    )
+    p.add_argument(
+        "--out",
+        default="",
+        metavar="PATH",
+        help="Output HTML path (default: <store-root>/build/viewer.html).",
+    )
+
     # --- edges ---
     p = sub.add_parser("edges", help="Print forward/reverse edge maps.")
     p.add_argument("--json", action="store_true")
@@ -1632,6 +1667,7 @@ COMMANDS = {
     "promote": cmd_promote,
     "validate": cmd_validate,
     "reindex": cmd_reindex,
+    "viewer": cmd_viewer,
     "edges": cmd_edges,
     "review": cmd_review,
     "help": cmd_help,
