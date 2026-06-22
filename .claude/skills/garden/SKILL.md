@@ -3,7 +3,9 @@ name: garden
 description: >
   Periodic maintenance pass that enforces Single Responsibility, catches drift,
   repairs orphans, and normalizes schema. The PRIME DIRECTIVE is decomposition:
-  find docs carrying more than one responsibility and propose concrete splits.
+  find docs carrying more than one responsibility and split them, applying the
+  fix directly — correctness is caught by the post-hoc review summary, not a
+  pre-write human gate.
   Use this when the store feels cluttered, after a wide cascade warning, when
   a doc has many history entries and seems to be a "hot file", or on a regular
   schedule (e.g. weekly). Each pass can be run alone or combined.
@@ -14,8 +16,12 @@ description: >
 The foundational test for every pass: **"Can this doc change for more than one
 reason?"** If yes, it violates Single Responsibility and is a split candidate.
 
-Gardening **proposes** and (with user confirmation) **applies** decompositions.
-It never silently rewrites meaning, deletes docs, or merges distinct ideas.
+Gardening **applies** its own judgment — it surveys, decides, and writes the
+decompositions and repairs it judges correct; correctness is caught by the
+post-hoc review summary, not a pre-write human gate (see `review-is-post-hoc`,
+`20260616181719`). It never silently rewrites meaning, deletes docs, or merges
+distinct ideas: every change lands with a `## Correction` section and history
+entry so the review layer can inspect or revert it afterward.
 
 ---
 
@@ -43,7 +49,7 @@ independent; run them in any order.
 
 ### Pass 1: `single-responsibility` (the headline pass)
 
-**Goal**: find docs bundling multiple responsibilities and propose concrete splits.
+**Goal**: find docs bundling multiple responsibilities and split them.
 
 1. List all docs and load each one:
    ```bash
@@ -59,7 +65,8 @@ independent; run them in any order.
    - The `requires` list is very long (pulling in many unrelated inputs).
    - The doc's title uses "and" or contains a list ("X and Y", "A, B, C").
    - You would naturally say "this doc owns X, but it also owns Y."
-3. For each split candidate, PROPOSE (do not auto-apply without confirmation):
+3. For each split candidate, decide the split (you apply this judgment; it is
+   not held for pre-write sign-off):
    - **New doc A**: what it owns, suggested title and type.
    - **New doc B**: what it owns, suggested title and type.
    - How `requires` (or `belongs_to`) edges would be rewired (which existing docs
@@ -67,7 +74,8 @@ independent; run them in any order.
      descendant-bearing signpost over A and B or be retired to `status: deprecated`).
    - The `requires` of A and B (they likely both depend on whatever the original
      depended on, unless that too should be split).
-4. Present the full proposal to the user. On confirmation:
+4. Apply the split (correctness is caught by the post-hoc review summary, not a
+   pre-write gate — `review-is-post-hoc`, `20260616181719`):
    - Create each new doc:
      ```bash
      ldoc new --type <type> --title "<title>" \
@@ -137,7 +145,7 @@ itself — potential stale dependents.
 ### Pass 3: `consistency`
 
 **Goal**: structural integrity — orphans, broken edges, missing required fields.
-(Overlaps `validate` but garden PROPOSES fixes rather than just reporting.)
+(Overlaps `validate` but garden APPLIES fixes rather than just reporting.)
 
 Start with an automated scan:
 ```bash
@@ -167,8 +175,10 @@ Then complement with graph-level checks:
    frontmatter (do NOT rename the file); apply with `ldoc set <id> --...` or direct
    frontmatter edit.
 
-Present all proposals together. On user confirmation, apply them, recording history
-entries with `ldoc history <id> --add "..."` for each modified doc.
+Apply the fixes you judge correct, recording history entries with
+`ldoc history <id> --add "..."` for each modified doc. They are not held for
+pre-write sign-off; the post-hoc review summary lets the human inspect or revert
+the episode afterward (`review-is-post-hoc`, `20260616181719`).
 
 ---
 
@@ -239,8 +249,11 @@ once and do not re-derive their model here:
   `ldoc show 20260619235018`.
 - `domain` (cross-cutting applied tag, open vocabulary): `ldoc show 20260615203839`.
 
-This pass **proposes only**; the human confirms before any write, identical to
-`curate-grouping` and garden's other passes.
+This pass **applies its own judgment**: deciding which scopes and domains the
+store reveals is an agentic curation call the skill makes and writes (see
+`grouping-is-agentic`, `20260618214139`), and correctness is caught by the
+post-hoc review summary, not a pre-write human gate (`review-is-post-hoc`,
+`20260616181719`) — identical to garden's other passes.
 
 #### Part A — Scope anchors
 
@@ -269,8 +282,8 @@ anchor name **derived from the doc itself**.
 3. Propose an anchor **name derived from the doc** — a short slug from its
    title/role (e.g. a "Viewer …" component → `viewer`; a "Review …" component →
    `review`). Show the candidate's subtree so the user sees exactly what the
-   anchor would scope. Propose applying it with `ldoc set <id> --scope <name>`
-   (do NOT run it; this is a proposal).
+   anchor would scope, then apply it with `ldoc set <id> --scope <name>`,
+   recording a history entry.
 
 #### Part B — Domains
 
@@ -307,12 +320,15 @@ subsystem.
 
 #### Discipline
 
-Propose-only; the human confirms before any write — same contract as
-`curate-grouping`. Reference `20260619235018` (scope) and `20260615203839`
-(domain) rather than re-explaining the model. Apply confirmed changes with the
-`ldoc set --scope` / `ldoc set --domain` mutators, recording a history entry on
-each touched doc, and emit the episode review summary **only if changes were
-actually applied** (garden's standing contract — see "Review summary").
+Apply the judgment, don't gate it — same contract as garden's other passes.
+Deciding the store's real scopes and domains is the skill's agentic call to make
+(`grouping-is-agentic`, `20260618214139`); correctness is caught post-hoc by the
+review summary (`review-is-post-hoc`, `20260616181719`), not a pre-write human
+sign-off. Reference `20260619235018` (scope) and `20260615203839` (domain) rather
+than re-explaining the model. Write the changes with the `ldoc set --scope` /
+`ldoc set --domain` mutators, recording a history entry on each touched doc, and
+emit the episode review summary **only if changes were actually applied**
+(garden's standing contract — see "Review summary").
 
 ---
 
@@ -326,14 +342,15 @@ Scanned: N docs
 Findings:
   <id>  "<title>"  — <finding description>
   ...
-Proposals:
+Actions:
   [1] <concrete action>
   [2] <concrete action>
   ...
-Awaiting confirmation to apply. Type "apply [1,2,...]" or "apply all" or "skip".
 ```
 
-After applying, print:
+The actions are the changes the pass judged correct and is applying — they are
+not held for pre-write sign-off. The post-hoc review summary is the safety net:
+the human inspects (and can revert) the episode afterward. After applying, print:
 ```
 Applied: [list of actions taken]
 Docs modified: [list of ids]
@@ -344,8 +361,8 @@ Docs modified: [list of ids]
 ## Review summary (change passes only; FINAL step)
 
 **Only when the pass applied changes** (splits, edits, field normalizations, or
-edge rewires were written to the store). A read-only or proposal-only pass that
-wrote nothing emits no summary.
+edge rewires were written to the store). A read-only surfacing pass (e.g.
+`staleness`) that wrote nothing emits no summary.
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating
 the summary never blocks the gardening result; it records the episode for later

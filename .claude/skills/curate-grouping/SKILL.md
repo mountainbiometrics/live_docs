@@ -1,18 +1,19 @@
 ---
 name: curate-grouping
 description: >
-  Survey the live_docs store and PROPOSE how docs should be grouped under
+  Survey the live_docs store and DECIDE how docs should be grouped under
   navigational signpost docs — which coherent themes deserve a descendant-bearing
   signpost, and which docs should `belongs_to` which signpost. This is the agentic
   curation decision: it reads orphans, shared domain/scope, requires/relates
-  clusters, and thematic coherence, then proposes new signpost docs and belongs_to
-  memberships. Proposal-only — the human confirms before any write, exactly like
-  garden. Use when the store has grown enough that navigation needs signposts,
+  clusters, and thematic coherence, then creates new signpost docs and wires
+  belongs_to memberships. The skill applies its own grouping judgment and writes;
+  correctness is caught by the post-hoc review summary, not a pre-write human gate.
+  Use when the store has grown enough that navigation needs signposts,
   when orphans accumulate, or when an existing grouping has become too broad and
   should split. A grouping signpost is a curated directory page, NOT an auto-dump.
 ---
 
-# curate-grouping — Decide what belongs under a grouping signpost (proposal-only)
+# curate-grouping — Decide what belongs under a grouping signpost
 
 The cardinal rule: **a grouping signpost is a navigational doc a human would want
 to land on** — a "this grouping contains these things" page, like a curated
@@ -28,20 +29,25 @@ whatever type fits the grouping's nature — `requirement`, `principle`, etc. Th
 member list is derived by consumers (the viewer renders it live from the
 `belongs_to` edges); there is no member-list prose stored in the signpost's body.
 
-This skill **proposes** groupings and (only on user confirmation) **applies**
-them — it never silently creates signpost docs or rewires `belongs_to` edges. The
-same proposal-only discipline as `garden`.
+Deciding which docs form a coherent group is an agentic curation judgment this
+skill performs (see `grouping-is-agentic`, `20260618214139`): it **applies** that
+judgment, creating signpost docs and wiring `belongs_to` edges directly.
+Correctness is caught by the post-hoc review summary, not a pre-write human gate
+(`review-is-post-hoc`, `20260616181719`) — every membership change lands with a
+history entry so the human can inspect or revert the episode afterward. The same
+apply-and-review discipline as `garden`.
 
 It decides the *structure* (which signposts exist, who belongs to whom). It does
 NOT write the aggregated overview prose — that is `summarize-descendants`, run
-after the memberships are confirmed.
+after the memberships are wired.
 
 ---
 
 ## Episode start time
 
 Before beginning, capture the current UTC time (used only if the pass actually
-writes — a pure proposal that writes nothing emits no review summary):
+writes — a survey that finds nothing to group writes nothing and emits no review
+summary):
 
 ```bash
 date -u +%Y-%m-%dT%H:%M:%SZ
@@ -136,9 +142,10 @@ than no grouping does.
 
 ---
 
-## Step 3 — Compose the proposal
+## Step 3 — Compose the plan
 
-For each grouping decision, propose concretely. Two kinds of proposal:
+For each grouping decision, lay it out concretely before writing. Three kinds of
+change:
 
 **(a) New signpost doc** for a coherent theme that lacks one:
 
@@ -155,7 +162,7 @@ For each grouping decision, propose concretely. Two kinds of proposal:
   (`20260615090011`) or a broader signpost?
 
 **(b) `belongs_to` membership wiring** for existing docs (including orphans)
-into an existing or proposed signpost:
+into an existing or newly-planned signpost:
 
 - Member id → target signpost id, with a one-clause reason it belongs.
 
@@ -168,13 +175,13 @@ mis-filed grouping:
 Present everything together in the garden output shape:
 
 ```
-curate-grouping — proposal
+curate-grouping — plan
 Scanned: N docs   (M orphans, K existing signposts)
 Findings:
   <theme>  — N coherent members, currently ungrouped
   <signpost-id>  — over-broad: spans "<sub-theme A>" and "<sub-theme B>"
   ...
-Proposals:
+Actions:
   [1] Create signpost "<type>: <theme>"  (belongs_to <root/parent-id>)
         members → belongs_to this signpost:
           <id>  "<title>"  — <one-clause why>
@@ -182,18 +189,20 @@ Proposals:
   [2] Wire <member-id> "<title>"  →  belongs_to <existing-signpost-id>
   [3] Split <signpost-id> into "<type>: <A>" + "<type>: <B>"; reassign members …
   ...
-Awaiting confirmation to apply. Type "apply [1,2,...]" or "apply all" or "skip".
-After applying, run summarize-descendants on each affected signpost to write its
-aggregated overview.
 ```
 
-Do not write anything in this step.
+The actions are the groupings the skill judged coherent and is applying (Step 4);
+they are not held for pre-write sign-off. After applying, run
+summarize-descendants on each affected signpost to write its aggregated overview.
+
+The actual writes happen in Step 4 — this step only lays the plan out so the
+batch lands coherently.
 
 ---
 
-## Step 4 — Apply confirmed proposals
+## Step 4 — Apply the groupings
 
-Only the proposals the user confirms. Structure changes only — no aggregated
+Write the changes the plan lays out. Structure changes only — no aggregated
 prose here (that is `summarize-descendants`).
 
 Create a new signpost doc — use the type that fits the grouping (typically
@@ -212,7 +221,7 @@ ldoc new \
 Note the returned id: **SIGNPOST_ID**. It becomes a signpost the moment members
 point up into it — no special type flag.
 
-Wire each confirmed member under its signpost (the member points up via
+Wire each planned member under its signpost (the member points up via
 `belongs_to`):
 
 ```bash
@@ -277,8 +286,8 @@ Address any ERRORs before finishing.
 
 ## Review summary (only if changes were applied; FINAL step)
 
-A pure proposal that wrote nothing emits no summary. If memberships/indexes were
-written:
+A survey that found nothing to group wrote nothing and emits no summary. If
+memberships/indexes were written:
 
 ```bash
 ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
