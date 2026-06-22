@@ -64,16 +64,16 @@ see Step 7).
 1. The caller supplies either the doc **id** (e.g. `20260615090003`) or a
    **title fragment**. If a title fragment is given, resolve it:
    ```bash
-   python3 scripts/ldoc.py resolve "title fragment"
+   ldoc resolve "title fragment"
    ```
    If more than one id matches, `ldoc resolve` will error listing candidates — ask
    the caller to confirm. If the fragment is ambiguous, use `ldoc find`:
    ```bash
-   python3 scripts/ldoc.py find "title fragment" --json
+   ldoc find "title fragment" --json
    ```
 2. Load the full doc — frontmatter, edges, and body:
    ```bash
-   python3 scripts/ldoc.py show <id>
+   ldoc show <id>
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
@@ -123,16 +123,16 @@ for all mutations; fall back to direct file editing only for body-text changes:
 
 ```bash
 # scalar frontmatter fields
-python3 scripts/ldoc.py set <id> --title "New title"
-python3 scripts/ldoc.py set <id> --level preference --status target
+ldoc set <id> --title "New title"
+ldoc set <id> --level preference --status target
 
 # edge additions / removals
-python3 scripts/ldoc.py link <id> --requires <dep-id>
-python3 scripts/ldoc.py unlink <id> --requires <old-dep-id>
-python3 scripts/ldoc.py link <id> --belongs-to <parent-id>
-python3 scripts/ldoc.py link <id> --relates <peer-id>
-python3 scripts/ldoc.py link <id> --provenance <norm-id>
-python3 scripts/ldoc.py link <id> --superseded-by <new-id>
+ldoc link <id> --requires <dep-id>
+ldoc unlink <id> --requires <old-dep-id>
+ldoc link <id> --belongs-to <parent-id>
+ldoc link <id> --relates <peer-id>
+ldoc link <id> --provenance <norm-id>
+ldoc link <id> --superseded-by <new-id>
 
 # body-text changes: edit docs/<id>.md directly (no ldoc verb for body in-place)
 ```
@@ -168,7 +168,7 @@ edge.
   peer cluster, this IS a change.
   - Record a history entry:
     ```bash
-    python3 scripts/ldoc.py history <id> --add "added provenance/relates: <label>"
+    ldoc history <id> --add "added provenance/relates: <label>"
     ```
   - Do NOT run cascade-check (provenance and relates are never cascade edges).
 
@@ -183,7 +183,7 @@ edge.
 **Action — history entry first:**
 
 ```bash
-python3 scripts/ldoc.py history <id> --add "<concise description of what changed and why>"
+ldoc history <id> --add "<concise description of what changed and why>"
 ```
 
 **Action — assess impact, then cascade (nested invocations):**
@@ -207,12 +207,12 @@ After writing all changes (including any cascade updates), confirm the store is
 structurally sound:
 
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 
 If `requires` or `belongs_to` edges were added or removed, also verify the edge map:
 ```bash
-python3 scripts/ldoc.py edges
+ldoc edges
 ```
 
 Address any ERRORs before finishing. Surface WARNINGs to the user for review.
@@ -254,7 +254,7 @@ skill owns the single summary for the episode. Emit one only when revise-doc is
 the outermost skill for this editing session.
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.
@@ -303,8 +303,8 @@ level to stabilize.
 substantive — this is a two-part mandatory operation, not just a field change:
 1. Add a `superseded_by` edge listing the doc(s) that replace this one:
    ```bash
-   python3 scripts/ldoc.py link <id> --superseded-by <new-id>
-   python3 scripts/ldoc.py set <id> --status deprecated
+   ldoc link <id> --superseded-by <new-id>
+   ldoc set <id> --status deprecated
    ```
 2. Add or update a `## Correction` section in the body explaining *why* the doc
    is wrong and which doc supersedes it. A bare status change with no

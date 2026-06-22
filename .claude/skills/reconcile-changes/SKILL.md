@@ -102,7 +102,7 @@ Write a concise digest of the session: what was decided, what was built, and
 to the raw tier:
 
 ```bash
-python3 scripts/ldoc.py ingest-raw \
+ldoc ingest-raw \
   --body "<session digest text>"   # or --body - to read from stdin
   --source "working-session <date/description>" \
   --title "Clipping: <short description of the session>"
@@ -212,7 +212,7 @@ summary.
 After all writes and cascades, confirm structural soundness:
 
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 
 Address any ERRORs before finishing. Surface WARNINGs to the user for review. Do
@@ -249,7 +249,7 @@ Then emit the single review summary for the whole episode. reconcile-changes own
 it (the nested sub-skills never emit one):
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.

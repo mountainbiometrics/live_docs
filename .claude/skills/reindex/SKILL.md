@@ -22,13 +22,13 @@ They are NEVER authoritative — the flat store is. If they conflict with
 
 ```bash
 # Canonical invocation via the porcelain CLI (preferred):
-python3 scripts/ldoc.py reindex
+ldoc reindex
 
 # Or via the shell wrapper (resolves paths relative to itself):
 .claude/skills/reindex/reindex.sh [docs_dir]
 
 # Or call the shared script directly from the repo root:
-python3 scripts/reindex.py [docs_dir]
+ldoc reindex [docs_dir]
 ```
 
 `docs_dir` defaults to the configured docs store (`kb/02-docs/` in this repo) relative to the repo root.
@@ -39,7 +39,7 @@ The script creates the index dir (`<docs>/.index/`) if it doesn't exist, then wr
 - `<docs>/.index/hierarchy.md`
 
 Orphan detection is NOT a reindex artifact. Orphan-hood is pure `belongs_to`
-topology and is computed FRESH on demand via `python3 scripts/ldoc.py orphans`
+topology and is computed FRESH on demand via `ldoc orphans`
 (backed by `kb.orphans()`) — the single source of truth — rather than baked into
 a stale `orphans.txt` cache.
 
@@ -103,7 +103,7 @@ definition itself; consumers (garden, the viewer) apply their own judgment.
 Because it is cheap, exact topology, it is computed FRESH on demand rather than
 cached — query the single source of truth:
 ```bash
-python3 scripts/ldoc.py orphans
+ldoc orphans
 ```
 This avoids the stale-cache hazard, consistent with how `cascade-check` uses
 `ldoc neighbors` instead of reading `dependents.json`.
@@ -116,7 +116,7 @@ This avoids the stale-cache hazard, consistent with how `cascade-check` uses
 - **Not hand-editable**: the comment `<!-- Generated ... do not hand-edit -->` in
   `hierarchy.md` signals this. Any manual edits will be overwritten on next run.
 - **Not authoritative**: `cascade-check` (and any verification) should call
-  `python3 scripts/ldoc.py neighbors <id> --json` (or `ldoc edges --json` for the
+  `ldoc neighbors <id> --json` (or `ldoc edges --json` for the
   full map) to get fresh data rather than reading `dependents.json` directly,
   to avoid stale-cache bugs. `dependents.json` is provided as a convenience for
   humans and other tools.
@@ -126,7 +126,7 @@ This avoids the stale-cache hazard, consistent with how `cascade-check` uses
 
 ## Implementation
 
-Logic lives in `scripts/reindex.py` (imports `scripts/livedocs.py`).
-The wrapper `.claude/skills/reindex/reindex.sh` calls it with an absolute path
-resolved relative to the wrapper's own location, so it works from any CWD.
-Stdlib only — no external dependencies.
+Logic lives in the `livedocs` package, exposed as the `ldoc reindex` subcommand.
+The wrapper `.claude/skills/reindex/reindex.sh` just `exec`s `ldoc reindex`; the
+installed `ldoc` locates the store by discovery (walks up from CWD for
+`.living_doc.toml`), so it works from any CWD. Stdlib only — no external deps.

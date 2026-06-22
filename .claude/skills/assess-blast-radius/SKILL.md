@@ -82,7 +82,7 @@ graph from every directly-matched doc whose relationship is **not**
 For each such doc:
 
 ```bash
-python3 scripts/ldoc.py neighbors <id> --json
+ldoc neighbors <id> --json
 ```
 
 This returns `{requires, belongs_to, dependents, relates, provenance}`. Walk
@@ -92,14 +92,14 @@ cascade edges. Skip `relates` and `provenance` (soft navigation edges).
 If you want the full two-hop picture up front:
 
 ```bash
-python3 scripts/ldoc.py graph <id> --depth 2 --direction both --json
+ldoc graph <id> --depth 2 --direction both --json
 ```
 
 For each neighbor not yet in the map, load it and assess whether the new intent
 affects it:
 
 ```bash
-python3 scripts/ldoc.py show <neighbor-id>
+ldoc show <neighbor-id>
 ```
 
 Enqueue neighbors whose verdict is `cascade-extend`, `cascade-full`, or

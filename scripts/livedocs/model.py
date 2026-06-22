@@ -7,23 +7,34 @@ Stdlib only. No external dependencies.
 
 from __future__ import annotations
 
-import json
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
-# Paths — resolved at import time, relative to THIS file's location
+# Paths — located by DISCOVERY, not by where this code lives
 # ---------------------------------------------------------------------------
+#
+# A single installed `ldoc` must operate on whichever store the directory you're
+# standing in belongs to, so resolution is anchored to the CURRENT WORKING
+# DIRECTORY, not to __file__. Git-style: walk up from the CWD looking for a
+# `.living_doc.toml` marker; if none is found in the CWD or any parent, fall
+# back to a per-user config at ~/.config/living_doc/config.toml; if neither
+# exists, complain and exit.
+#
+# Paths inside a config file resolve relative to the directory CONTAINING that
+# file (absolute and ~ paths are kept as-is). So a config can point at docs that
+# live in a different repo entirely — a shared "mono-doc" store for several
+# related code repos.
 
-# scripts/livedocs/model.py → scripts/livedocs/ → scripts/ → repo_root
-_SCRIPTS_DIR: Path = Path(__file__).resolve().parent.parent
-REPO_ROOT: Path = _SCRIPTS_DIR.parent
+CONFIG_FILENAME = ".living_doc.toml"
+HOME_CONFIG: Path = Path.home() / ".config" / "living_doc" / "config.toml"
 
-# Built-in defaults reproduce TODAY's layout exactly (docs/, raw/, reviews/ at
-# repo root; inbox/ alongside; the index cache lives under docs/.index).
+# Built-in defaults, used for any key a located config omits. Relative to the
+# config file's own directory (the store root).
 _DEFAULT_PATHS = {
     "docs": "docs",
     "raw": "raw",
@@ -32,11 +43,8 @@ _DEFAULT_PATHS = {
     "index": None,  # None → derived as <docs>/.index
 }
 
-# Optional config file at repo root. Keys are any subset of the above; values
-# are paths relative to repo root (or absolute). Parsed with stdlib json only.
-_CONFIG_FILE = REPO_ROOT / "livedocs.config.json"
-
-# Per-key env var overrides (win over the config file).
+# Per-key env var overrides (win over the config file). Relative values resolve
+# against the CWD, since they are invocation-time overrides.
 _ENV_VARS = {
     "docs": "LIVEDOCS_DOCS_DIR",
     "raw": "LIVEDOCS_RAW_DIR",
@@ -45,50 +53,136 @@ _ENV_VARS = {
 }
 
 
-def _load_config() -> dict:
-    """Read livedocs.config.json if present; return {} on absence or parse error.
+class LivedocsConfigError(Exception):
+    """No live_docs config could be located by discovery."""
 
-    Parse errors are swallowed deliberately: a malformed override must never
-    break the store; the built-in defaults always remain a safe fallback.
+
+def _find_config() -> "tuple[Path | None, list[Path]]":
+    """Locate the governing config file.
+
+    Returns (config_path, searched): the chosen file (or None if none exists)
+    and every location inspected, so a failure can show its work.
     """
-    if not _CONFIG_FILE.is_file():
-        return {}
+    searched: list[Path] = []
+    cwd = Path.cwd().resolve()
+    for d in (cwd, *cwd.parents):
+        candidate = d / CONFIG_FILENAME
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate, searched
+    searched.append(HOME_CONFIG)
+    if HOME_CONFIG.is_file():
+        return HOME_CONFIG, searched
+    return None, searched
+
+
+def _parse_toml(text: str) -> dict:
+    """Parse a live_docs config into a flat dict.
+
+    Prefer a real TOML parser when the runtime offers one (`tomllib` on 3.11+,
+    or the `tomli` backport if installed). Otherwise fall back to a minimal
+    flat-key reader that understands exactly what a config needs: top-level
+    `key = "value"` string assignments, `#` comments, and blank lines. The
+    config is deliberately a flat name→path map, so this subset is sufficient
+    and keeps the tool zero-dependency on a stock Python 3.9.
+    """
     try:
-        data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (ValueError, OSError):
-        return {}
+        import tomllib as _toml  # py3.11+
+    except ModuleNotFoundError:
+        try:
+            import tomli as _toml  # optional backport
+        except ModuleNotFoundError:
+            _toml = None
+    if _toml is not None:
+        return _toml.loads(text)
+
+    out: dict = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith("["):
+            continue
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip()
+        if val and val[0] in "\"'":
+            quote = val[0]
+            end = val.find(quote, 1)
+            val = val[1:end] if end != -1 else val[1:]
+        else:
+            val = val.split("#", 1)[0].strip()
+        if key:
+            out[key] = val
+    return out
 
 
-def _resolve_path(value: str) -> Path:
-    """Resolve a configured path string relative to REPO_ROOT (absolute kept as-is)."""
-    p = Path(value)
-    return p if p.is_absolute() else (REPO_ROOT / p)
+def _resolve_path(value: str, base: Path) -> Path:
+    """Resolve a configured path string relative to `base` (absolute/~ kept as-is)."""
+    p = Path(value).expanduser()
+    return p if p.is_absolute() else (base / p)
 
 
-def _resolve_dir(key: str, config: dict) -> Path:
-    """Resolve one directory by precedence: env var > config file > built-in default."""
-    env_name = _ENV_VARS.get(key)
-    if env_name and os.environ.get(env_name):
-        return _resolve_path(os.environ[env_name])
-    if key in config and config[key]:
-        return _resolve_path(str(config[key]))
-    return REPO_ROOT / _DEFAULT_PATHS[key]
+def _resolve() -> dict:
+    """Run discovery and resolve every store directory. Raises on no config."""
+    config_path, searched = _find_config()
+    cwd = Path.cwd().resolve()
+
+    if config_path is None:
+        # Escape hatch: explicit env overrides can operate without a marker file
+        # (e.g. CI). Otherwise there is no store to point at — complain.
+        if not any(os.environ.get(v) for v in _ENV_VARS.values()):
+            looked = "\n".join(f"  - {p}" for p in searched)
+            raise LivedocsConfigError(
+                f"no live_docs config found.\n"
+                f"Looked for '{CONFIG_FILENAME}' in the current directory and each "
+                f"parent, then for a home config:\n{looked}\n"
+                f"Create a '{CONFIG_FILENAME}' at your store root, or set a "
+                f"LIVEDOCS_* override."
+            )
+        base = cwd
+        config: dict = {}
+    else:
+        base = config_path.parent
+        try:
+            config = _parse_toml(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise LivedocsConfigError(f"could not read config {config_path}: {e}")
+
+    resolved: dict = {"root": base}
+    for key in ("docs", "raw", "reviews", "inbox"):
+        env_val = os.environ.get(_ENV_VARS[key])
+        if env_val:
+            resolved[key] = _resolve_path(env_val, cwd)
+        elif config.get(key):
+            resolved[key] = _resolve_path(str(config[key]), base)
+        else:
+            resolved[key] = base / _DEFAULT_PATHS[key]
+
+    # Index cache derives under docs by default; an explicit `index` key
+    # (config only — no env var) overrides it.
+    if config.get("index"):
+        resolved["index"] = _resolve_path(str(config["index"]), base)
+    else:
+        resolved["index"] = resolved["docs"] / ".index"
+    return resolved
 
 
-_config = _load_config()
+try:
+    _paths = _resolve()
+except LivedocsConfigError as e:
+    # Every consumer of this module is a CLI; a clean message beats a traceback.
+    sys.stderr.write(f"ldoc: {e}\n")
+    sys.exit(2)
 
-DOCS_DIR: Path = _resolve_dir("docs", _config)
-RAW_DIR: Path = _resolve_dir("raw", _config)
-REVIEWS_DIR: Path = _resolve_dir("reviews", _config)
-INBOX_DIR: Path = _resolve_dir("inbox", _config)
-
-# Index cache is derived under docs by default; an explicit `index` key
-# (config only — no env var) overrides it.
-if _config.get("index"):
-    INDEX_DIR: Path = _resolve_path(str(_config["index"]))
-else:
-    INDEX_DIR: Path = DOCS_DIR / ".index"
+# REPO_ROOT is retained for back-compat; it now means the discovered store root
+# (the directory containing the config), not the directory this code lives in.
+REPO_ROOT: Path = _paths["root"]
+DOCS_DIR: Path = _paths["docs"]
+RAW_DIR: Path = _paths["raw"]
+REVIEWS_DIR: Path = _paths["reviews"]
+INBOX_DIR: Path = _paths["inbox"]
+INDEX_DIR: Path = _paths["index"]
 
 
 # ---------------------------------------------------------------------------

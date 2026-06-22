@@ -67,8 +67,8 @@ the single review summary.
 Load the descendant-bearing doc and the docs that belong to it:
 
 ```bash
-python3 scripts/ldoc.py show <parent-id>
-python3 scripts/ldoc.py neighbors <parent-id> --kind dependents --json
+ldoc show <parent-id>
+ldoc neighbors <parent-id> --kind dependents --json
 ```
 
 The members are the docs that hard-edge *up into* this parent via `belongs_to` —
@@ -79,7 +79,7 @@ For each member, read enough to characterize it — its `summary` is a starting
 point, but read the body when the summary is thin or stale:
 
 ```bash
-python3 scripts/ldoc.py show <member-id>
+ldoc show <member-id>
 ```
 
 Skip `deprecated` members from the guide (they are no longer part of what the
@@ -122,8 +122,8 @@ Load the current body, then write the full new body (the guide prose only),
 replacing whatever `curate-grouping` or a prior run left:
 
 ```bash
-python3 scripts/ldoc.py show <parent-id>            # read current body
-python3 scripts/ldoc.py set <parent-id> --body -    # then pipe the full new body on stdin
+ldoc show <parent-id>            # read current body
+ldoc set <parent-id> --body -    # then pipe the full new body on stdin
 ```
 
 ---
@@ -140,7 +140,7 @@ the orientation guide condensed.
 - Name the grouping and its purpose; the contents live in the body guide.
 
 ```bash
-python3 scripts/ldoc.py set <parent-id> --summary "<the tight signpost>"
+ldoc set <parent-id> --summary "<the tight signpost>"
 ```
 
 ---
@@ -148,7 +148,7 @@ python3 scripts/ldoc.py set <parent-id> --summary "<the tight signpost>"
 ## Step 5 — Record history
 
 ```bash
-python3 scripts/ldoc.py history <parent-id> --add "summarize-descendants: synthesized aggregated overview over <N> members"
+ldoc history <parent-id> --add "summarize-descendants: synthesized aggregated overview over <N> members"
 ```
 
 ---
@@ -156,7 +156,7 @@ python3 scripts/ldoc.py history <parent-id> --add "summarize-descendants: synthe
 ## Step 6 — Validate
 
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 
 Address any ERRORs before finishing.
@@ -195,7 +195,7 @@ decision (`20260615204138`) intends.
 For **standalone** invocations, after the write completes:
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.

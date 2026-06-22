@@ -81,7 +81,7 @@ or "pasted". If the source is ambiguous, ask before proceeding.
 ## Step 2 — Create the RAW reference doc (immutable clipping)
 
 ```bash
-python3 scripts/ldoc.py ingest-raw \
+ldoc ingest-raw \
   --from-file <path>           # OR: --body "<raw content>" OR: --body -
   --source "<where it came from>" \
   --title "Clipping: <descriptive title>"   # optional but recommended
@@ -111,7 +111,7 @@ Determine `kind`:
 - `clipping` — only if none of the above fit.
 
 ```bash
-python3 scripts/ldoc.py new \
+ldoc new \
   --type reference \
   --kind <kind> \
   --status reference \
@@ -206,7 +206,7 @@ floating extracted doc with neither `provenance` nor `source` nor `requires` is 
 provenance violation — add the `provenance` edge. Then validate:
 
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 
 ---
@@ -237,7 +237,7 @@ Then emit the single review summary for the entire ingest episode. ingest-
 reference owns it (the nested sub-skills never emit one):
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.
@@ -250,7 +250,7 @@ Review summary created: <id>   (reviews/<id>.md)
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): it records the
 ingest episode for later signoff and never blocks the change. Reviewers inspect
-it via `python3 scripts/ldoc.py review show <id>`.
+it via `ldoc review show <id>`.
 
 ---
 

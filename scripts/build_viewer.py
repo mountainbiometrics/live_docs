@@ -33,9 +33,19 @@ FM_RE = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
 
 
 def load_config():
-    cfg_path = os.path.join(REPO, "livedocs.config.json")
-    with open(cfg_path) as f:
-        return json.load(f)
+    # Minimal reader for the flat `.living_doc.toml` at the repo root. This is a
+    # one-shot static export anchored to this checkout, so we read the local
+    # marker directly rather than going through livedocs' CWD-based discovery.
+    cfg_path = os.path.join(REPO, ".living_doc.toml")
+    cfg = {}
+    with open(cfg_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            cfg[key.strip()] = val.strip().strip("\"'")
+    return cfg
 
 
 def split_frontmatter(text):

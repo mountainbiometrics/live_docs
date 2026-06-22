@@ -56,37 +56,37 @@ For every concept, search for candidate matching docs using its `Asserts`
 sentence as the search key:
 
 ```bash
-python3 scripts/ldoc.py find "<concept noun phrase or key claim>"
+ldoc find "<concept noun phrase or key claim>"
 ```
 
 If the first search returns no strong candidates, try alternate phrasings:
 
 ```bash
-python3 scripts/ldoc.py find "<alternate phrasing>"
+ldoc find "<alternate phrasing>"
 ```
 
 Also list all docs of the concept's likely type to catch anything text search
 misses:
 
 ```bash
-python3 scripts/ldoc.py ls --type <type> --json
+ldoc ls --type <type> --json
 ```
 
 For a dedup/conflict scan around an existing target doc (revise-doc's emphasis),
 also pull the doc's neighbors so upstream and downstream candidates are included:
 
 ```bash
-python3 scripts/ldoc.py neighbors <target-id> --json
+ldoc neighbors <target-id> --json
 ```
 
 For each candidate, load the full doc and read it:
 
 ```bash
-python3 scripts/ldoc.py show <candidate-id>
+ldoc show <candidate-id>
 ```
 
 To surface dangling edges across the store before relying on the graph, run
-`python3 scripts/ldoc.py edges --json` and check the `dangling` key; surface any
+`ldoc edges --json` and check the `dangling` key; surface any
 to the user.
 
 ---

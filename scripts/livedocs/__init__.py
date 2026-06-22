@@ -5,8 +5,9 @@ Stdlib only (pathlib, re, datetime). No external dependencies. Import from other
 
     from livedocs import DOCS_DIR, RAW_DIR, REVIEWS_DIR, parse_doc, load_all, forward_edges, reverse_edges, id_title_map, generate_id, KB
 
-Repo-root detection: the repo root is the parent of the parent of the directory that
-contains this package (scripts/livedocs/ → scripts/ → repo root).
+Store location: resolved by discovery, not by where this code lives. `ldoc` walks
+up from the current working directory for a `.living_doc.toml` marker, falling back
+to ~/.config/living_doc/config.toml. See model.py for the resolution rules.
 """
 
 from .model import (

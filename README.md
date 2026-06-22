@@ -45,7 +45,7 @@ kb/
   reviews/       # review ledger — post-hoc episode summaries
 ```
 
-Paths are configured in `livedocs.config.json` at the repo root. Per-key `LIVEDOCS_*_DIR` environment variables override the config file; the built-in defaults fall back to a root-layout if neither is set. A deployment can relocate any box without touching code.
+Paths are configured in a `.living_doc.toml` file, located by discovery: `ldoc` walks up from the working directory looking for one, falling back to `~/.config/living_doc/config.toml`. Paths inside it resolve relative to the config file's own directory (absolute and `~` honored), so the docs need not live in the same repo as the code that reads them — a single store can serve several related repos. Per-key `LIVEDOCS_*_DIR` environment variables override the file; omitted keys fall back to a root-layout. A deployment can relocate any box, or point at a shared store elsewhere, without touching code.
 
 ---
 
@@ -140,14 +140,14 @@ Cascade-hard edges (`requires` + `belongs_to`) drive `cascade-check` and the rev
 
 ## ldoc CLI
 
-`ldoc` is the porcelain CLI. It lives in `scripts/ldoc.py`. On PATH via mise:
+`ldoc` is the porcelain CLI (`scripts/ldoc.py`). It must be on your PATH; this repo provides it via mise:
 
 ```bash
 mise trust          # once per machine, first time in this repo
 ldoc help           # grouped verb overview with copy-pasteable examples
 ```
 
-Without mise: `python3 scripts/ldoc.py <verb> ...`
+Elsewhere, put `ldoc` on your PATH yourself (a symlink or thin wrapper to `scripts/ldoc.py`). It locates the store by discovery, so it runs from any directory that belongs to one.
 
 All ref arguments accept `id`, `label`, or `title` (exact or unique substring). Most read verbs accept multiple refs space-separated; pass `-` as the sole ref to read from stdin.
 

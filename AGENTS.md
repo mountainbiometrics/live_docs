@@ -39,7 +39,7 @@ ldoc validate           # check integrity
 ldoc reindex            # rebuild .index/ artifacts
 ```
 
-The `ldoc` porcelain is on PATH inside this repo via mise. Without mise: `python3 scripts/ldoc.py <verb> ...`
+The `ldoc` porcelain must be on your PATH; inside this repo mise provides it. It locates the store by walking up from the working directory for `.living_doc.toml`, so it runs from any directory that belongs to a store.
 
 **Mutators are intentionally dumb** — they write what you tell them and validate refs, but they do not judge impact, cascade propagation, or cross-doc consistency. That judgment lives in the skills. Always invoke the appropriate skill when making substantive changes; do not call ldoc mutations directly as a substitute for running the skill.
 

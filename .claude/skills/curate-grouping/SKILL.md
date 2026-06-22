@@ -63,13 +63,13 @@ groupings:
    descendant-bearing doc and the children that hard-edge into it. Cross-check a
    candidate parent's live membership with:
    ```bash
-   python3 scripts/ldoc.py neighbors <id> --kind dependents --json
+   ldoc neighbors <id> --kind dependents --json
    ```
 2. **Orphans** — docs outside the `belongs_to` hierarchy are the prime
    candidates for a home. Query them FRESH (single source of truth, computed
    live — not a stale cache):
    ```bash
-   python3 scripts/ldoc.py orphans
+   ldoc orphans
    ```
    This is pure `belongs_to` in/out topology with no type exemptions; apply your
    own judgment (e.g. `reference`/`type` docs are legitimately edge-light and not
@@ -77,19 +77,19 @@ groupings:
 3. **Shared `domain` / `scope`** — docs tagged into the same area are a thematic
    cluster signal:
    ```bash
-   python3 scripts/ldoc.py find --domain "<domain>" --json
-   python3 scripts/ldoc.py find --scope "<scope>" --json
+   ldoc find --domain "<domain>" --json
+   ldoc find --scope "<scope>" --json
    ```
 4. **`requires` / `relates` clusters** — docs that depend on or see-also each
    other form natural neighborhoods:
    ```bash
-   python3 scripts/ldoc.py neighbors <id> --json
-   python3 scripts/ldoc.py graph <id> --depth 2 --direction both --json
+   ldoc neighbors <id> --json
+   ldoc graph <id> --depth 2 --direction both --json
    ```
 5. **Full inventory** for thematic coherence — skim titles/types to recognize a
    theme text search would miss:
    ```bash
-   python3 scripts/ldoc.py ls --json
+   ldoc ls --json
    ```
 
 ---
@@ -200,7 +200,7 @@ Create a new signpost doc — use the type that fits the grouping (typically
 `component`):
 
 ```bash
-python3 scripts/ldoc.py new \
+ldoc new \
   --type <fitting-type> \
   --title "<theme>" \
   --level incidental \
@@ -216,16 +216,16 @@ Wire each confirmed member under its signpost (the member points up via
 `belongs_to`):
 
 ```bash
-python3 scripts/ldoc.py link <member-id> --belongs-to <SIGNPOST_ID>
-python3 scripts/ldoc.py history <member-id> --add "curate-grouping: grouped under <SIGNPOST_ID> (<theme>)"
+ldoc link <member-id> --belongs-to <SIGNPOST_ID>
+ldoc history <member-id> --add "curate-grouping: grouped under <SIGNPOST_ID> (<theme>)"
 ```
 
 For a recategorization, unlink the old membership first:
 
 ```bash
-python3 scripts/ldoc.py unlink <member-id> --belongs-to <old-signpost-id>
-python3 scripts/ldoc.py link   <member-id> --belongs-to <new-signpost-id>
-python3 scripts/ldoc.py history <member-id> --add "curate-grouping: moved from <old-signpost-id> to <new-signpost-id>"
+ldoc unlink <member-id> --belongs-to <old-signpost-id>
+ldoc link   <member-id> --belongs-to <new-signpost-id>
+ldoc history <member-id> --add "curate-grouping: moved from <old-signpost-id> to <new-signpost-id>"
 ```
 
 For a split, create the two new signposts, reassign each member's `belongs_to`,
@@ -236,7 +236,7 @@ is invalid — add a `## Correction` section naming the replacements and the
 Record a history entry on each new signpost doc:
 
 ```bash
-python3 scripts/ldoc.py history <SIGNPOST_ID> --add "curate-grouping: created to group <N> members under <theme>"
+ldoc history <SIGNPOST_ID> --add "curate-grouping: created to group <N> members under <theme>"
 ```
 
 ---
@@ -268,7 +268,7 @@ it fresh, so there is nothing to regenerate there.)
 ## Step 7 — Validate
 
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 
 Address any ERRORs before finishing.
@@ -281,7 +281,7 @@ A pure proposal that wrote nothing emits no summary. If memberships/indexes were
 written:
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.

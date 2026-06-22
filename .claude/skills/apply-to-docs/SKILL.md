@@ -78,7 +78,7 @@ skill creates. Archive it now, before any concept extraction, so all new docs
 can point back to it.
 
 ```bash
-python3 scripts/ldoc.py ingest-raw \
+ldoc ingest-raw \
   --body "<verbatim request text>" \
   --source "user-request" \
   --title "Clipping: <short description of the request>"
@@ -90,7 +90,7 @@ graph — and is the immutable original.
 Then create a normalized reference doc summarizing the request's intent:
 
 ```bash
-python3 scripts/ldoc.py new \
+ldoc new \
   --type reference \
   --kind plan \
   --status reference \
@@ -198,7 +198,7 @@ downstream, and returns the list of writes performed in context for the report.
 After all writes, confirm structural soundness:
 
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 
 Address any ERRORs before finishing. Surface WARNINGs to the user for review.
@@ -235,7 +235,7 @@ apply-to-docs owns the single review summary for the episode (the nested
 sub-skills never emit one):
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.

@@ -29,7 +29,7 @@ principle.
 
 Emit a review summary **only when cascade-check is invoked directly by the
 user** (standalone invocation). In that case, capture the start timestamp before
-Step 1 and run `python3 scripts/ldoc.py review new --since "<that literal
+Step 1 and run `ldoc review new --since "<that literal
 timestamp>"` as the final step after Step 7/8. See "Step 9" below.
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): the summary
@@ -77,7 +77,7 @@ the entire reachable impact set before a single doc is modified.
 For each changed doc id, retrieve its full neighbor set:
 
 ```bash
-python3 scripts/ldoc.py neighbors <id> --json
+ldoc neighbors <id> --json
 ```
 
 This returns `{requires, belongs_to, provenance, relates, dependents, referenced_by}` — all
@@ -97,13 +97,13 @@ for fresh data.
 If you need the full two-hop picture before starting, use:
 
 ```bash
-python3 scripts/ldoc.py graph <id> --depth 2 --direction both --json
+ldoc graph <id> --depth 2 --direction both --json
 ```
 
 To surface dangling edges across the whole store before proceeding, run:
 
 ```bash
-python3 scripts/ldoc.py edges --json
+ldoc edges --json
 ```
 
 and check the `dangling` key. Surface any reported dangling edges to the user
@@ -211,7 +211,7 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
 
 1. Load the doc to understand its current content:
    ```bash
-   python3 scripts/ldoc.py show <n>
+   ldoc show <n>
    ```
 2. Write the doc as its single correct current state, given everything that
    changed across the full impact set. If prior text would now be misleading,
@@ -223,11 +223,11 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
    edge changes, and direct file editing only for body-text changes:
    ```bash
    # scalar field update
-   python3 scripts/ldoc.py set <n> --status deprecated
+   ldoc set <n> --status deprecated
    # edge updates
-   python3 scripts/ldoc.py link <n> --requires <new-dep-id>
-   python3 scripts/ldoc.py link <n> --belongs-to <parent-id>
-   python3 scripts/ldoc.py link <n> --superseded-by <replacement-id>
+   ldoc link <n> --requires <new-dep-id>
+   ldoc link <n> --belongs-to <parent-id>
+   ldoc link <n> --superseded-by <replacement-id>
    ```
    **Deprecation rule**: if restoring consistency means deprecating the doc,
    a bare `--status deprecated` is insufficient. You MUST also add a
@@ -237,7 +237,7 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
 
 3. Record the cascade history entry:
    ```bash
-   python3 scripts/ldoc.py history <n> --add "cascade-check: updated because <source-id> changed — <one sentence why>"
+   ldoc history <n> --add "cascade-check: updated because <source-id> changed — <one sentence why>"
    ```
 
 ---
@@ -248,7 +248,7 @@ After the write pass completes, record a history entry on EACH originally-change
 doc summarizing the cascade session outcome:
 
 ```bash
-python3 scripts/ldoc.py history <changed-id> --add "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
+ldoc history <changed-id> --add "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
 ```
 
 ---
@@ -290,7 +290,7 @@ a duplicate, overlapping review record.
 For **standalone invocations only**, after the walk and smell-check are complete:
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.

@@ -47,8 +47,8 @@ independent; run them in any order.
 
 1. List all docs and load each one:
    ```bash
-   python3 scripts/ldoc.py ls --json          # full id list
-   python3 scripts/ldoc.py show <id>          # title, type, edges, history, body
+   ldoc ls --json          # full id list
+   ldoc show <id>          # title, type, edges, history, body
    ```
 2. Ask: "Can this doc change for more than one reason?" Signals that a doc is a
    split candidate:
@@ -70,22 +70,22 @@ independent; run them in any order.
 4. Present the full proposal to the user. On confirmation:
    - Create each new doc:
      ```bash
-     python3 scripts/ldoc.py new --type <type> --title "<title>" \
+     ldoc new --type <type> --title "<title>" \
        --level <level> --status <status> --requires <dep-ids>
      ```
    - Retire the original doc with a full deprecation (NOT a bare status flip):
      ```bash
-     python3 scripts/ldoc.py set <original-id> --status deprecated \
+     ldoc set <original-id> --status deprecated \
        --superseded-by <A-id> <B-id>
-     python3 scripts/ldoc.py history <original-id> --add "split into <A-id> and <B-id>"
+     ldoc history <original-id> --add "split into <A-id> and <B-id>"
      ```
      Also add a `## Correction` section to the original doc body explaining why
      it was split and which docs replace it.
    - Update any docs that pointed to the original and now should point to A or B:
      ```bash
-     python3 scripts/ldoc.py unlink <pointing-doc> --requires <original-id>
-     python3 scripts/ldoc.py link   <pointing-doc> --requires <A-id>
-     python3 scripts/ldoc.py history <pointing-doc> --add "rewired requires from <original-id> to <A-id> after split"
+     ldoc unlink <pointing-doc> --requires <original-id>
+     ldoc link   <pointing-doc> --requires <A-id>
+     ldoc history <pointing-doc> --add "rewired requires from <original-id> to <A-id> after split"
      ```
 5. After **all** split writes are complete for this pass, run `cascade-check`
    as a **nested invocation** (garden owns the episode review summary; cascade-check
@@ -116,7 +116,7 @@ itself — potential stale dependents.
 
 1. For each doc D, load its history and note the most recent `at` timestamp:
    ```bash
-   python3 scripts/ldoc.py get <id> --json   # includes history array
+   ldoc get <id> --json   # includes history array
    ```
 2. For each id in D's `requires` and `belongs_to` hard edges (from
    `ldoc neighbors <id> --kind requires --json` and
@@ -141,7 +141,7 @@ itself — potential stale dependents.
 
 Start with an automated scan:
 ```bash
-python3 scripts/ldoc.py validate
+ldoc validate
 ```
 This surfaces broken hard-edge references and missing/invalid fields.
 Then complement with graph-level checks:
@@ -153,7 +153,7 @@ Then complement with graph-level checks:
    AND no `belongs_to` descendants. Query them FRESH (single source of truth,
    computed live — never a stale cache):
    ```bash
-   python3 scripts/ldoc.py orphans
+   ldoc orphans
    ```
    Apply your own judgment on top of this raw topology: skip frozen/`reference`
    docs (supporting evidence wired via `provenance`, not `belongs_to`) and
@@ -215,15 +215,104 @@ Procedure:
    - Drop the `state:` line in both cases.
 3. For canonical-field enum corrections (e.g. `status`, `level`), use:
    ```bash
-   python3 scripts/ldoc.py set <id> --status living   # example
+   ldoc set <id> --status living   # example
    ```
 4. Changes are applied **non-destructively**: record a history entry noting the
    normalization:
    ```bash
-   python3 scripts/ldoc.py history <id> --add "field-aliases normalization: renamed <old> → <new>"
+   ldoc history <id> --add "field-aliases normalization: renamed <old> → <new>"
    ```
    Do not change any semantic content.
 5. Report how many docs were normalized and which fields were affected.
+
+---
+
+### Pass 5: `tag-curation`
+
+**Goal**: keep the two facet axes — `scope` (topological zone) and `domain`
+(cross-cutting concern) — honest as the store grows. **Discovery, not a
+checklist**: there is no canonical list of domains to enforce. The relevant
+domains are whatever *this* store currently reveals, and they shift over time —
+which is exactly why this is a gardening concern. Read the two governing docs
+once and do not re-derive their model here:
+- `scope` (topological, `belongs_to`-derived anchor + inheritance):
+  `ldoc show 20260619235018`.
+- `domain` (cross-cutting applied tag, open vocabulary): `ldoc show 20260615203839`.
+
+This pass **proposes only**; the human confirms before any write, identical to
+`curate-grouping` and garden's other passes.
+
+#### Part A — Scope anchors
+
+`scope` is **declared on a few structural anchors and inherited down the
+`belongs_to` subtree** — leaves are not hand-stamped. The job is to find
+descendant-bearing structural docs that *should* declare a distinct anchor but
+don't yet (or that redundantly restate an inherited value), and propose an
+anchor name **derived from the doc itself**.
+
+1. Build the live `belongs_to` tree:
+   ```bash
+   ldoc ls --json
+   ldoc get <id> --json    # frontmatter incl. belongs_to, scope
+   ```
+2. **Anchor candidates** = descendant-bearing structural docs (targets of
+   `belongs_to` edges — typically `component`, sometimes a structural
+   `requirement`). For each, compute its **effective scope** (the union of
+   `scope` values along its full `belongs_to` genealogy, including its own — see
+   `20260619235018`). Flag a candidate when:
+   - it bears descendants but declares **no** `scope` of its own (inherits a
+     coarser parent zone the subtree deserves to specialize), **or**
+   - it declares a `scope` value **identical to its parent's** (a redundant
+     restatement, not a real sub-zone — the subtree is indistinguishable from
+     the parent in facet space).
+   The root already anchors the root zone; leave it.
+3. Propose an anchor **name derived from the doc** — a short slug from its
+   title/role (e.g. a "Viewer …" component → `viewer`; a "Review …" component →
+   `review`). Show the candidate's subtree so the user sees exactly what the
+   anchor would scope. Propose applying it with `ldoc set <id> --scope <name>`
+   (do NOT run it; this is a proposal).
+
+#### Part B — Domains
+
+`domain` is a cross-cutting **applied** tag (a list on a doc), orthogonal to
+`scope`. The bar for a real domain is the **≥2-scopes test**: a concern earns a
+`domain` tag only when it spans **two or more distinct (effective) scopes**. A
+concern living entirely inside one subsystem is **already captured by that
+subsystem's scope** and needs no domain — tagging it would just restate the
+subsystem.
+
+1. Survey for **recurring cross-cutting concerns**: cluster docs by thematic
+   coherence using the signals you already have — shared `relates`/`requires`
+   neighborhoods that **cross subsystem boundaries**, repeated vocabulary in
+   titles/summaries, and docs that keep getting co-edited. Ignore
+   `requires → Foundational Principles` edges as a clustering signal: depending
+   on a foundational principle is universal, not a domain.
+2. For each candidate cluster, compute the effective scope of each member and
+   **apply the ≥2-scopes test**. Keep only clusters that clear it; discard the
+   rest as "already a subsystem."
+3. For each surviving domain, propose:
+   - a domain **name** (open vocabulary; reuse an existing domain string if one
+     already fits — watch for synonym drift, e.g. `Account Mgmt` vs
+     `Account Management`),
+   - the **set of docs** that should carry it, and
+   - a one-line justification naming **which scopes it cross-cuts**.
+4. **Align untagged docs**: for docs that clearly belong to an already-proposed
+   or existing domain but lack the tag, propose adding it
+   (`ldoc set <id> --domain <name>`).
+5. **Retire / split stale or over-broad domains**: if an existing domain has
+   collapsed to a single scope (no longer cross-cuts), propose **retiring** it;
+   if one domain has absorbed two unrelated concerns, propose **splitting** it.
+   Under-proposing is correct — never invent a domain to fill a slot. If few or
+   none clear the ≥2-scopes bar, say so plainly.
+
+#### Discipline
+
+Propose-only; the human confirms before any write — same contract as
+`curate-grouping`. Reference `20260619235018` (scope) and `20260615203839`
+(domain) rather than re-explaining the model. Apply confirmed changes with the
+`ldoc set --scope` / `ldoc set --domain` mutators, recording a history entry on
+each touched doc, and emit the episode review summary **only if changes were
+actually applied** (garden's standing contract — see "Review summary").
 
 ---
 
@@ -270,7 +359,7 @@ batch write). Garden owns the single summary for the episode.
 After all changes for the pass are applied:
 
 ```bash
-python3 scripts/ldoc.py review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
 ```
 
 After it runs, confirm `touched` is non-empty and reflects the episode's changes.

@@ -85,7 +85,7 @@ For each doc with verdict `full-supersession` or `cascade-full`:
 1. Draft the replacement doc body — the single correct current claim.
 2. Create the replacement:
    ```bash
-   python3 scripts/ldoc.py new \
+   ldoc new \
      --type <type> \
      --title "<precise, single-responsibility title>" \
      --level <level> \
@@ -97,9 +97,9 @@ For each doc with verdict `full-supersession` or `cascade-full`:
    Add a `## Correction` section to the deprecated doc's body explaining why it
    is now wrong and which doc supersedes it, then:
    ```bash
-   python3 scripts/ldoc.py set <old-id> --status deprecated
-   python3 scripts/ldoc.py link <old-id> --superseded-by <REPLACEMENT_ID>
-   python3 scripts/ldoc.py history <old-id> --add "synthesize-doc-changes: deprecated — superseded by <REPLACEMENT_ID>: <one-line reason>"
+   ldoc set <old-id> --status deprecated
+   ldoc link <old-id> --superseded-by <REPLACEMENT_ID>
+   ldoc history <old-id> --add "synthesize-doc-changes: deprecated — superseded by <REPLACEMENT_ID>: <one-line reason>"
    ```
 
 ---
@@ -111,14 +111,14 @@ For each doc with verdict `partial-supersession`, `cascade-extend`, or a planned
 
 1. Load the current body:
    ```bash
-   python3 scripts/ldoc.py show <id>
+   ldoc show <id>
    ```
 2. Rewrite the affected portion to its correct current state. If the prior text
    would now be misleading, rewrite it — do not add qualifiers or exception
    clauses that leave contradictory statements coexisting.
 3. Record the history entry:
    ```bash
-   python3 scripts/ldoc.py history <id> --add "synthesize-doc-changes: revised — <one sentence: what changed and why>"
+   ldoc history <id> --add "synthesize-doc-changes: revised — <one sentence: what changed and why>"
    ```
 
 ---
@@ -129,7 +129,7 @@ For each concept with no existing match (or whose only matches are frozen/
 deprecated), create a new doc:
 
 ```bash
-python3 scripts/ldoc.py new \
+ldoc new \
   --type <type> \
   --title "<precise, single-responsibility title>" \
   --level <incidental|trial|preference|requirement> \
@@ -157,7 +157,7 @@ such an explicit anchor.
 living doc, do NOT create a new doc — instead link the anchor to that doc's
 provenance:
 ```bash
-python3 scripts/ldoc.py link <existing-id> --provenance <anchor id>
+ldoc link <existing-id> --provenance <anchor id>
 ```
 
 ---
