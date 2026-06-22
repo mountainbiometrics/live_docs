@@ -20,12 +20,10 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
+from ._paths import HOME_CONFIG
 from .toml_flat import read_config_file, write_config_file
-
-HOME_CONFIG: Path = Path.home() / ".config" / "live_docs" / "config.toml"
 
 USER_KEYS = ("user.name", "user.email")
 

@@ -13,10 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import (
-    DOCS_DIR, RAW_DIR,
-    generate_id, title_to_label, unique_label, display_label,
-)
+from .model import generate_id, title_to_label, unique_label, display_label
 from .serialize import parse_doc, dump_doc, _yaml_str
 from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges
 
@@ -35,12 +32,15 @@ def _doc_tag_list(doc: dict, key: str) -> list:
 # Public: load all docs
 # ---------------------------------------------------------------------------
 
-def load_all(docs_dir: Path = DOCS_DIR) -> dict:
+def load_all(docs_dir: Path | None = None) -> dict:
     """
     Load every *.md file in docs_dir (excluding .index/ subdirectory).
 
     Returns: {id: parsed_doc_dict}
     """
+    if docs_dir is None:
+        from .model import DOCS_DIR
+        docs_dir = DOCS_DIR
     result = {}
     for path in sorted(docs_dir.glob("*.md")):
         if ".index" in path.parts:
@@ -66,7 +66,10 @@ class KB:
     Skills handle cascade decisions.
     """
 
-    def __init__(self, docs_dir: Path = DOCS_DIR):
+    def __init__(self, docs_dir: Path | None = None):
+        if docs_dir is None:
+            from .model import DOCS_DIR
+            docs_dir = DOCS_DIR
         self.docs_dir = docs_dir
         self._reload()
 
@@ -834,6 +837,7 @@ class KB:
         Mirrors ingest_raw.py behavior but operates through KB.
         """
         from datetime import date
+        from .model import RAW_DIR
 
         RAW_DIR.mkdir(parents=True, exist_ok=True)
         raw_id = generate_id(RAW_DIR)

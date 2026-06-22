@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ._paths import CONFIG_FILENAME, HOME_CONFIG
 from .toml_flat import read_store_keys
 
 
@@ -31,9 +32,6 @@ from .toml_flat import read_store_keys
 # file (absolute and ~ paths are kept as-is). So a config can point at docs that
 # live in a different repo entirely — a shared "mono-doc" store for several
 # related code repos.
-
-CONFIG_FILENAME = ".live_docs.toml"
-HOME_CONFIG: Path = Path.home() / ".config" / "live_docs" / "config.toml"
 
 # Built-in defaults, used for any key a located config omits. Relative to the
 # config file's own directory (the store root).
@@ -129,21 +127,35 @@ def _resolve() -> dict:
     return resolved
 
 
-try:
-    _paths = _resolve()
-except LivedocsConfigError as e:
-    # Every consumer of this module is a CLI; a clean message beats a traceback.
-    sys.stderr.write(f"ldoc: {e}\n")
-    sys.exit(2)
+_resolved_paths: dict | None = None
 
-# REPO_ROOT is retained for back-compat; it now means the discovered store root
-# (the directory containing the config), not the directory this code lives in.
-REPO_ROOT: Path = _paths["root"]
-DOCS_DIR: Path = _paths["docs"]
-RAW_DIR: Path = _paths["raw"]
-REVIEWS_DIR: Path = _paths["reviews"]
-INBOX_DIR: Path = _paths["inbox"]
-INDEX_DIR: Path = _paths["index"]
+_PATH_ATTRS: dict[str, str] = {
+    "REPO_ROOT": "root",
+    "DOCS_DIR": "docs",
+    "RAW_DIR": "raw",
+    "REVIEWS_DIR": "reviews",
+    "INBOX_DIR": "inbox",
+    "INDEX_DIR": "index",
+}
+
+
+def _get_paths() -> dict:
+    global _resolved_paths
+    if _resolved_paths is None:
+        try:
+            _resolved_paths = _resolve()
+        except LivedocsConfigError as e:
+            sys.stderr.write(f"ldoc: {e}\n")
+            sys.exit(2)
+    return _resolved_paths
+
+
+def __getattr__(name: str) -> "Path":
+    if name in _PATH_ATTRS:
+        obj = _get_paths()[_PATH_ATTRS[name]]
+        globals()[name] = obj  # cache so subsequent access skips __getattr__
+        return obj
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ---------------------------------------------------------------------------

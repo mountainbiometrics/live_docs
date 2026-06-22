@@ -34,14 +34,13 @@ truth); labels are resolved live at display time via ReviewLedger.render_body.
 Stdlib only. No external dependencies.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import (
-    REVIEWS_DIR, generate_id, DOCS_DIR,
-    ref_token, render_ref_token, WIKILINK_RE,
-)
+from .model import generate_id, ref_token, render_ref_token, WIKILINK_RE
 
 
 def _normalize_ref(token: str) -> str:
@@ -220,7 +219,13 @@ class ReviewLedger:
     the dependency graph. All review records live in REVIEWS_DIR.
     """
 
-    def __init__(self, reviews_dir: Path = REVIEWS_DIR, docs_dir: Path = DOCS_DIR):
+    def __init__(self, reviews_dir: Path | None = None, docs_dir: Path | None = None):
+        if reviews_dir is None:
+            from .model import REVIEWS_DIR
+            reviews_dir = REVIEWS_DIR
+        if docs_dir is None:
+            from .model import DOCS_DIR
+            docs_dir = DOCS_DIR
         self.reviews_dir = reviews_dir
         self.docs_dir = docs_dir
         reviews_dir.mkdir(parents=True, exist_ok=True)

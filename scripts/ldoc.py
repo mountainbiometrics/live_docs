@@ -77,14 +77,8 @@ from pathlib import Path
 _scripts_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_scripts_dir))
 
-# `ldoc config` only touches ~/.config/live_docs/config.toml — no store required.
-if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "config":
-    from livedocs.user_config import run_config_cli
-    sys.exit(run_config_cli(sys.argv[2:]))
-
-from livedocs import KB, DOCS_DIR, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
-from livedocs import ReviewLedger, REVIEWS_DIR
-from livedocs import INBOX_DIR, RAW_DIR, generate_id
+from livedocs import KB, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
+from livedocs import ReviewLedger, generate_id
 
 
 # ---------------------------------------------------------------------------
@@ -974,6 +968,7 @@ def cmd_inbox(kb: KB, args) -> int:
 def _inbox_add(args) -> int:
     """Write one item verbatim into INBOX_DIR with minimal frontmatter."""
     from datetime import datetime, timezone as _tz
+    from livedocs import INBOX_DIR
 
     # Resolve body
     if getattr(args, "from_file", None):
@@ -1022,6 +1017,7 @@ def _inbox_add(args) -> int:
 
 def _inbox_list(args) -> int:
     """List items currently in the inbox."""
+    from livedocs import INBOX_DIR
     if not INBOX_DIR.exists():
         print("(inbox is empty)")
         return 0
@@ -1054,6 +1050,7 @@ def _inbox_list(args) -> int:
 def cmd_promote(kb: KB, args) -> int:
     """Gate 1: move item(s) from inbox → raw, or explain gate 2 for raw items."""
     from datetime import date as _date
+    from livedocs import INBOX_DIR, RAW_DIR
 
     if getattr(args, "all", False):
         # Drain every inbox item
@@ -1095,6 +1092,7 @@ def cmd_promote(kb: KB, args) -> int:
 def _promote_one(inbox_id: str, inbox_path: Path, args) -> int:
     """Move one inbox item to raw/, rewriting frontmatter to raw-clipping shape."""
     from datetime import datetime, timezone as _tz
+    from livedocs import RAW_DIR
 
     try:
         body_text = inbox_path.read_text(encoding="utf-8")
@@ -1195,6 +1193,7 @@ def cmd_viewer(kb: KB, args) -> int:
 
 def cmd_review(kb: KB, args) -> int:
     """Dispatch ldoc review <subverb> commands over the reviews/ ledger."""
+    from livedocs import REVIEWS_DIR
     ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
     verb = args.review_verb
 
@@ -1333,7 +1332,7 @@ def cmd_edges(kb: KB, args) -> int:
     return result.returncode
 
 
-def cmd_config(_kb: KB, args) -> int:
+def cmd_config(_kb, args) -> int:
     from livedocs.user_config import run_config_cli
     return run_config_cli(sys.argv[2:])
 
@@ -1725,19 +1724,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Signature (git author format). Default: user.name + user.email from config.")
 
     # --- config (user preferences; no store required) ---
-    p_cfg = sub.add_parser(
+    # Minimal stub so `ldoc --help` lists the subcommand. Actual parsing is
+    # handled by user_config._build_config_parser(), invoked in main() before
+    # parse_args() so flag-like args (--list, --unset, etc.) reach it cleanly.
+    sub.add_parser(
         "config",
         help="Read/write user preferences in ~/.config/live_docs/config.toml.",
         add_help=False,
     )
-    p_cfg.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
-    p_cfg.add_argument("--list", "-l", action="store_true",
-                       help="List all user preference keys and values.")
-    p_cfg.add_argument("--unset", metavar="KEY", help="Remove a user preference key.")
-    p_cfg.add_argument("--bootstrap-from-git", action="store_true",
-                       help="Copy user.name/user.email from git config --global if unset.")
-    p_cfg.add_argument("key", nargs="?", help="Preference key (e.g. user.name, signer).")
-    p_cfg.add_argument("value", nargs="?", help="Value to set (omit to read).")
 
     # --- help ---
     sub.add_parser("help", help="Show overview with grouped verbs and copy-pasteable examples.")
@@ -1787,16 +1781,27 @@ COMMANDS = {
 # ---------------------------------------------------------------------------
 
 def main() -> int:
+    # `ldoc config` is store-free; argparse's subparser dispatch can't reliably
+    # pass flag-like args (--list, --unset) through REMAINDER, so we route it
+    # directly before parse_args(). This is safe now that the module-level
+    # imports no longer trigger store discovery.
+    if len(sys.argv) >= 2 and sys.argv[1] == "config":
+        from livedocs.user_config import run_config_cli
+        return run_config_cli(sys.argv[2:])
+
     parser = build_parser()
     args = parser.parse_args()
-
-    kb = KB(DOCS_DIR)
 
     handler = COMMANDS.get(args.subcommand)
     if not handler:
         _err(f"Unknown subcommand: {args.subcommand}")
         return 1
 
+    if args.subcommand == "help":
+        return handler(None, args)
+
+    from livedocs import DOCS_DIR
+    kb = KB(DOCS_DIR)
     return handler(kb, args)
 
 
