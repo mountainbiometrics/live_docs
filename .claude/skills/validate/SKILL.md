@@ -165,4 +165,4 @@ Exit code: 0
 Logic lives in the `livedocs` package, exposed as the `ldoc validate` subcommand.
 The wrapper `.claude/skills/validate/validate.sh` just `exec`s `ldoc validate`; the
 installed `ldoc` locates the store by discovery (walks up from CWD for
-`.living_doc.toml`), so it works from any CWD. Stdlib only — no external deps.
+`.live_docs.toml`), so it works from any CWD. Stdlib only — no external deps.

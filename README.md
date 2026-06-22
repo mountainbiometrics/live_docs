@@ -1,11 +1,10 @@
-# sinai — MTN's live_docs instance
+# live_docs
 
-**sinai** is both the definition and the first live instance of **live_docs**, a self-documenting atomic-documentation system.
+**live_docs** is a self-documenting atomic-documentation system: a flat graph of single-responsibility Markdown docs, a porcelain CLI (`ldoc`), and a set of AI-agent skills that ingest, revise, garden, and validate the store.
 
-- **live_docs** is the portable system specification. Its defining documents are tagged `scope: [live_docs]`.
-- **sinai** is MTN's instance of that system. Organisation-specific documents are tagged `scope: [sinai]` or a more specific domain.
+This repo **is** the system, and it proves the system by eating its own cooking — the knowledge base under `kb/` is live_docs' *own* design documentation (principles, decisions, the edge model, the ingest pipeline, …), read and edited with `ldoc` like any other store.
 
-The two coexist in this repo by design: the spec is proven by eating its own cooking.
+An **instance** is a separate store that consumes the same tooling. You install the `ldoc` CLI and the `livedocs` skills plugin once (see [Install](#install)), then point any repo at a store with a `.live_docs.toml` marker — the CLI and skills operate on whichever store the current directory resolves to. MTN's instance is **sinai** (`../sinai`): the documentation store for MTN's projects and components, kept separate so organisation docs and the system's source never tangle.
 
 ---
 
@@ -32,7 +31,7 @@ live_docs has three independent parts. Only the store differs per project; the C
 |------|-----------|-------|
 | `ldoc` CLI | `scripts/ldoc.py`, symlinked onto your PATH | one machine-wide install; works in any terminal |
 | `livedocs` skills | the Claude Code plugin in `.claude-plugin/` (exposes the `.claude/skills/`) | one user-scope install; available in every project |
-| the **store** | the `kb/` graph, located by a `.living_doc.toml` marker | per consumer repo — just the marker file |
+| the **store** | the `kb/` graph, located by a `.live_docs.toml` marker | per consumer repo — just the marker file |
 
 ### Quick start
 
@@ -48,15 +47,15 @@ After installing, the skills are namespaced under the plugin: `/livedocs:garden`
 
 ### Pointing another repo at a store
 
-The CLI and skills are store-agnostic: they operate on whichever store the current directory's `.living_doc.toml` points at. To make a *consumer* repo read/write a shared store (e.g. this one, or a dedicated docs repo), drop a marker file at its root:
+The CLI and skills are store-agnostic: they operate on whichever store the current directory's `.live_docs.toml` points at. To make a *consumer* repo read/write a shared store (e.g. this one, or a dedicated docs repo), drop a marker file at its root:
 
 ```bash
 cd /path/to/consumer-repo
-/path/to/live_docs/install.sh --init-store /path/to/store   # writes .living_doc.toml
+/path/to/live_docs/install.sh --init-store /path/to/store   # writes .live_docs.toml
 ldoc count                                                  # confirm it resolves
 ```
 
-`--init-store` writes absolute paths into the store's `kb/`. You can also hand-write the four-line `.living_doc.toml` (see [kb/ layout](#kb-layout)) — the helper is just convenience.
+`--init-store` writes absolute paths into the store's `kb/`. You can also hand-write the four-line `.live_docs.toml` (see [kb/ layout](#kb-layout)) — the helper is just convenience.
 
 ### Manual / partial setup
 
@@ -77,9 +76,9 @@ Working *inside this repo*, `ldoc` is also provided via `mise` (`mise trust` onc
 
 ## How to read this repo
 
-The knowledge base lives entirely in `kb/`. The flat `kb/02-docs/` store has no canonical "front page" yet — the root index doc (`kb/02-docs/20260615090011.md`) is currently a stub, intended to become the top-level index of the system's highest-level MOCs once that (agentic) concept is built.
+The knowledge base lives entirely in `kb/`. The flat `kb/02-docs/` store has no hand-maintained "front page"; its entry points are derived from topology — any doc that other docs `belongs_to` is structurally a signpost. **`ldoc map`** prints those entry-point signposts (ranked, with summaries) and is the closest thing to a front page; the largest root signpost orients you to the whole system.
 
-Filenames are opaque timestamp IDs (Zettelkasten/"Kiste" style); the human-readable name lives only in the `title` frontmatter field. Navigate with `ldoc find` / `ldoc ls`, or by following typed edges from any doc you land on.
+Filenames are opaque timestamp IDs (Zettelkasten/"Kiste" style); the human-readable name lives only in the `title` frontmatter field. Run `ldoc map` to orient, then navigate with `ldoc find` / `ldoc ls`, or by following typed edges from any doc you land on.
 
 The authoritative source of truth is always the flat `*.md` files in `kb/02-docs/`. Generated artifacts under `kb/02-docs/.index/` are caches — rebuildable, never hand-edited.
 
@@ -97,7 +96,7 @@ kb/
   reviews/       # review ledger — post-hoc episode summaries
 ```
 
-Paths are configured in a `.living_doc.toml` file, located by discovery: `ldoc` walks up from the working directory looking for one, falling back to `~/.config/living_doc/config.toml`. Paths inside it resolve relative to the config file's own directory (absolute and `~` honored), so the docs need not live in the same repo as the code that reads them — a single store can serve several related repos. Per-key `LIVEDOCS_*_DIR` environment variables override the file; omitted keys fall back to a root-layout. A deployment can relocate any box, or point at a shared store elsewhere, without touching code.
+Paths are configured in a `.live_docs.toml` file, located by discovery: `ldoc` walks up from the working directory looking for one, falling back to `~/.config/live_docs/config.toml`. Paths inside it resolve relative to the config file's own directory (absolute and `~` honored), so the docs need not live in the same repo as the code that reads them — a single store can serve several related repos. Per-key `LIVEDOCS_*_DIR` environment variables override the file; omitted keys fall back to a root-layout. A deployment can relocate any box, or point at a shared store elsewhere, without touching code.
 
 ---
 
@@ -144,7 +143,7 @@ history:                          # omit when empty; changes only, never creatio
 ---
 ```
 
-Edge lists are stored as quoted wikilinks (`"[[<id>]]"`) for Obsidian graph compatibility. The tooling unwraps them to bare IDs in memory. Empty edge lists, empty `history`, and empty `domain`/`scope` are omitted entirely from the file — writing `[]` is wrong.
+Edge lists are stored as quoted wikilinks (`"[[<id>]]"`) — a portable `[[id]]` link format the HTML viewer resolves (and which any Obsidian-style tool also understands). The tooling unwraps them to bare IDs in memory. Empty edge lists, empty `history`, and empty `domain`/`scope` are omitted entirely from the file — writing `[]` is wrong.
 
 `reference` type docs also carry `kind`, `source`, and `imported` fields (appended after `history`).
 
@@ -162,11 +161,11 @@ Every doc has three human-facing descriptors with distinct roles:
 
 | Field | Valid values |
 |-------|-------------|
-| `type` | `type`, `principle`, `goal`, `decision`, `constraint`, `requirement`, `use-case`, `guide`, `component`, `reference`, `index` |
+| `type` | `type`, `principle`, `goal`, `decision`, `constraint`, `requirement`, `use-case`, `guide`, `component`, `reference` |
 | `status` | `living` (current), `target` (intended-but-not-yet-built), `deprecated` (retired), `reference` (frozen supporting material) |
 | `level` | `incidental` (calcified without a decision), `trial`, `preference`, `requirement` |
 
-The 11 `type` values are the taxonomy, defined as enum values in `model.py`. (There are no separate per-type definition docs — earlier ones were removed as non-weight-bearing orphans, so the taxonomy lives in code, not as docs.)
+The 10 `type` values are the taxonomy, defined as enum values in `model.py`. (The former `index` type was retired — a doc is a navigational signpost *structurally*, by being a `belongs_to` target, not by type. There are also no separate per-type definition docs — earlier ones were removed as non-weight-bearing orphans, so the taxonomy lives in code, not as docs.)
 
 The old `state: actual|target` field has been folded into `status` (`target` = intended-but-unbuilt; `living` = current reality). The old separate `state` field is stale schema.
 
@@ -220,8 +219,10 @@ All ref arguments accept `id`, `label`, or `title` (exact or unique substring). 
 
 | Verb | What it does |
 |------|-------------|
+| `map` | Orientation map: entry-point signposts (topological roots) with summaries, ranked by subtree size — **start here** |
 | `find [terms...] [--or] [--regex PAT]` | Full-text search + filter by `--type`, `--level`, `--status`, `--scope`, `--domain` |
 | `ls [--type T]` | List all docs (optionally filtered by type) |
+| `orphans` | Docs outside the `belongs_to` hierarchy (no hard edge in or out) |
 | `log [--since ISO] [--limit N]` | Recent changes view (created/edited, newest first) |
 | `count` | Doc and edge count statistics by type / level / status |
 
@@ -237,7 +238,7 @@ All ref arguments accept `id`, `label`, or `title` (exact or unique substring). 
 | Verb | What it does |
 |------|-------------|
 | `new --type T --title T [options]` | Create a new doc (validates edge refs before writing) |
-| `set <ref> [--title] [--label] [--summary] [--level] [--status] [--type] [--body -\|TEXT]` | Update frontmatter fields or body |
+| `set <ref> [--title] [--label] [--summary] [--level] [--status] [--type] [--scope] [--domain] [--body -\|TEXT]` | Update frontmatter fields or body (`--scope`: single string; `--domain`: comma list; empty string clears either) |
 | `edit <ref>` | Alias for `set <ref> --body -` (replace body from stdin) |
 | `link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
 | `unlink <ref> [same edge flags]` | Remove edges |
@@ -259,7 +260,7 @@ All ref arguments accept `id`, `label`, or `title` (exact or unique substring). 
 |------|-------------|
 | `validate` | Read-only structural integrity check (see below) |
 | `reindex` | Rebuild `kb/02-docs/.index/` artifacts |
-| `edges [--json]` | Print full forward/reverse edge map |
+| `viewer [--out PATH]` | Build the self-contained read-only HTML viewer |
 | `review new\|list\|show\|sign` | Manage review summaries in the `kb/reviews/` ledger |
 
 Most mutation verbs accept `--dry-run` to preview what would happen without writing.
@@ -267,9 +268,12 @@ Most mutation verbs accept `--dry-run` to preview what would happen without writ
 ### Quick examples
 
 ```bash
+# Orient
+ldoc map                                  # entry-point signposts + summaries
+
 # Read a doc
 ldoc show "Living over Stale"
-ldoc get root-index batch-operations --json
+ldoc get "The live_docs system" --json
 
 # Search
 ldoc find porcelain
@@ -303,6 +307,7 @@ They ship as the **`livedocs` Claude Code plugin** (`.claude-plugin/`), so insta
 
 | Skill | When to use |
 |-------|-------------|
+| **reference** | Portable, store-agnostic quick-reference: the full `ldoc` command surface, frontmatter schema, enums, edge model, scope vs domain, and the all-metadata creation recipe. Invoke it when you land in a store and need to operate `ldoc` without rediscovering it from `--help` |
 | **apply-to-docs** | Landing a user request or design plan into the KB: extracts concepts, maps blast radius across the graph, batch-synthesizes a coherent new state for all affected docs |
 | **ingest-reference** | Bringing external material (meeting notes, RFCs, research, URLs) into the store: creates a raw clipping, a normalized reference doc, then decomposes into single-responsibility atomic docs |
 | **revise-doc** | Editing an existing doc with full discipline: dedup/conflict scan, history entry, cascade-check for substantive changes |
@@ -341,7 +346,7 @@ Exits 0 if clean, 1 if errors. Use `garden consistency` for fix proposals.
 
 - `dependents.json` — reverse map of `requires` + `belongs_to` edges (the cascade input)
 - `referenced_by.json` — reverse map of `provenance` edges (navigation only)
-- `hierarchy.md` — human-readable children rollup per index doc
+- `hierarchy.md` — human-readable children rollup per signpost doc
 - `orphans.txt` — docs with no hard graph edges in either direction
 
 Run `reindex` after bulk doc changes, or before a cascade-check if you want a pre-built reverse map on hand. (`reindex` only writes derived caches under `.index/`; it does not edit doc bodies.)
@@ -362,4 +367,3 @@ The review ledger (`kb/reviews/`) holds post-hoc episode summaries. Skills emit 
 | `.claude-plugin/` | `plugin.json` + `marketplace.json` — packages `.claude/skills/` as the installable `livedocs` plugin |
 | `.claude/skills/` | AI-agent skill definitions (see Skills above) |
 | `reports/` | Design analyses and research artifacts (not part of the KB graph) |
-| `.obsidian/` | Obsidian vault configuration for visual graph navigation |

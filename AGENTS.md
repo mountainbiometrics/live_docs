@@ -2,7 +2,13 @@
 
 This document is the operating manual for any AI agent working in the sinai/live_docs repo. Read it before touching anything in `kb/`.
 
-For background on the system's design, see [README.md](README.md).
+For background on the system's design, see [README.md](README.md). For the
+portable, store-agnostic quick-reference — the full `ldoc` command surface,
+schema, enums, and edge model in one page — invoke the **`reference`** skill
+(`/livedocs:reference`); it ships with the plugin, so it's available in any
+consumer repo, not just this one. **To orient in an unfamiliar store, run
+`ldoc map` first** — it prints the entry-point signposts with their summaries,
+so you start from context instead of a cold search.
 
 ---
 
@@ -39,7 +45,7 @@ ldoc validate           # check integrity
 ldoc reindex            # rebuild .index/ artifacts
 ```
 
-The `ldoc` porcelain must be on your PATH; inside this repo mise provides it. It locates the store by walking up from the working directory for `.living_doc.toml`, so it runs from any directory that belongs to a store.
+The `ldoc` porcelain must be on your PATH; inside this repo mise provides it. It locates the store by walking up from the working directory for `.live_docs.toml`, so it runs from any directory that belongs to a store.
 
 **Mutators are intentionally dumb** — they write what you tell them and validate refs, but they do not judge impact, cascade propagation, or cross-doc consistency. That judgment lives in the skills. Always invoke the appropriate skill when making substantive changes; do not call ldoc mutations directly as a substitute for running the skill.
 
@@ -120,7 +126,7 @@ Run on a schedule or when triggered by a wide-cascade warning. Key passes:
 - **staleness**: surface docs whose dependencies were updated more recently than the doc itself
 - **consistency**: orphan detection + broken edges + missing fields (proposes fixes; `validate` only reports)
 - **field-aliases**: normalize stale field names and enum values
-- **index-moc**: keep index docs healthy — check for oversized indexes, stale rollups, and orphaned children
+- **tag-curation**: curate `scope` anchors and `domain` tags — add missing anchors, remove redundant ones, normalize tag drift
 
 Garden always proposes before applying; it never silently rewrites meaning.
 
@@ -158,7 +164,7 @@ domain, scope, created, history
 
 ```
 type:   type | principle | goal | decision | constraint | requirement |
-        use-case | guide | component | reference | index
+        use-case | guide | component | reference
 status: living | target | deprecated | reference
 level:  incidental | trial | preference | requirement
 ```
@@ -180,7 +186,7 @@ The `id` field must match the filename stem exactly (a 14-digit UTC timestamp). 
 | Edge | Cascade | Use when |
 |------|---------|----------|
 | `requires` | hard | This doc is existentially dependent on the target — meaningless or wrong without it |
-| `belongs_to` | hard | This doc is structurally a child of the target (index membership, part-of) |
+| `belongs_to` | hard | This doc is structurally a child of the target (signpost membership, part-of) |
 | `relates` | soft / nav | Symmetric clustering / see-also; topic kinship but not a dependency |
 | `provenance` | soft / nav | "Was derived from / informed by"; may point at `kb/01-raw/` (raw ids are not graph nodes) |
 | `superseded_by` | — | Required when `status: deprecated`; points at the replacement doc(s) |
@@ -269,8 +275,7 @@ Address all ERRORs before continuing. Surface WARNINGs to the user for review.
 Run `ldoc reindex` (or the `reindex` skill):
 
 - After bulk doc creation or deletion
-- After any doc type changes from or to `index`
-- After restructuring `belongs_to` edges
+- After restructuring `belongs_to` edges (signpost membership)
 - Before reading `kb/02-docs/.index/hierarchy.md` or `orphans.txt` if they may be stale
 
 Reindex is always idempotent. The `.index/` artifacts are safe to commit.

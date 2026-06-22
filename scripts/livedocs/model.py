@@ -21,8 +21,8 @@ from pathlib import Path
 # A single installed `ldoc` must operate on whichever store the directory you're
 # standing in belongs to, so resolution is anchored to the CURRENT WORKING
 # DIRECTORY, not to __file__. Git-style: walk up from the CWD looking for a
-# `.living_doc.toml` marker; if none is found in the CWD or any parent, fall
-# back to a per-user config at ~/.config/living_doc/config.toml; if neither
+# `.live_docs.toml` marker; if none is found in the CWD or any parent, fall
+# back to a per-user config at ~/.config/live_docs/config.toml; if neither
 # exists, complain and exit.
 #
 # Paths inside a config file resolve relative to the directory CONTAINING that
@@ -30,8 +30,8 @@ from pathlib import Path
 # live in a different repo entirely — a shared "mono-doc" store for several
 # related code repos.
 
-CONFIG_FILENAME = ".living_doc.toml"
-HOME_CONFIG: Path = Path.home() / ".config" / "living_doc" / "config.toml"
+CONFIG_FILENAME = ".live_docs.toml"
+HOME_CONFIG: Path = Path.home() / ".config" / "live_docs" / "config.toml"
 
 # Built-in defaults, used for any key a located config omits. Relative to the
 # config file's own directory (the store root).

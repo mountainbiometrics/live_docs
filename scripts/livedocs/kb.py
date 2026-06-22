@@ -416,6 +416,106 @@ class KB:
                 })
         return results
 
+    def _children_map(self) -> dict[str, list[str]]:
+        """Map each doc id to the ids that `belongs_to` it (its direct children)."""
+        children: dict[str, list[str]] = {}
+        for doc_id, doc in self._docs.items():
+            for parent in doc.get("belongs_to", []):
+                if parent in self._docs:
+                    children.setdefault(parent, []).append(doc_id)
+        return children
+
+    def map_overview(self) -> dict:
+        """
+        Return the store's navigational map: the topological ROOTS of the
+        belongs_to hierarchy, ranked so an agent can orient without a cold
+        search.
+
+        A root is any doc with no resolving `belongs_to` parent. Roots split into:
+          - signposts: roots that HAVE descendants (the entry points) — each
+            carries its summary, transitive descendant count, effective scope,
+            and its direct children (next hop, each with its own summary)
+          - floating: roots with no descendants (orphans + standalone docs)
+
+        Mirrors the viewer's structural-signpost derivation (the retired `index`
+        type, re-computed from topology). Read-only.
+
+        Returns {total, signposts: [...], floating: [...]}.
+        """
+        children = self._children_map()
+
+        # Transitive descendant count, memoized, cycle-guarded.
+        _desc_cache: dict[str, int] = {}
+
+        def desc_count(doc_id: str) -> int:
+            if doc_id in _desc_cache:
+                return _desc_cache[doc_id]
+            seen: set[str] = set()
+            stack = list(children.get(doc_id, []))
+            while stack:
+                c = stack.pop()
+                if c in seen:
+                    continue
+                seen.add(c)
+                stack.extend(children.get(c, []))
+            _desc_cache[doc_id] = len(seen)
+            return len(seen)
+
+        def _summary(doc: dict) -> str:
+            s = doc.get("summary")
+            return s.strip() if isinstance(s, str) else ""
+
+        roots = [
+            (doc_id, doc)
+            for doc_id, doc in self._docs.items()
+            if not any(p in self._docs for p in doc.get("belongs_to", []))
+        ]
+
+        signposts = []
+        floating = []
+        for doc_id, doc in roots:
+            kids = sorted(children.get(doc_id, []))
+            if kids:
+                signposts.append({
+                    "id": doc_id,
+                    "label": doc.get("label", ""),
+                    "display": self.display_label(doc_id),
+                    "summary": _summary(doc),
+                    "type": doc.get("type", ""),
+                    "status": doc.get("status", ""),
+                    "scope": self.effective_scope(doc_id),
+                    "descendants": desc_count(doc_id),
+                    "children": [
+                        {
+                            "id": c,
+                            "label": self._docs[c].get("label", ""),
+                            "display": self.display_label(c),
+                            "summary": _summary(self._docs[c]),
+                            "descendants": desc_count(c),
+                        }
+                        for c in sorted(kids, key=lambda c: (-desc_count(c), c))
+                    ],
+                })
+            else:
+                floating.append({
+                    "id": doc_id,
+                    "label": doc.get("label", ""),
+                    "display": self.display_label(doc_id),
+                    "summary": _summary(doc),
+                    "type": doc.get("type", ""),
+                    "status": doc.get("status", ""),
+                })
+
+        # Biggest signposts first; floating sorted by id for stability.
+        signposts.sort(key=lambda s: (-s["descendants"], s["id"]))
+        floating.sort(key=lambda f: f["id"])
+
+        return {
+            "total": len(self._docs),
+            "signposts": signposts,
+            "floating": floating,
+        }
+
     def ls(self, type: str = None) -> list[dict]:
         """List all docs. Returns [{id, label, display}]."""
         results = []
@@ -617,14 +717,16 @@ class KB:
     def set(self, ref: str, **fields) -> None:
         """
         Update scalar frontmatter fields: title, label, summary, level, status,
-        type, scope.
+        type, scope, domain.
 
         Resolves ref, loads doc, updates fields, writes back. Setting `summary`
-        or `scope` to an empty string removes it (both are omitted on disk when
-        empty). `scope` is a single STRING naming a topological zone — its value
-        applies to this doc and its whole belongs_to subtree (see effective_scope).
+        or `scope` to an empty string — or `domain` to an empty list — removes
+        the field (all three are omitted on disk when empty). `scope` is a single
+        STRING naming a topological zone, applying to this doc and its whole
+        belongs_to subtree (see effective_scope); `domain` is a flat LIST of
+        cross-cutting business/problem tags (NOT inherited).
         """
-        allowed = {"title", "label", "summary", "level", "status", "type", "scope"}
+        allowed = {"title", "label", "summary", "level", "status", "type", "scope", "domain"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -632,7 +734,7 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
         for k, v in fields.items():
-            if k in ("summary", "scope") and not v:
+            if k in ("summary", "scope", "domain") and not v:
                 fm.pop(k, None)
             else:
                 fm[k] = v

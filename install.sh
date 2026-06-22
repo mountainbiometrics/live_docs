@@ -8,7 +8,7 @@
 #      (user scope, so it's available in every project)
 #
 # The store itself is NOT installed here. `ldoc` and the skills locate it by
-# walking up from the current directory for a `.living_doc.toml` marker, so a
+# walking up from the current directory for a `.live_docs.toml` marker, so a
 # consumer repo just needs that one file (see --init-store below).
 #
 # Usage:
@@ -16,7 +16,7 @@
 #   ./install.sh --no-plugin         # CLI only
 #   ./install.sh --no-cli            # plugin only
 #   ./install.sh --bin-dir ~/bin     # symlink ldoc somewhere other than ~/.local/bin
-#   ./install.sh --init-store DIR    # ALSO write a .living_doc.toml in the CURRENT
+#   ./install.sh --init-store DIR    # ALSO write a .live_docs.toml in the CURRENT
 #                                    #   directory whose kb/ paths point at DIR
 #                                    #   (use this in a consumer repo to point it
 #                                    #    at a shared store, e.g. .../mtn/sinai)
@@ -103,12 +103,12 @@ install_plugin() {
   warn "restart any running Claude Code session to pick up the skills."
 }
 
-# ── 3. (optional) consumer .living_doc.toml ────────────────────────────────
+# ── 3. (optional) consumer .live_docs.toml ────────────────────────────────
 init_store() {
-  step "Writing .living_doc.toml in $(pwd)"
+  step "Writing .live_docs.toml in $(pwd)"
   local store
   store="$(cd "$INIT_STORE" 2>/dev/null && pwd)" || die "--init-store: no such directory: $INIT_STORE"
-  local toml="./.living_doc.toml"
+  local toml="./.live_docs.toml"
   if [ -e "$toml" ]; then
     warn "$toml already exists — not overwriting. Remove it and re-run to regenerate."
     return
@@ -134,4 +134,4 @@ EOF
 step "Done."
 say "  ${DIM}CLI:${RST}    ldoc help"
 say "  ${DIM}skills:${RST} /${PLUGIN_NAME}:garden, /${PLUGIN_NAME}:ingest-reference, … (restart Claude Code first)"
-say "  ${DIM}store:${RST}  drop a .living_doc.toml in a repo (or run --init-store) to point it at one"
+say "  ${DIM}store:${RST}  drop a .live_docs.toml in a repo (or run --init-store) to point it at one"

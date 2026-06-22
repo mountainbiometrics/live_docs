@@ -4,3 +4,4 @@ kb/02-docs/.index
 
 build/
 
+__pycache__/

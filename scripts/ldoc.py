@@ -21,7 +21,8 @@ Subcommands (grouped):
         [--kind requires|belongs_to|relates|provenance|superseded_by|dependents|provenance_of|all]
         [--json]
 
-  ── Search / list ──
+  ── Orient / search / list ──
+    map [--json]                    # entry points (signpost roots) — start here
     find [term ...] [--or] [--regex PAT]
          [--type] [--level] [--status] [--scope] [--domain] [--json] [--plain]
     ls [--type] [--json] [--plain]
@@ -34,13 +35,13 @@ Subcommands (grouped):
     edges [--json]
 
   ── Mutations ──
-    new --type T --title T [--label L] [--level L] [--status S]
+    new --type T --title T [--label L] [--summary S] [--level L] [--status S]
         [--requires a,b] [--belongs-to a,b] [--relates a,b]
         [--provenance a,b] [--superseded-by a,b]
         [--tags-domain d] [--tags-scope s]
         [--kind K] [--source S] [--body T|-] [--dry-run]
-    set <ref> [--title] [--label] [--level] [--status] [--type] [--scope]
-              [--body -|TEXT] [--dry-run]
+    set <ref> [--title] [--label] [--summary] [--level] [--status] [--type]
+              [--scope] [--domain] [--body -|TEXT] [--dry-run]
     edit <ref>   (alias: set <ref> --body -)
     link <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
                [--provenance a,b] [--superseded-by a,b] [--dry-run]
@@ -389,6 +390,53 @@ def cmd_orphans(kb: KB, args) -> int:
     return 0
 
 
+def cmd_map(kb: KB, args) -> int:
+    """Orientation map: the topological entry points (signpost roots) of the store."""
+    try:
+        overview = kb.map_overview()
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    if args.json:
+        _json(overview)
+        return 0
+
+    signposts = overview["signposts"]
+    floating = overview["floating"]
+
+    print(f"# Store map — {overview['total']} docs, "
+          f"{len(signposts)} entry point(s), {len(floating)} floating\n")
+
+    if signposts:
+        print("## Entry points (signpost roots, biggest first)\n")
+        for s in signposts:
+            scope = f"  scope: {', '.join(s['scope'])}" if s["scope"] else ""
+            print(f"[{s['display']}]({s['id']}.md)  "
+                  f"({s['descendants']} descendants){scope}")
+            if s["summary"]:
+                print(f"  {s['summary']}")
+            for c in s["children"]:
+                tail = f" ({c['descendants']} below)" if c["descendants"] else ""
+                print(f"    → [{c['display']}]({c['id']}.md){tail}")
+                if c["summary"]:
+                    print(f"        {c['summary']}")
+            print()
+
+    if floating:
+        print("## Floating (roots with no descendants — orphans & standalone)\n")
+        for f in floating:
+            print(f"[{f['display']}]({f['id']}.md)")
+            if f["summary"]:
+                print(f"  {f['summary']}")
+        print()
+
+    if not signposts and not floating:
+        print("(empty store)")
+
+    return 0
+
+
 def cmd_resolve(kb: KB, args) -> int:
     refs = _resolve_refs(kb, args.refs)
     if refs is None:
@@ -645,6 +693,10 @@ def cmd_set(kb: KB, args) -> int:
     if args.scope is not None:
         # scope is a single string naming a topological zone; empty string clears it
         fields["scope"] = args.scope
+    if args.domain is not None:
+        # domain is a flat list of cross-cutting tags; comma-separated input,
+        # empty string clears it (drops the field).
+        fields["domain"] = [s.strip() for s in args.domain.split(",") if s.strip()]
 
     # --body: read new body from stdin or inline
     body_arg = getattr(args, "body", None)
@@ -655,7 +707,7 @@ def cmd_set(kb: KB, args) -> int:
         new_body = body_arg
 
     if not fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, or --body.")
+        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, or --body.")
         return 1
 
     # --dry-run preview
@@ -1290,6 +1342,7 @@ def cmd_help(kb: KB, args) -> int:
   echo -e "porcelain-roadmap\\nbatch-operations" | ldoc show -
 
   # Search / list
+  ldoc map                                # orient: entry points + summaries
   ldoc find porcelain
   ldoc find label title --or              # OR-mode multi-term
   ldoc find --regex 'batch|multi'
@@ -1304,6 +1357,8 @@ def cmd_help(kb: KB, args) -> int:
        --requires cognitive-load
   ldoc new --type decision --title "Test" --dry-run
   ldoc set porcelain-roadmap --title "New Title"
+  ldoc set porcelain-roadmap --summary "One-line gist."
+  ldoc set porcelain-roadmap --domain "Ingest,Schema Evolution"   # set/clear domain tags
   ldoc set porcelain-roadmap --body -         # read body from stdin
   echo "new body text" | ldoc edit porcelain-roadmap
   ldoc link porcelain-roadmap --requires batch-operations
@@ -1405,6 +1460,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
 
+    # --- map ---
+    p = sub.add_parser(
+        "map",
+        help="Orientation map: the store's entry points (signpost roots) with summaries.",
+    )
+    p.add_argument("--json", action="store_true")
+
     # --- resolve ---
     p = sub.add_parser("resolve", help="Resolve ref(s) to canonical id(s).")
     p.add_argument("refs", nargs="+", metavar="ref",
@@ -1498,6 +1560,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scope", default=None,
                    help="Single string naming a topological zone; applies to this "
                         "doc and its whole belongs_to subtree. Empty string clears it.")
+    p.add_argument("--domain", default=None,
+                   help="Comma-separated cross-cutting domain tags (flat list, NOT "
+                        "inherited). Replaces the doc's domain list; empty string clears it.")
     p.add_argument("--body", default=None,
                    help="Replace body: TEXT value or '-' to read from stdin.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
@@ -1650,6 +1715,7 @@ COMMANDS = {
     "find": cmd_find,
     "ls": cmd_ls,
     "orphans": cmd_orphans,
+    "map": cmd_map,
     "resolve": cmd_resolve,
     "label": cmd_label,
     "neighbors": cmd_neighbors,

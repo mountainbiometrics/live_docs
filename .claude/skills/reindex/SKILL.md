@@ -129,4 +129,4 @@ This avoids the stale-cache hazard, consistent with how `cascade-check` uses
 Logic lives in the `livedocs` package, exposed as the `ldoc reindex` subcommand.
 The wrapper `.claude/skills/reindex/reindex.sh` just `exec`s `ldoc reindex`; the
 installed `ldoc` locates the store by discovery (walks up from CWD for
-`.living_doc.toml`), so it works from any CWD. Stdlib only — no external deps.
+`.live_docs.toml`), so it works from any CWD. Stdlib only — no external deps.
