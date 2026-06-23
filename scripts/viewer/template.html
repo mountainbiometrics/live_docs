@@ -113,11 +113,33 @@
   /* reader */
   .reader { display: grid; grid-template-columns: 290px 1fr; min-height: calc(100vh - 49px); }
   .tree { border-right: 1px solid var(--line); background: var(--panel); padding: 12px 8px; overflow-y: auto; max-height: calc(100vh - 49px); position: sticky; top: 49px; }
-  .tree details { margin-bottom: 2px; }
-  .tree summary { cursor: pointer; padding: 3px 6px; border-radius: 5px; font-weight: 600; font-size: 13px; color: var(--accent); list-style: none; }
+  .tree .tree-node { margin-bottom: 1px; }
+  .tree summary,
+  .tree .leaf {
+    padding: 3px 6px;
+    border-radius: 5px; font-size: 13px;
+  }
+  .tree summary {
+    cursor: pointer; font-weight: 600; color: var(--accent); list-style: none;
+    display: flex; align-items: center;
+  }
   .tree summary::-webkit-details-marker { display: none; }
+  .tree summary::before {
+    content: ""; display: inline-block; flex: none;
+    width: 0; height: 0; margin-right: 6px;
+    border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+    border-left: 5px solid var(--faint);
+    transition: transform .12s;
+  }
+  .tree details[open] > summary::before { transform: rotate(90deg); }
   .tree summary:hover { background: var(--accent-soft); }
-  .tree .leaf { padding: 3px 6px 3px 22px; font-size: 13px; cursor: pointer; border-radius: 5px; color: var(--ink); }
+  .tree .tree-children {
+    border-left: 1px solid var(--line);
+    margin-left: 6px;
+    padding-left: 2px;
+  }
+  .tree .tree-count { font-weight: 400; font-size: 11px; color: var(--faint); margin-left: 4px; }
+  .tree .leaf { cursor: pointer; color: var(--ink); font-weight: 400; }
   .tree .leaf:hover { background: var(--accent-soft); }
   .tree .leaf.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
   .content { padding: 22px 28px; max-width: 820px; overflow-x: hidden; }
@@ -564,6 +586,44 @@ const TYPE_ICONS = {
 const TYPE_ICON_FALLBACK = { color: "var(--faint)", label: "unknown",
   svg: `<circle cx="12" cy="12" r="9"/><path d="M12 17h.01"/><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3"/>` };
 
+/* Canonical type ordering (high-level → concrete). Used anywhere the viewer
+   lists docs without an established sort (tree siblings, member lists, orphans,
+   connection groups, catalog default). Reviews keep newest-first. Catalog column
+   clicks override the default. Unknown types sort after reference, alpha by name. */
+const TYPE_ORDER = [
+  "use-case", "principle", "requirement", "constraint",
+  "component", "decision", "guide", "reference",
+];
+function typeRank(t) {
+  const s = String(t || "");
+  const i = TYPE_ORDER.indexOf(s);
+  return i >= 0 ? i : TYPE_ORDER.length;
+}
+function docSortKey(d) {
+  return String((d && (d.label || d.title || d.id)) || "");
+}
+function compareDocsByTypeThenLabel(a, b) {
+  const tr = typeRank(a.type) - typeRank(b.type);
+  if (tr) return tr;
+  const ta = String(a.type || ""), tb = String(b.type || "");
+  if (ta !== tb) return ta.localeCompare(tb);
+  return docSortKey(a).localeCompare(docSortKey(b));
+}
+function compareIdsByTypeThenLabel(a, b) {
+  const da = byId.get(String(a)), db = byId.get(String(b));
+  if (!da && !db) return String(a).localeCompare(String(b));
+  if (!da) return 1;
+  if (!db) return -1;
+  return compareDocsByTypeThenLabel(da, db);
+}
+function sortTypes(arr) {
+  return arr.slice().sort((a, b) => typeRank(a) - typeRank(b) || String(a).localeCompare(String(b)));
+}
+function sortGroupKeys(field, keys) {
+  if (field === "type") return sortTypes(keys);
+  return keys.slice().sort((a, b) => String(a).localeCompare(String(b)));
+}
+
 // render the icon for a doc `type` as an inline <svg>, sized to text via the .ticon
 // wrapper. Returns "" for no type so callers can interpolate unconditionally.
 function typeIcon(type, opts) {
@@ -760,7 +820,7 @@ function renderHome() {
   let html = `<h1 class="pagetitle">Dashboard</h1><div class="sub">Orientation for the live_docs store — every link below resolves to a label; hover for summary, single-click to expand, double-click to open in Reader.</div>`;
   html += `<div class="stats">`;
   html += statBox(DOCS.length, "total docs");
-  Object.keys(byType).sort().forEach(t => html += statBox(byType[t], t));
+  sortTypes(Object.keys(byType)).forEach(t => html += statBox(byType[t], t));
   html += `</div>`;
   html += `<div class="stats">`;
   Object.keys(byStatus).sort().forEach(s => html += statBox(byStatus[s], "status: " + s));
@@ -797,13 +857,13 @@ function renderHome() {
   // orphans — belongs_to roots that bear no descendants (unplaced by curation)
   html += `<div class="card"><h3>Orphans — no belongs_to, no descendants (${orphans.length})</h3><ul class="tight">`;
   if (!orphans.length) html += `<li class="sub">none</li>`;
-  orphans.forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${scopePills(d.id)}</li>`);
+  orphans.slice().sort(compareDocsByTypeThenLabel).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${scopePills(d.id)}</li>`);
   html += `</ul></div>`;
 
   // deprecated -> superseded_by
   html += `<div class="card"><h3>Deprecated → superseded by (${deprecated.length})</h3><ul class="tight">`;
   if (!deprecated.length) html += `<li class="sub">none</li>`;
-  deprecated.forEach(d => {
+  deprecated.slice().sort(compareDocsByTypeThenLabel).forEach(d => {
     const sup = edgeList(d, "superseded_by");
     const supHtml = sup.length ? sup.map(s => linkHtml(s, null, {icon:1})).join(", ") : `<span class="dl broken">(no superseded_by!)</span>`;
     html += `<li>${linkHtml(d.id, null, {icon:1})} → ${supHtml}</li>`;
@@ -818,25 +878,30 @@ function buildTree() {
   // Folders are SIGNPOSTS (docs that bear descendants), not type:index — that
   // type is retired. A member that is itself a signpost nests as a sub-folder;
   // members with no descendants are leaves. Tree roots = signposts with no
-  // resolving belongs_to parent.
+  // resolving belongs_to parent. Siblings sort type → label; depth is visual.
   const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0)
-    .sort((a, b) => descCount(b.id) - descCount(a.id));
+    .sort(compareDocsByTypeThenLabel);
 
   function renderNode(idx, seen) {
     seen = seen || new Set();
     if (seen.has(idx.id)) return ""; // guard cycles
     seen = new Set(seen); seen.add(idx.id);
     const memberIds = (children.get(idx.id) || []);
-    const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean);
-    const leaves = memberIds.filter(m => !isSignpost(m));
-    let h = `<details open><summary data-ref="${idx.id}">${typeIcon(idx.type)}${escapeHtml(idx.label || idx.title)}</summary>`;
+    const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean)
+      .sort(compareDocsByTypeThenLabel);
+    const leaves = memberIds.filter(m => !isSignpost(m))
+      .map(lid => byId.get(lid)).filter(Boolean)
+      .sort(compareDocsByTypeThenLabel);
+    const nKids = childSignposts.length + leaves.length;
+    const countHint = nKids ? `<span class="tree-count">${nKids}</span>` : "";
+    let h = `<div class="tree-node"><details open>`
+      + `<summary data-ref="${idx.id}">${typeIcon(idx.type)}${escapeHtml(idx.label || idx.title)}${countHint}</summary>`
+      + `<div class="tree-children">`;
     childSignposts.forEach(ci => h += renderNode(ci, seen));
-    leaves.forEach(lid => {
-      const d = byId.get(lid);
-      if (!d) return;
-      h += `<div class="leaf" data-id="${lid}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || lid)}</div>`;
+    leaves.forEach(d => {
+      h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`;
     });
-    h += `</details>`;
+    h += `</div></details></div>`;
     return h;
   }
 
@@ -845,11 +910,12 @@ function buildTree() {
 
   // Ungrouped catch-all: docs that belong to nothing AND bear no descendants
   // (a signpost with no parent is already a root above, so exclude those).
-  const ungrouped = belongsRoots.filter(d => !isSignpost(d.id));
+  const ungrouped = belongsRoots.filter(d => !isSignpost(d.id))
+    .sort(compareDocsByTypeThenLabel);
   if (ungrouped.length) {
-    h += `<details><summary>Ungrouped (${ungrouped.length})</summary>`;
+    h += `<div class="tree-node"><details><summary>Ungrouped <span class="tree-count">${ungrouped.length}</span></summary><div class="tree-children">`;
     ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`);
-    h += `</details>`;
+    h += `</div></details></div>`;
   }
   return h;
 }
@@ -892,8 +958,9 @@ function metaLine(d) {
 
 function relGroup(title, ids) {
   if (!ids || !ids.length) return "";
+  const sorted = ids.slice().sort(compareIdsByTypeThenLabel);
   return `<div class="relgroup"><div class="rt">${escapeHtml(title)} (${ids.length})</div><ul>` +
-    ids.map(id => `<li>${linkHtml(id, null, {icon:1})} ${edgeBadge(id)}</li>`).join("") + `</ul></div>`;
+    sorted.map(id => `<li>${linkHtml(id, null, {icon:1})} ${edgeBadge(id)}</li>`).join("") + `</ul></div>`;
 }
 
 // Index member list, derived from the belongs_to reverse edge (children map) —
@@ -905,12 +972,7 @@ function memberListHtml(indexId) {
   if (!members.length) {
     return `<div class="members"><h2>Members</h2><div class="sub">No docs belong to this index yet.</div></div>`;
   }
-  // sub-signposts first (descendant-bearing members), then the rest, alpha by label
-  const sorted = members.slice().sort((a, b) => {
-    const ia = isSignpost(a) ? 0 : 1, ib = isSignpost(b) ? 0 : 1;
-    if (ia !== ib) return ia - ib;
-    return String(labelOf(a) || a).localeCompare(String(labelOf(b) || b));
-  });
+  const sorted = members.slice().sort(compareIdsByTypeThenLabel);
   const li = sorted.map(mid => {
     const md = byId.get(mid);
     if (!md) return `<li>${linkHtml(mid)}</li>`;
@@ -987,7 +1049,7 @@ function renderFocusDoc(content, id) {
     // a signpost still has its own edges (it belongs_to a parent, may require/relate)
     html += connectionsHtml(d, { skipChildren: true });
     content.innerHTML = html;
-    const members = (children.get(d.id) || []);
+    const members = (children.get(d.id) || []).slice().sort(compareIdsByTypeThenLabel);
     document.getElementById("composeBtn").addEventListener("click", function () {
       const target = document.getElementById("composed");
       if (target.innerHTML) { target.innerHTML = ""; this.textContent = "Expand — inline all member docs"; return; }
@@ -1356,10 +1418,10 @@ function mountGraph(container, focusId) {
 }
 
 /* ===== CATALOG ===== */
-const catalogState = { type: "", status: "", level: "", scope: "", q: "", group: "", sort: "label", dir: 1 };
+const catalogState = { type: "", status: "", level: "", scope: "", q: "", group: "", sort: "", dir: 1 };
 function renderCatalog() {
   const el = document.getElementById("page-catalog");
-  const types = [...new Set(DOCS.map(d => d.type).filter(Boolean))].sort();
+  const types = sortTypes([...new Set(DOCS.map(d => d.type).filter(Boolean))]);
   const statuses = [...new Set(DOCS.map(d => d.status).filter(Boolean))].sort();
   const levels = [...new Set(DOCS.map(d => d.level).filter(Boolean))].sort();
   // effective-scope facet: the union of every doc's resolved scope set (computed
@@ -1385,7 +1447,7 @@ function renderCatalog() {
   html += `<div class="count-note" id="cat-count"></div>`;
   html += `<table class="catalog"><thead><tr>`;
   ["label","title","type","status","level"].forEach(c =>
-    html += `<th data-sort="${c}">${c}${catalogState.sort===c?(catalogState.dir>0?" ▲":" ▼"):""}</th>`);
+    html += `<th data-sort="${c}">${c}${catalogState.sort===c?(catalogState.dir>0?" ▲":" ▼"):catalogState.sort===""&&c==="type"?" ▲":""}</th>`);
   html += `<th>scope</th>`;  // effective scope — computed, so not click-sortable
   html += `<th data-sort="created">created${catalogState.sort==="created"?(catalogState.dir>0?" ▲":" ▼"):""}</th>`;
   html += `</tr></thead><tbody id="cat-body"></tbody></table>`;
@@ -1399,7 +1461,13 @@ function renderCatalog() {
       (!catalogState.scope || effectiveScopes(d.id).includes(catalogState.scope)) &&
       (!catalogState.q || ((d.label||"")+" "+(d.title||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
     const s = catalogState.sort;
-    rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
+    if (!s) {
+      rows.sort((a, b) => compareDocsByTypeThenLabel(a, b) * catalogState.dir);
+    } else if (s === "type") {
+      rows.sort((a, b) => (compareDocsByTypeThenLabel(a, b)) * catalogState.dir);
+    } else {
+      rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
+    }
     document.getElementById("cat-count").textContent = `${rows.length} of ${DOCS.length} docs`;
     const body = document.getElementById("cat-body");
     const cell = d => `<td>${linkHtml(d.id, null, {icon:1})}</td><td>${escapeHtml(d.title||"")}</td><td>${escapeHtml(d.type||"")}</td>`
@@ -1417,7 +1485,7 @@ function renderCatalog() {
           if (!es.length) push("(none)", d); else es.forEach(z => push(z, d));
         } else push(d[catalogState.group]||"(none)", d);
       });
-      body.innerHTML = Object.keys(groups).sort().map(k =>
+      body.innerHTML = sortGroupKeys(catalogState.group, Object.keys(groups)).map(k =>
         `<tr class="grouphdr"><td colspan="7">${escapeHtml(catalogState.group)}: ${escapeHtml(k)} (${groups[k].length})</td></tr>`
         + groups[k].map(d => `<tr>${cell(d)}</tr>`).join("")).join("");
     } else {
@@ -1505,13 +1573,13 @@ function renderReviews() {
 /* ===== type-icon legend (key) ===== */
 // Build the collapsible key from the same TYPE_ICONS map the rest of the UI uses,
 // so the legend can never drift from the rendered glyphs. Only types that actually
-// occur in the store are shown, in the map's declared (taxonomy) order.
+// occur in the store are shown, in TYPE_ORDER (high-level → concrete).
 function renderTypeKey() {
   const present = new Set(DOCS.map(d => d.type).filter(Boolean));
   const panel = document.getElementById("typekey-panel");
   if (!panel) return;
-  const rows = Object.keys(TYPE_ICONS)
-    .filter(t => present.has(t))
+  const typeKeys = sortTypes(Object.keys(TYPE_ICONS).filter(t => present.has(t)));
+  const rows = typeKeys
     .map(t => `<div class="keyrow">${typeIcon(t, { title: false })}<span>${escapeHtml(TYPE_ICONS[t].label)}</span></div>`)
     .join("");
   panel.innerHTML = rows || `<div class="keyrow sub">no typed docs</div>`;
