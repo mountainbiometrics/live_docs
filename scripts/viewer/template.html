@@ -112,7 +112,21 @@
 
   /* reader */
   .reader { display: grid; grid-template-columns: 290px 1fr; min-height: calc(100vh - 49px); }
-  .tree { border-right: 1px solid var(--line); background: var(--panel); padding: 12px 8px; overflow-y: auto; max-height: calc(100vh - 49px); position: sticky; top: 49px; }
+  .tree-panel {
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 49px; max-height: calc(100vh - 49px);
+  }
+  .tree-toolbar {
+    display: flex; gap: 6px; padding: 8px 8px 6px;
+    border-bottom: 1px solid var(--line); flex: none;
+  }
+  .tree-toolbar button.tree-act {
+    background: var(--accent-soft); color: var(--accent); border: none;
+    border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer;
+  }
+  .tree-toolbar button.tree-act:hover { opacity: .85; }
+  .tree { padding: 8px 8px 12px; overflow-y: auto; flex: 1; min-height: 0; }
   .tree .tree-node { margin-bottom: 1px; }
   .tree summary,
   .tree .leaf {
@@ -133,6 +147,7 @@
   }
   .tree details[open] > summary::before { transform: rotate(90deg); }
   .tree summary:hover { background: var(--accent-soft); }
+  .tree summary.active { background: var(--accent-soft); }
   .tree .tree-children {
     border-left: 1px solid var(--line);
     margin-left: 6px;
@@ -882,7 +897,7 @@ function buildTree() {
   const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0)
     .sort(compareDocsByTypeThenLabel);
 
-  function renderNode(idx, seen) {
+  function renderNode(idx, seen, depth) {
     seen = seen || new Set();
     if (seen.has(idx.id)) return ""; // guard cycles
     seen = new Set(seen); seen.add(idx.id);
@@ -894,10 +909,11 @@ function buildTree() {
       .sort(compareDocsByTypeThenLabel);
     const nKids = childSignposts.length + leaves.length;
     const countHint = nKids ? `<span class="tree-count">${nKids}</span>` : "";
-    let h = `<div class="tree-node"><details open>`
+    const openAttr = depth === 0 ? " open" : "";
+    let h = `<div class="tree-node"><details${openAttr}>`
       + `<summary data-ref="${idx.id}">${typeIcon(idx.type)}${escapeHtml(idx.label || idx.title)}${countHint}</summary>`
       + `<div class="tree-children">`;
-    childSignposts.forEach(ci => h += renderNode(ci, seen));
+    childSignposts.forEach(ci => h += renderNode(ci, seen, depth + 1));
     leaves.forEach(d => {
       h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`;
     });
@@ -906,14 +922,14 @@ function buildTree() {
   }
 
   let h = "";
-  roots.forEach(r => h += renderNode(r));
+  roots.forEach(r => h += renderNode(r, undefined, 0));
 
   // Ungrouped catch-all: docs that belong to nothing AND bear no descendants
   // (a signpost with no parent is already a root above, so exclude those).
   const ungrouped = belongsRoots.filter(d => !isSignpost(d.id))
     .sort(compareDocsByTypeThenLabel);
   if (ungrouped.length) {
-    h += `<div class="tree-node"><details><summary>Ungrouped <span class="tree-count">${ungrouped.length}</span></summary><div class="tree-children">`;
+    h += `<div class="tree-node"><details open><summary>Ungrouped <span class="tree-count">${ungrouped.length}</span></summary><div class="tree-children">`;
     ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`);
     h += `</div></details></div>`;
   }
@@ -921,24 +937,95 @@ function buildTree() {
 }
 
 let readerTreeHtml = null;
-function renderReader(focusId) {
+let readerShell = null;
+
+function wireTreeToolbar(toolbarEl, treeEl) {
+  if (toolbarEl._wired) return;
+  toolbarEl._wired = true;
+  toolbarEl.addEventListener("click", e => {
+    const btn = e.target.closest("[data-tree-act]");
+    if (!btn) return;
+    const act = btn.getAttribute("data-tree-act");
+    treeEl.querySelectorAll("details").forEach(det => { det.open = act === "expand"; });
+  });
+}
+
+function wireReaderTree(treeEl) {
+  if (treeEl._wired) return;
+  treeEl._wired = true;
+  treeEl.addEventListener("click", e => {
+    const leaf = e.target.closest(".leaf[data-id]");
+    if (leaf) location.hash = "#/" + leaf.getAttribute("data-id");
+  });
+  treeEl.addEventListener("dblclick", e => {
+    const sum = e.target.closest("summary[data-ref]");
+    if (!sum) return;
+    e.preventDefault();
+    location.hash = "#/" + sum.getAttribute("data-ref");
+  });
+}
+
+// Open belongs_to ancestors so the focused row is visible; does not collapse
+// anything the user left open elsewhere in the tree.
+function revealInTree(treeEl, focusId) {
+  const seen = new Set();
+  let cur = String(focusId);
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const ps = parentsOf(cur).filter(p => byId.has(p));
+    ps.forEach(p => {
+      const sum = treeEl.querySelector(`summary[data-ref="${p}"]`);
+      if (sum && sum.parentElement && sum.parentElement.tagName === "DETAILS") {
+        sum.parentElement.open = true;
+      }
+    });
+    cur = ps[0] || null;
+  }
+  const row = treeEl.querySelector(`.leaf[data-id="${focusId}"]`)
+    || treeEl.querySelector(`summary[data-ref="${focusId}"]`);
+  const details = row && row.closest("details");
+  if (details) details.open = true;
+}
+
+function setTreeFocus(treeEl, focusId) {
+  treeEl.querySelectorAll(".leaf").forEach(n =>
+    n.classList.toggle("active", n.getAttribute("data-id") === focusId));
+  treeEl.querySelectorAll("summary[data-ref]").forEach(s =>
+    s.classList.toggle("active", s.getAttribute("data-ref") === focusId));
+  if (focusId) {
+    revealInTree(treeEl, focusId);
+    const active = treeEl.querySelector(".leaf.active") || treeEl.querySelector("summary.active");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function ensureReaderShell() {
   const el = document.getElementById("page-reader");
+  if (readerShell) return el.querySelector("#reader-content");
   if (readerTreeHtml === null) readerTreeHtml = buildTree();
-  el.innerHTML = `<div class="reader"><div class="tree">${readerTreeHtml}</div><div class="content" id="reader-content"></div></div>`;
+  el.innerHTML = `<div class="reader"><div class="tree-panel">`
+    + `<div class="tree-toolbar">`
+    + `<button type="button" class="tree-act" data-tree-act="expand">Expand all</button>`
+    + `<button type="button" class="tree-act" data-tree-act="collapse">Collapse all</button>`
+    + `</div><div class="tree">${readerTreeHtml}</div></div>`
+    + `<div class="content" id="reader-content"></div></div>`;
+  readerShell = el.querySelector(".reader");
+  const treeEl = readerShell.querySelector(".tree");
+  wireTreeToolbar(readerShell.querySelector(".tree-toolbar"), treeEl);
+  wireReaderTree(treeEl);
+  return el.querySelector("#reader-content");
+}
 
-  // wire tree clicks
-  el.querySelectorAll(".tree .leaf").forEach(n =>
-    n.addEventListener("click", () => { location.hash = "#/" + n.getAttribute("data-id"); }));
-  el.querySelectorAll(".tree summary[data-ref]").forEach(s =>
-    s.addEventListener("dblclick", e => { e.preventDefault(); location.hash = "#/" + s.getAttribute("data-ref"); }));
+function renderReader(focusId) {
+  const content = ensureReaderShell();
+  const treeEl = readerShell.querySelector(".tree");
 
-  const content = document.getElementById("reader-content");
   if (!focusId) {
+    treeEl.querySelectorAll(".leaf.active, summary.active").forEach(n => n.classList.remove("active"));
     content.innerHTML = `<h1 class="doctitle">Reader</h1><div class="sub">Pick a doc from the tree on the left, or double-click any link anywhere to focus it here.</div>`;
     return;
   }
-  el.querySelectorAll(".tree .leaf").forEach(n =>
-    n.classList.toggle("active", n.getAttribute("data-id") === focusId));
+  setTreeFocus(treeEl, focusId);
   renderFocusDoc(content, focusId);
 }
 
