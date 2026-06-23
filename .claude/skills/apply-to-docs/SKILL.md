@@ -32,12 +32,24 @@ pause-before-implementing gate.
 
 Exactly like cascade-check's "orchestrator owns the episode" contract:
 
+> **What "invoke a sub-skill" means here — read this literally.** When a step says
+> to run a sub-skill (e.g. `/map-concepts-to-docs`), you invoke that skill
+> **yourself, inline, with the Skill tool, in THIS SAME turn** — exactly as if you
+> had typed the slash command — and then you **keep going** to the next step. It
+> does **NOT** mean: spawn a subagent; hand the work off to another agent; or stop
+> and report a partial result for "something else" to continue. You are the single
+> agent that runs this whole skill start to finish. An intermediate artifact (a
+> concept list, a conflict map) is the **input to the next step you run now**, not
+> a stopping point.
+
 - apply-to-docs captures the single `START` timestamp and emits the **one**
   review summary for the whole episode (Step 9).
-- Every sub-skill it invokes is a **nested invocation**: tell each one so. Nested
-  sub-skills must NOT capture their own `START`, must NOT run `ldoc review new`,
-  and must NOT re-invoke this orchestrator. They leave their labeled output in
-  context for the next step to read.
+- Every sub-skill it runs is **nested**: it executes inline in this turn (per the
+  box above) and must NOT capture its own `START`, must NOT run `ldoc review new`,
+  and must NOT re-invoke this orchestrator. Each leaves its labeled output in
+  context for the next step **that you then run** — the output is a handoff to
+  your own next step, not to another agent. ("Nested" describes review/episode
+  ownership; it does not mean a separate agent.)
 
 ---
 
@@ -95,7 +107,7 @@ ldoc new \
   --kind plan \
   --status reference \
   --level incidental \
-  --title "Reference: <short description>" \
+  --title "<short description>" \   # no "Reference:" prefix — the type is shown automatically on display
   --source "raw/<RAW_ID>.md" \
   --body "<the one-paragraph restatement from Step 1>"
 ```
@@ -108,30 +120,34 @@ to `synthesize-doc-changes` in Step 6; every new doc will carry
 
 ## Step 2 — Extract concepts (invoke `identify-key-concepts`)
 
-Invoke the **`identify-key-concepts`** skill on the normalized restatement from
-Step 1, as a **nested invocation**. Pass apply-to-docs's knob:
+Run **`/identify-key-concepts`** yourself (inline, this turn; nested) on the
+normalized restatement from Step 1. Pass apply-to-docs's knob:
 
 > Extract **3–10 key concepts**, labeled `Concept`. (No splitting test.)
 
 It returns a typed concept list (`Concept / Type / Asserts`) in context. Keep it
 for Step 3.
 
+> **Do NOT stop here.** The concept list is an intermediate artifact, not a
+> deliverable to hand off. You produced it; now you continue to Step 3 in this
+> same turn. An apply-to-docs episode that ends after extracting concepts has done
+> none of its actual work (no docs written) — it is incomplete, not finished.
+
 ---
 
-## Step 3 — Map concepts to existing docs (invoke `map-concepts-to-docs`)
+## Step 3 — Map concepts to existing docs (run `/map-concepts-to-docs`)
 
-Invoke the **`map-concepts-to-docs`** skill with the concept list from Step 2, as
-a **nested invocation**. Emphasis: full concept survey across the store. It
+Run **`/map-concepts-to-docs`** yourself (inline, this turn; nested) with the
+concept list from Step 2. Emphasis: full concept survey across the store. It
 returns a relationship verdict map (`compatible` / `partial-supersession` /
-`full-supersession` / `conflict-unresolved`) in context. (Read-only — safe to run
-via `context: fork` if the store is large.)
+`full-supersession` / `conflict-unresolved`) in context. (Read-only.)
 
 ---
 
-## Step 4 — Assess the blast radius (invoke `assess-blast-radius`)
+## Step 4 — Assess the blast radius (run `/assess-blast-radius`)
 
-Invoke the **`assess-blast-radius`** skill from every non-`compatible` match in
-the Step 3 map, as a **nested invocation**, passing the restatement as the change
+Run **`/assess-blast-radius`** yourself (inline, this turn; nested) from every
+non-`compatible` match in the Step 3 map, passing the restatement as the change
 description. It walks the graph and returns the **complete impact set** with
 verdicts (`cascade-extend` / `cascade-full` / `conflict-unresolved` /
 `inconsequential`) and the frozen-doc rule applied. (Read-only — safe to run via
@@ -178,10 +194,10 @@ directly to Step 6.
 
 ---
 
-## Step 6 — Batch-synthesize all changes (invoke `synthesize-doc-changes`)
+## Step 6 — Batch-synthesize all changes (run `/synthesize-doc-changes`)
 
-Invoke the **`synthesize-doc-changes`** skill, as a **nested invocation**,
-handing it:
+Run **`/synthesize-doc-changes`** yourself (inline, this turn; nested), handing
+it:
 
 - the complete impact set from Step 4 (each affected doc with its verdict),
 - the concept list from Step 2 (for new-doc creation),

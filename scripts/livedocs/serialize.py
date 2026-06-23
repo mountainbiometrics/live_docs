@@ -57,8 +57,11 @@ CANONICAL_FIELD_ORDER = [
 # These are omitted entirely when empty (not written as []).
 EDGE_FIELDS = {"belongs_to", "requires", "relates", "provenance", "superseded_by"}
 
-# Extra fields appended for reference docs (after canonical baseline)
-REFERENCE_EXTRA_FIELDS = ["kind", "source", "imported"]
+# Extra fields appended for reference docs (after canonical baseline).
+# origin/medium/authored_at are optional provenance fields carried from the raw
+# clipping so the graph node retains source-corpus, medium, and source-age
+# context for staleness reasoning; omitted when empty.
+REFERENCE_EXTRA_FIELDS = ["kind", "source", "origin", "medium", "authored_at", "imported"]
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +386,45 @@ def _emit_field(key: str, value: Any) -> list[str]:
         return [f"{key}: {_yaml_str(value)}"]
 
     return [f"{key}: {value}"]
+
+
+def build_raw_frontmatter(
+    raw_id: str,
+    source: str,
+    title: str,
+    imported: str,
+    origin: str = "",
+    medium: str = "",
+    authored_at: str = "",
+    captured: str = "",
+    parent_raw: str = "",
+    shard_depth: int = 0,
+) -> str:
+    """Return the frontmatter block for a raw/ clipping file.
+
+    Raw files are not graph nodes — no edge fields, tags, or history.
+    Optional provenance fields (origin, medium, authored_at, captured,
+    parent_raw, shard_depth) are omitted from output when empty/zero.
+    """
+    lines = ["---", f"id: {_yaml_str(raw_id)}"]
+    if title:
+        lines.append(f"title: {_yaml_str(title)}")
+    lines += ["type: reference", "kind: clipping", "status: reference"]
+    if origin:
+        lines.append(f"origin: {_yaml_str(origin)}")
+    if medium:
+        lines.append(f"medium: {_yaml_str(medium)}")
+    lines.append(f"original_source: {_yaml_str(source)}")
+    if authored_at:
+        lines.append(f"authored_at: {_yaml_str(authored_at)}")
+    if captured:
+        lines.append(f"captured: {_yaml_str(captured)}")
+    if parent_raw:
+        lines.append(f"parent_raw: {_yaml_str(parent_raw)}")
+    if shard_depth:
+        lines.append(f"shard_depth: {int(shard_depth)}")
+    lines += [f"imported: {_yaml_str(imported)}", "---"]
+    return "\n".join(lines)
 
 
 def dump_doc(frontmatter: dict, body: str) -> str:

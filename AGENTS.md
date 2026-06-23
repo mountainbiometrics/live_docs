@@ -65,10 +65,13 @@ The KB is not a changelog; it is the living model of what the system IS. Impleme
 
 Skills are in `.claude/skills/*/SKILL.md`. Each skill owns a specific operating procedure. Invoke the matching skill; do not approximate it with raw ldoc calls.
 
+**When one skill's steps tell you to invoke another skill** (e.g. ingest-reference running `/identify-key-concepts` then `/map-concepts-to-docs` then `/synthesize-doc-changes`), that means: **you run that skill yourself, inline, in the same turn** — as if you had typed the slash command — and then continue to the next step. It does **not** mean spawn a subagent, and it does **not** mean stop and hand the intermediate output (a concept list, a conflict map) to "something else." A "nested invocation" is purely about review/episode ownership (the outer skill owns the single review summary; the inner one does not emit its own) — it is *not* a separate agent. An orchestrator episode that ends after an intermediate step has produced no durable result and is incomplete, not finished.
+
 | Situation | Skill to invoke |
 |-----------|----------------|
 | A user request, design proposal, or plan needs to be recorded in the KB | **apply-to-docs** |
 | External material needs to be brought in (meeting notes, RFC, article, research, URL content) | **ingest-reference** |
+| A raw clipping carries more concepts than one ingest pass can synthesize (≳50) | **shard-clipping** (gate 1.5 — invoked automatically by ingest-reference; rarely run by hand) |
 | An existing doc needs to be edited, corrected, or updated | **revise-doc** |
 | A doc was changed and you need to know what else is now stale | **cascade-check** |
 | The store feels cluttered; a doc has many history entries; cascade was wide; periodic maintenance | **garden** |
@@ -90,11 +93,17 @@ Do not skip Step 3 (blast-radius walk) or interleave reads and writes.
 
 Gate 2 of the inbox pipeline. Run this on a raw item in `kb/01-raw/` to decompose it into atomic docs. Decomposition is mandatory — a blob ingested as a single doc is a liability. The skill:
 1. Creates the raw clipping (in `kb/01-raw/`) and a normalized reference doc (in `kb/02-docs/`)
-2. Extracts a typed concept list from the material
-3. Runs a conflict-detection pass against existing docs before writing anything
-4. Creates or updates docs in one batch pass; runs cascade-check from any corrected existing docs
+2. **Invokes `shard-clipping` (gate 1.5)** on the raw before any comprehension; triggered purely by concept **volume**, so for almost everything (≲50 concepts) it is a pass-through — only a genuinely high-volume clipping gets its verbatim passages gathered into child raws left **pending**, after which the ingest episode ends (the children are ingested later by the backlog loop, not by this episode)
+3. Extracts a typed concept list from the material
+4. Runs a conflict-detection pass against existing docs before writing anything
+5. Creates or updates docs in one batch pass; runs cascade-check from any corrected existing docs
+6. Marks the raw item ingested (`ldoc raw mark-ingested`) so it drops out of `ldoc raw list --pending`
 
 Never run this on an inbox item directly — promote it to raw first (`ldoc promote`).
+
+### shard-clipping
+
+Gate 1.5 — sits between `promote` and `ingest-reference` and is **invoked automatically by ingest-reference** (you rarely run it by hand). It decides whether one raw clipping is one gate-2 unit or many, on a **single trigger: concept volume.** If the clipping would decompose into more atomic docs than one pass can synthesize (a generous floor of ~50 — so most clippings, including dense multi-subject design notes, pass through unchanged), it shards; otherwise pass-through. Topical disjointness is **not** a trigger — it only decides *where* to cut once volume forces a split. When sharding, the **verbatim** passages are gathered per concept cluster (non-contiguous and overlapping allowed; the one hard rule is full coverage — never rephrased) into child raw clippings left **pending**, each small enough to ingest in one pass. This keeps comprehension and synthesis fused per shard instead of stalling one context on a whole over-large document. It divides the *unit of work*, never the *phases* (no plan/apply split). Children inherit the parent's provenance and carry a `parent_raw` pointer; the parent stays the immutable whole-archive. shard-clipping does **not** ingest the children — they are left pending for the backlog loop (`ldoc raw list --pending`), which can ingest them in any order: duplicate concepts across shards are reconciled by `map-concepts-to-docs` + gardening, so no serialization is needed.
 
 ### revise-doc
 
@@ -183,13 +192,15 @@ The `id` field must match the filename stem exactly (a 14-digit UTC timestamp). 
 
 ## Edge rules
 
-| Edge | Cascade | Use when |
-|------|---------|----------|
-| `requires` | hard | This doc is existentially dependent on the target — meaningless or wrong without it |
-| `belongs_to` | hard | This doc is structurally a child of the target (signpost membership, part-of) |
-| `relates` | soft / nav | Symmetric clustering / see-also; topic kinship but not a dependency |
-| `provenance` | soft / nav | "Was derived from / informed by"; may point at `kb/01-raw/` (raw ids are not graph nodes) |
-| `superseded_by` | — | Required when `status: deprecated`; points at the replacement doc(s) |
+| Edge | Cascade | Acyclic? | Use when |
+|------|---------|----------|----------|
+| `requires` | hard (reverse) | may cycle | This doc is existentially dependent on the target — meaningless or wrong without it. The logical-dependency **web** (mutual `requires` is legal). |
+| `belongs_to` | hard (both ways) | **yes (DAG)** | This doc is a structural member of the target — the **hierarchy**. Orphan test: *if the target were removed, would this doc be homeless / meaningless as a standalone entry?* If yes, use `belongs_to`. |
+| `relates` | soft / nav | n/a (symmetric) | Symmetric clustering / see-also; topic kinship but not a dependency |
+| `provenance` | soft / nav | — | "Was derived from / informed by"; may point at `kb/01-raw/` (raw ids are not graph nodes) |
+| `superseded_by` | — | — | Required when `status: deprecated`; points at the replacement doc(s) |
+
+`belongs_to` is the acyclic hierarchy/lineage DAG (validate enforces acyclicity on it alone); `requires`/`relates` form the cyclic influence web. They are **different axes — never substitute one for the other**. When a cluster of docs elaborates one doc that states their over-arching concept, those docs `belongs_to` that defining doc (which becomes a descendant-bearing signpost), and it `belongs_to` the broader grouping — nest the hierarchy, don't flatten every member onto the top-level signpost. Reserve a bare `belongs_to` to a broad signpost for docs with no nearer defining parent. Authoritative: [Edge Type Vocabulary](kb/02-docs/20260617144634.md), [Graph Cycles Are Legal](kb/02-docs/20260617144556.md).
 
 **Do not point `requires` at a raw file** (`kb/01-raw/<id>.md`). Raw files are not graph nodes. Use `provenance` for that relationship, or `--source` on a reference doc.
 
@@ -222,6 +233,19 @@ ldoc inbox add --from-file notes.txt --title "Meeting notes"
 ldoc inbox list         # see what's waiting
 ```
 
+**Provenance flags** (optional, but capture them at gate 0 when known — they are
+carried forward losslessly through `promote` and should be stamped onto the
+normalized reference doc at ingest):
+
+- `--origin` — corpus/system the material came from (`notion`, `codebase:foo`).
+- `--medium` — medium of the source (`pdf`, `scan`, `notion-page`, `source-file`, `transcript`).
+- `--authored-at` — when the SOURCE was written, possibly fuzzy (`2024-03`, `circa 2023`). Stored as `authored_at`; distinct from `captured` (inbox drop time) and `imported` (promotion time).
+
+```bash
+ldoc inbox add --from-file memo.pdf.txt --title "Capability memo" \
+  --origin "notion" --medium "pdf" --authored-at "2024-03"
+```
+
 **Accept** (gate 1 — deliberate): when you're ready to process an inbox item, promote it to raw:
 
 ```bash
@@ -232,6 +256,20 @@ ldoc promote --all        # drain the inbox
 **Ingest** (gate 2 — the decomposition step): run the `ingest-reference` skill on the promoted raw item. This is where atomicity is produced. It cannot be automated or skipped.
 
 If `ldoc promote <ref>` tells you the item is already in `kb/01-raw/`, it will print guidance to run `/ingest-reference` — that is gate 2.
+
+**Tracking the raw backlog** (hybrid ingest-state): raw items are not deleted after ingest — they remain as the immutable archive. To see what still needs ingesting:
+
+```bash
+ldoc raw list                 # all raw items with [pending] / [ingested] / [sharded] / [sharding] state
+ldoc raw list --pending       # only leaf items not yet ingested (the drain target for a backlog loop)
+ldoc raw show <ref>           # print a raw clipping (frontmatter + verbatim body); raw is outside the graph
+ldoc raw children <ref>       # list the child shards of a sharded parent, each with its state
+ldoc raw mark-ingested <ref>  # ingest-reference calls this when decomposition completes
+```
+
+Ingest-state is **hybrid**: `mark-ingested` writes an `ingested_at` flag onto the raw clipping, and `ldoc raw list` cross-checks that flag against graph evidence (a doc whose `source`/`provenance` points at the raw id). When the flag and the graph disagree, the item is reported `ingested` with a `⚠ DRIFT` note so it can be reconciled (e.g. an interrupted ingest that wrote docs but never got flagged).
+
+**Shard-aware:** a raw that has child shards (gate 1.5) is never a direct drain target — it reports `[sharding]` while any child is still pending and `[sharded]` once all children are ingested, and it never appears in `--pending`. The pending list therefore contains exactly the leaf raws a backlog loop should ingest; draining them resolves their parents automatically. This is what makes "drop a batch, process the pending raw over time" viable.
 
 ---
 

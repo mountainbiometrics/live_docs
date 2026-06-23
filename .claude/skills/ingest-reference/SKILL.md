@@ -35,19 +35,51 @@ itself is composed from three sub-skills it invokes in order —
 `identify-key-concepts`, `map-concepts-to-docs`, `synthesize-doc-changes` —
 keeping ingest's own knobs (unbounded concept extraction + the splitting test).
 
+**Gate 1.5 runs first.** Before any comprehension, this skill invokes
+`shard-clipping` (Step 2.5) on the raw. Its sole trigger is concept **volume**, so
+for almost everything — including dense, multi-subject design notes — it is a
+near-no-op pass-through. Only a genuinely high-volume clipping (more concepts than
+one pass can synthesize — a 10k-line mega-doc) gets sharded: `shard-clipping`
+gathers its verbatim passages into child raws left **pending** in the raw tier,
+and this episode then **ends** — it does not ingest or even enumerate the
+children. They are ingested later as their own gate-2 episodes by the backlog loop
+over `ldoc raw list --pending`. So one agent context never holds the comprehension
+*and* synthesis of an over-large document at once.
+That is how `shard-clipping` is reached: you never run it manually; ingest always
+passes through it.
+
 ---
 
 ## This skill OWNS the episode (recursion / duplicate-review discipline)
 
 Exactly like cascade-check's "orchestrator owns the episode" contract:
 
+> **What "invoke a sub-skill" means here — read this literally.** When a step says
+> to run a sub-skill (e.g. `/map-concepts-to-docs`), you invoke that skill
+> **yourself, inline, with the Skill tool, in THIS SAME turn** — exactly as if you
+> had typed the slash command — and then you **keep going** to the next step. It
+> does **NOT** mean: spawn a subagent; hand the work off to some other agent; or
+> stop and report a partial result for "something else" to continue. You are the
+> single agent that runs this whole skill start to finish. Producing an
+> intermediate artifact (a concept list, a conflict map) is **not** a stopping
+> point — it is the input to the very next step, which you run now.
+
 - ingest-reference captures the single `START` timestamp (Step 0) and emits the
   **one** review summary for the whole episode (Step 8).
-- Every sub-skill it invokes — `identify-key-concepts`, `map-concepts-to-docs`,
-  `synthesize-doc-changes`, and `cascade-check` (Step 6) — is a **nested
-  invocation**: tell each one so. Nested sub-skills must NOT capture their own
-  `START`, must NOT run `ldoc review new`, and must NOT re-invoke this
-  orchestrator.
+- The sub-skills it runs in sequence — `/shard-clipping` (Step 2.5),
+  `/identify-key-concepts` (Step 4), `/map-concepts-to-docs` (Step 5a),
+  `/synthesize-doc-changes` (Step 5b), and `/cascade-check` (Step 6) — are
+  **nested**: each runs inline in this turn (per the box above) and must NOT
+  capture its own `START`, must NOT run `ldoc review new`, and must NOT re-invoke
+  this orchestrator. ("Nested" describes the review/episode ownership — it does
+  not mean a separate agent.)
+- **Exception — the shard branch.** If `shard-clipping` splits the raw, this
+  episode created only the child raws (via the nested shard-clipping) and
+  decomposes nothing itself; it then **ends**, leaving the children pending. It
+  does NOT ingest or enumerate them. Each child is ingested later by its own
+  fresh, separate `ingest-reference` episode (driven by the backlog loop), owning
+  its own review. This episode's one Step 8 review covers only the child-raw
+  creation.
 
 ---
 
@@ -84,8 +116,15 @@ or "pasted". If the source is ambiguous, ask before proceeding.
 ldoc ingest-raw \
   --from-file <path>           # OR: --body "<raw content>" OR: --body -
   --source "<where it came from>" \
-  --title "Clipping: <descriptive title>"   # optional but recommended
+  --title "Clipping: <descriptive title>" \  # optional but recommended
+  --origin "<corpus/system>" \               # optional: notion, codebase:foo, …
+  --medium "<medium>" \                       # optional: pdf, scan, notion-page, …
+  --authored-at "<when source written>"       # optional, may be fuzzy: 2024-03, circa 2023
 ```
+
+When ingesting a raw item that was already promoted from the inbox (gate 1), it
+already carries `origin` / `medium` / `authored_at` / `captured` in its frontmatter
+— prefer reading those off the raw clipping rather than re-supplying them.
 
 This writes to the **raw/ tier** (repo root `/raw/<id>.md`), NOT to `docs/`.
 `raw/` is outside the graph — `livedocs`, `validate`, and `reindex` scan only
@@ -96,6 +135,44 @@ This writes to the **raw/ tier** (repo root `/raw/<id>.md`), NOT to `docs/`.
 - If the content is large (> ~2000 words), you may truncate it in the raw file
   and note "full content at <source>" in the body — but prefer the full text.
 - Note the created id printed to stdout: call it **RAW_ID**.
+
+---
+
+## Step 2.5 — Shard check (invoke `shard-clipping`, nested) — gate 1.5
+
+Before any comprehension, run **`/shard-clipping`** on `RAW_ID` yourself, inline
+in this turn (nested — it must not capture its own `START` or emit its own
+review). It returns one verdict:
+
+- **`pass-through`** (the common case — clipping fits one pass, ≲50 concepts):
+  continue to Step 3 with the single `RAW_ID`. This is a near-no-op; proceed
+  exactly as normal.
+
+- **`shard`** (high-volume — over the ~50-concept floor): `shard-clipping` has
+  gathered `RAW_ID`'s verbatim passages into pending child raws (each carrying `parent_raw` → `RAW_ID`,
+  inherited provenance, and `shard_depth`). Do **NOT** run Steps 3–7 on `RAW_ID`,
+  and do **NOT** enumerate or read the children — pulling their text into this
+  context would re-accumulate the bulk sharding exists to shed. This episode is
+  essentially done:
+
+  1. Leave the children as **pending** raws. They are picked up by whatever
+     iterates pending raws (`ldoc raw list --pending` — the backlog loop, or a
+     later ingest invocation). Each becomes its own independent gate-2 episode;
+     **order does not matter** — duplicate concepts across shards are reconciled by
+     `map-concepts-to-docs`' concept-matching and the gardening passes.
+  2. Do **NOT** `ldoc raw mark-ingested` the parent — once its children are
+     ingested it derives as `[sharded]`; until then it shows `[sharding]`.
+  3. Go to Step 8 and emit this episode's single review (covering the child-raw
+     creation). Report the verdict and the child ids `shard-clipping` returned (a
+     one-line list is fine — just don't read their bodies).
+
+  *Optional single-step continuation:* to make forward progress in this one
+  invocation instead of stopping cold, you MAY tail-process **only the first**
+  pending child by invoking `ingest-reference` on that single id, leaving the rest
+  pending. Never loop over the whole list.
+
+The parent `RAW_ID` is the immutable whole-archive; sharding only adds child raws
+beside it.
 
 ---
 
@@ -116,8 +193,11 @@ ldoc new \
   --kind <kind> \
   --status reference \
   --level incidental \
-  --title "Reference: <descriptive title>" \
+  --title "<descriptive title>" \  # no "Reference:" prefix — the type is shown automatically on display
   --source "raw/<RAW_ID>.md" \
+  --origin "<corpus/system>" \      # carry from the raw clipping if present
+  --medium "<medium>" \             # carry from the raw clipping if present
+  --authored-at "<when written>" \  # carry from the raw clipping if present
   --body "<normalized summary>"
 ```
 
@@ -128,6 +208,10 @@ Key differences from Step 2:
   path, not a requires edge — raw files are not graph nodes, so a requires
   entry pointing at RAW_ID would be a dangling edge.
 - Do NOT pass `--requires "<RAW_ID>"`.  RAW_ID is not in the graph.
+- **Carry provenance forward**: read `origin` / `medium` / `authored_at` off the
+  raw clipping (gate-1 promotion preserves them) and pass them here so the graph
+  node — and every doc that takes `--provenance <NORM_ID>` — retains
+  source-corpus, medium, and source-age context for staleness reasoning.
 - `type: reference` docs always get `status: reference` — they are frozen
   supporting material, not truth claims that evolve.
 
@@ -139,8 +223,8 @@ to `synthesize-doc-changes` in Step 5; every extracted doc gets
 
 ## Step 4 — Extract the concept list (invoke `identify-key-concepts`)
 
-Invoke the **`identify-key-concepts`** skill on the normalized reference from
-Step 3, as a **nested invocation**. Pass ingest's knobs:
+Run **`/identify-key-concepts`** yourself (inline, this turn; nested) on the
+normalized reference from Step 3. Pass ingest's knobs:
 
 > Extract concepts with **no upper limit** (a dense document may yield dozens;
 > concepts are often presupposed rather than stated outright). Label each
@@ -151,6 +235,11 @@ Step 3, as a **nested invocation**. Pass ingest's knobs:
 It returns the typed concept list (`Concept / Type / Asserts`) in context. This
 list is the input to Step 5.
 
+> **Do NOT stop here.** The concept list is an intermediate artifact, not a
+> deliverable to hand off. You produced it; now you continue to Step 5 in this
+> same turn. An ingest episode that ends after extracting concepts has done none
+> of its actual work (no docs written) — it is incomplete, not finished.
+
 ---
 
 ## Step 5 — Decompose into atomic docs (THE KEY STEP)
@@ -158,10 +247,10 @@ list is the input to Step 5.
 Decomposition is the two-pass survey-then-write that produces atomicity. It is
 composed from two sub-skills; never interleave their reads and writes.
 
-### Step 5a — Survey (invoke `map-concepts-to-docs`)
+### Step 5a — Survey (run `/map-concepts-to-docs`)
 
-Invoke the **`map-concepts-to-docs`** skill with the concept list from Step 4,
-as a **nested invocation**. Emphasis: a full conflict scan — for every concept,
+Run **`/map-concepts-to-docs`** yourself (inline, this turn; nested) with the
+concept list from Step 4. Emphasis: a full conflict scan — for every concept,
 does its claim conflict with something already in live_docs? It returns the
 relationship verdict map (`compatible` / `partial-supersession` /
 `full-supersession` / `conflict-unresolved`) with a planned action per concept.
@@ -171,10 +260,10 @@ relationship verdict map (`compatible` / `partial-supersession` /
 newly created doc**, because existing docs have dependents and cascade-check will
 propagate the correction; freshly created docs have no dependents yet.
 
-### Step 5b — Write (invoke `synthesize-doc-changes`)
+### Step 5b — Write (run `/synthesize-doc-changes`)
 
-Invoke the **`synthesize-doc-changes`** skill, as a **nested invocation**,
-handing it:
+Run **`/synthesize-doc-changes`** yourself (inline, this turn; nested), handing
+it:
 
 - the conflict map from Step 5a (each existing doc with its verdict / planned
   action — revise, deprecate, link-provenance),
@@ -188,13 +277,13 @@ new atomic docs for unmatched concepts. It returns the list of writes performed.
 
 ---
 
-## Step 6 — Cascade from corrected docs (invoke `cascade-check`, nested)
+## Step 6 — Cascade from corrected docs (run `/cascade-check`, nested)
 
-After Step 5b corrects or deprecates existing docs, invoke the **`cascade-check`**
-skill from **those corrected/deprecated docs** (not from freshly created docs —
-new docs have no dependents and surface nothing when cascaded from). Tell
-cascade-check this is a **nested invocation** so it does not emit its own review
-summary.
+After Step 5b corrects or deprecates existing docs, run **`/cascade-check`**
+yourself (inline, this turn; nested) from **those corrected/deprecated docs** (not
+from freshly created docs — new docs have no dependents and surface nothing when
+cascaded from). Because it is nested, it does not emit its own review summary —
+this episode owns the one summary.
 
 ---
 
@@ -208,6 +297,28 @@ provenance violation — add the `provenance` edge. Then validate:
 ```bash
 ldoc validate
 ```
+
+---
+
+## Step 7b — Mark the raw item ingested
+
+Once decomposition is complete and validated, flag the RAW item so the backlog
+view (`ldoc raw list --pending`) no longer surfaces it:
+
+```bash
+ldoc raw mark-ingested <RAW_ID>
+```
+
+(Only on the normal / `pass-through` path, where this episode actually
+decomposed `RAW_ID`. In the **shard branch** you reach Step 8 without this — the
+parent is never marked directly; each child episode marks its own child raw, and
+the parent derives as `[sharded]`.)
+
+This writes an `ingested_at` lifecycle field to the raw clipping's frontmatter
+(the raw BODY stays immutable). Ingest-state is **hybrid**: this explicit flag is
+cross-checked against graph evidence (a NORM doc whose `source`/`provenance`
+points at the raw id), so `ldoc raw list` can flag drift if the two disagree —
+e.g. an interrupted ingest that wrote docs but never got flagged.
 
 ---
 

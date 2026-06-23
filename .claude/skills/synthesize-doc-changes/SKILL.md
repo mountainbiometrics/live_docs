@@ -142,9 +142,36 @@ ldoc new \
 `REQ_ID`/`NORM_ID` the orchestrator supplied). The anchor lives in `docs/`, so
 `--provenance` is the correct edge — do not use `--source` for a graph node.
 
-Apply `--requires` (genuine existential dependency) or `--belongs-to`
-(structural parent/child membership) only when that relationship truly exists,
-not for mere topical proximity.
+### Wiring `belongs_to` and `requires` (do not conflate them)
+
+These are two different axes (see [Edge Type Vocabulary](../../../kb/02-docs/20260617144634.md)
+and [Graph Cycles Are Legal](../../../kb/02-docs/20260617144556.md)):
+
+- **`belongs_to` = the hierarchy / membership DAG.** It is the *acyclic* structural
+  axis: a doc declares membership in the parent that defines its grouping, and
+  **removing the parent would orphan it**. Test: *"If the parent concept didn't
+  exist, would this doc be homeless / meaningless as a standalone entry?"* If yes,
+  it `belongs_to` that parent.
+- **`requires` = the logical-dependency web.** It may cycle; it is reverse-cascading
+  ("if the required doc changes, re-evaluate this one"). It is NOT structural and
+  does NOT place a doc in the navigation hierarchy.
+
+**Nest clear clusters — this is not "being non-conservative."** When the concepts
+you are creating form a coherent cluster *and one of them states the over-arching
+concept that the others elaborate* (the decisions/constraints that define how that
+concept works), the elaborating docs **`belongs_to` the defining doc**, which in
+turn `belongs_to` whatever broader grouping it sits in. Wiring those members
+straight to the broad top-level signpost instead — flattening the cluster — is not
+caution; it misreads `belongs_to`, because each member *would* be orphaned without
+the concept it elaborates. The defining doc thereby becomes a descendant-bearing
+signpost (signposts are structural, not a type — see curate-grouping).
+
+What conservatism actually forbids is `belongs_to` for **mere topical proximity**:
+two docs that merely share a subject, where neither would be orphaned by the
+other's removal, get `relates` (or just a shared `domain`/`scope` tag), never
+`belongs_to`. A member often *both* `belongs_to` its defining concept (membership)
+and `requires` it (existential dependency) — wire both when both hold, but never
+substitute one axis for the other.
 
 **Level classification**: a doc not grounded in something explicitly stated (no
 `requires`, `belongs_to`, `provenance`, or `source` tying it to a decision,

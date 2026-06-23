@@ -22,7 +22,7 @@ _EXPORT_MAP = [
                    "generate_id", "title_to_label", "unique_label", "display_label",
                    "ref_token", "render_ref_token", "WIKILINK_RE", "doc_prefix"}),
     ("serialize", {"CANONICAL_FIELD_ORDER", "REFERENCE_EXTRA_FIELDS", "EDGE_FIELDS",
-                   "parse_doc", "dump_doc"}),
+                   "parse_doc", "dump_doc", "build_raw_frontmatter"}),
     ("graph",     {"forward_edges", "reverse_edges", "dangling_edges", "reference_edges",
                    "referenced_by", "dangling_references", "relates_edges",
                    "superseded_by_edges", "id_title_map"}),

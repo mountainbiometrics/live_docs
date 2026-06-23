@@ -35,44 +35,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import RAW_DIR, generate_id
-
-
-# ---------------------------------------------------------------------------
-# Frontmatter builder
-# ---------------------------------------------------------------------------
-
-def _yaml_str(value: str) -> str:
-    """Wrap value in double-quotes, escaping any inner double-quotes."""
-    return '"' + value.replace('"', '\\"') + '"'
-
-
-def build_raw_frontmatter(
-    raw_id: str,
-    source: str,
-    title: str,
-    imported: str,
-) -> str:
-    """
-    Return the minimal frontmatter block for a raw/ file.
-
-    Fields emitted:
-      id, type, kind, status, original_source, imported
-    and optionally title when non-empty.  No edge fields, no tags, no history —
-    raw files are not graph nodes and do not need those fields.
-    """
-    lines = ["---", f"id: {_yaml_str(raw_id)}"]
-    if title:
-        lines.append(f"title: {_yaml_str(title)}")
-    lines += [
-        "type: reference",
-        "kind: clipping",
-        "status: historical",
-        f"original_source: {_yaml_str(source)}",
-        f"imported: {_yaml_str(imported)}",
-        "---",
-    ]
-    return "\n".join(lines)
+from livedocs import RAW_DIR, generate_id, build_raw_frontmatter
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +98,26 @@ Examples:
         "--title", default="",
         help="Human-readable label (stored in frontmatter only, does not alter body).",
     )
+    parser.add_argument(
+        "--origin", default="",
+        help='Corpus/system the material came from (e.g. "notion", "codebase:foo").',
+    )
+    parser.add_argument(
+        "--medium", default="",
+        help='Medium of the source (e.g. "pdf", "scan", "notion-page", "source-file").',
+    )
+    parser.add_argument(
+        "--authored-at", dest="authored_at", default="",
+        help='When the SOURCE was written, possibly fuzzy (e.g. "2024-03", "circa 2023").',
+    )
+    parser.add_argument(
+        "--parent-raw", dest="parent_raw", default="",
+        help='Shard pointer back to the parent raw, as "raw/<id>.md" (gate 1.5).',
+    )
+    parser.add_argument(
+        "--shard-depth", dest="shard_depth", type=int, default=0,
+        help="Recursion depth of a shard (0 = original; omitted from frontmatter when 0).",
+    )
 
     return parser
 
@@ -165,6 +148,11 @@ def main() -> None:
         source=args.source,
         title=args.title,
         imported=imported,
+        origin=args.origin,
+        medium=args.medium,
+        authored_at=args.authored_at,
+        parent_raw=args.parent_raw,
+        shard_depth=args.shard_depth,
     )
     # Preserve body exactly — only ensure the file ends with a newline.
     content = frontmatter + "\n\n" + body

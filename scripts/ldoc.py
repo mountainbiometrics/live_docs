@@ -39,7 +39,8 @@ Subcommands (grouped):
         [--requires a,b] [--belongs-to a,b] [--relates a,b]
         [--provenance a,b] [--superseded-by a,b]
         [--tags-domain d] [--tags-scope s]
-        [--kind K] [--source S] [--body T|-] [--dry-run]
+        [--kind K] [--source S] [--origin O] [--medium M] [--authored-at A]
+        [--body T|-] [--dry-run]
     set <ref> [--title] [--label] [--summary] [--level] [--status] [--type]
               [--scope] [--domain] [--body -|TEXT] [--dry-run]
     edit <ref>   (alias: set <ref> --body -)
@@ -49,11 +50,18 @@ Subcommands (grouped):
                  [--provenance a,b] [--superseded-by a,b]
     history <ref> --add "summary"
     ingest-raw (--from-file P | --body T|-) --source S [--title T] [--label L]
+               [--origin O] [--medium M] [--authored-at A]
+               [--parent-raw R] [--inherit-from R] [--shard-depth N]
 
   ── Inbox pipeline ──
     inbox add (--from-file P | --body T|-) [--title T] [--source S]
+              [--origin O] [--medium M] [--authored-at A]
     inbox list
     promote <ref> [--all]
+    raw list [--pending]
+    raw show <ref>
+    raw children <ref>
+    raw mark-ingested <ref>
 
   ── Maintenance ──
     validate
@@ -70,6 +78,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -78,7 +87,7 @@ _scripts_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_scripts_dir))
 
 from livedocs import KB, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
-from livedocs import ReviewLedger, generate_id
+from livedocs import ReviewLedger, generate_id, build_raw_frontmatter
 
 
 # ---------------------------------------------------------------------------
@@ -666,6 +675,9 @@ def cmd_new(kb: KB, args) -> int:
             body=body,
             kind=args.kind or "",
             source=args.source or "",
+            origin=getattr(args, "origin", "") or "",
+            medium=getattr(args, "medium", "") or "",
+            authored_at=getattr(args, "authored_at", "") or "",
         )
     except Exception as e:
         _err(str(e))
@@ -839,6 +851,22 @@ def cmd_history(kb: KB, args) -> int:
     return 0
 
 
+def _normalize_raw_pointer(ref: str):
+    """Resolve a raw ref (id, substring, or 'raw/<id>.md') to ('raw/<id>.md', id).
+
+    Returns (None, None) if it does not resolve to a raw file.
+    """
+    from livedocs import RAW_DIR
+    if not ref:
+        return None, None
+    m = re.search(r"\d{14}", ref)
+    cand = m.group(0) if m else ref
+    path = _inbox_resolver(cand, RAW_DIR)
+    if path is None:
+        return None, None
+    return f"raw/{path.stem}.md", path.stem
+
+
 def cmd_ingest_raw(kb: KB, args) -> int:
     body = ""
     from_file = ""
@@ -853,19 +881,69 @@ def cmd_ingest_raw(kb: KB, args) -> int:
         _err("Provide --from-file or --body.")
         return 1
 
+    from livedocs import RAW_DIR
+
+    origin = getattr(args, "origin", "") or ""
+    medium = getattr(args, "medium", "") or ""
+    authored_at = getattr(args, "authored_at", "") or ""
+    source = args.source or ""
+    captured = ""
+    parent_raw = ""
+    shard_depth = getattr(args, "shard_depth", None)
+
+    # --inherit-from: copy provenance from a parent raw; implies --parent-raw and,
+    # unless overridden, sets shard_depth = parent.shard_depth + 1.
+    inherit = getattr(args, "inherit_from", "") or ""
+    if inherit:
+        ptr, pid = _normalize_raw_pointer(inherit)
+        if ptr is None:
+            _err(f"--inherit-from: raw item {inherit!r} not found.")
+            return 1
+        ppath = RAW_DIR / f"{pid}.md"
+        origin = origin or _read_frontmatter_field(ppath, "origin")
+        medium = medium or _read_frontmatter_field(ppath, "medium")
+        authored_at = authored_at or _read_frontmatter_field(ppath, "authored_at")
+        captured = _read_frontmatter_field(ppath, "captured")
+        source = source or _read_frontmatter_field(ppath, "original_source")
+        parent_raw = ptr
+        if shard_depth is None:
+            pd = _read_frontmatter_field(ppath, "shard_depth")
+            try:
+                shard_depth = (int(pd) if pd else 0) + 1
+            except ValueError:
+                shard_depth = 1
+
+    # Explicit --parent-raw overrides / sets the parent pointer.
+    pr = getattr(args, "parent_raw", "") or ""
+    if pr:
+        ptr, _pid = _normalize_raw_pointer(pr)
+        if ptr is None:
+            _err(f"--parent-raw: raw item {pr!r} not found.")
+            return 1
+        parent_raw = ptr
+
+    if not source:
+        _err("--source is required (or use --inherit-from to copy it from a parent raw).")
+        return 1
+
     try:
         raw_id = kb.ingest_raw(
-            source=args.source,
+            source=source,
             body=body,
             from_file=from_file,
             title=args.title or "",
             label=args.label or "",
+            origin=origin,
+            medium=medium,
+            authored_at=authored_at,
+            captured=captured,
+            parent_raw=parent_raw,
+            shard_depth=shard_depth or 0,
         )
     except Exception as e:
         _err(str(e))
         return 1
 
-    from livedocs import RAW_DIR
     print(f"id:   {raw_id}")
     print(f"path: {RAW_DIR / raw_id}.md")
     return 0
@@ -888,8 +966,6 @@ def _inbox_resolver(ref: str, search_dir: Path) -> Path | None:
     Returns the Path on a unique match, None if not found or ambiguous.
     Prints an error to stderr on ambiguity.
     """
-    import re as _re
-
     candidates = list(search_dir.glob("*.md"))
 
     # 1. Exact id match
@@ -907,7 +983,7 @@ def _inbox_resolver(ref: str, search_dir: Path) -> Path | None:
         return None
 
     # 3. Title substring in frontmatter (case-insensitive)
-    pattern = _re.compile(_re.escape(ref), _re.IGNORECASE)
+    pattern = re.compile(re.escape(ref), re.IGNORECASE)
     title_matches = []
     for p in candidates:
         try:
@@ -952,6 +1028,239 @@ def _read_frontmatter_field(path: Path, field: str) -> str:
     return ""
 
 
+def _referenced_raw_ids(kb: KB) -> set:
+    """Return the set of raw ids referenced by any graph doc.
+
+    A raw clipping counts as ingested-by-graph-evidence when some doc points at
+    it via its `source` path (e.g. "raw/<id>.md") or lists it in `provenance`.
+    This is the read-only half of the hybrid ingest-state check.
+    """
+    refs = set()
+    for d in kb._docs.values():
+        src = d.get("source") or ""
+        for m in re.findall(r"\d{14}", str(src)):
+            refs.add(m)
+        for pid in (d.get("provenance") or []):
+            refs.add(str(pid))
+    return refs
+
+
+def _read_frontmatter_fields(path: Path, *fields: str) -> dict:
+    """Read multiple frontmatter scalar fields in a single file pass."""
+    result = {f: "" for f in fields}
+    remaining = set(fields)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return result
+    in_fm = False
+    for line in text.split("\n"):
+        if line == "---":
+            if not in_fm:
+                in_fm = True
+                continue
+            break
+        if not in_fm or not remaining:
+            continue
+        for field in list(remaining):
+            if line.startswith(f"{field}:"):
+                result[field] = line[len(f"{field}:"):].strip().strip('"').strip("'")
+                remaining.discard(field)
+                break
+    return result
+
+
+def _raw_inventory(kb: KB) -> dict:
+    """Build {raw_id: record} for every raw clipping, with the signals needed to
+    derive ingest-state: the `ingested_at` flag, whether the graph references it,
+    its `parent_raw` pointer, and the list of child shards pointing back at it.
+    """
+    from livedocs import RAW_DIR
+    inv: dict = {}
+    if not RAW_DIR.exists():
+        return inv
+    referenced = _referenced_raw_ids(kb)
+    for p in sorted(RAW_DIR.glob("*.md")):
+        rid = p.stem
+        fm = _read_frontmatter_fields(p, "title", "ingested_at", "parent_raw")
+        pm = re.search(r"\d{14}", fm["parent_raw"])
+        inv[rid] = {
+            "id": rid,
+            "title": fm["title"],
+            "flagged": bool(fm["ingested_at"]),
+            "referenced": rid in referenced,
+            "parent_id": pm.group(0) if pm else "",
+            "children": [],
+        }
+    for rid, rec in inv.items():
+        pid = rec["parent_id"]
+        if pid and pid in inv:
+            inv[pid]["children"].append(rid)
+    return inv
+
+
+def _raw_done(inv: dict, rid: str, seen: set = None) -> bool:
+    """True if a raw is fully processed: a sharded parent whose children are all
+    done, or a leaf that has been ingested (flagged or graph-referenced)."""
+    seen = seen or set()
+    if rid in seen:
+        return True  # cycle guard
+    seen.add(rid)
+    rec = inv.get(rid)
+    if not rec:
+        return False
+    if rec["children"]:
+        return all(_raw_done(inv, c, seen) for c in rec["children"])
+    return rec["flagged"] or rec["referenced"]
+
+
+def _raw_status_for(inv: dict, rid: str) -> tuple:
+    """Return (status, drift_warning) for a raw item.
+
+    A parent (has child shards) is `sharded` when every child is done, else
+    `sharding`; it is never a direct gate-2 unit so never `pending`. A leaf uses
+    the hybrid flag+graph cross-check; disagreement surfaces as drift.
+    """
+    rec = inv[rid]
+    if rec["children"]:
+        if all(_raw_done(inv, c) for c in rec["children"]):
+            return ("sharded", "")
+        return ("sharding", "")
+    flagged, referenced = rec["flagged"], rec["referenced"]
+    if flagged and referenced:
+        return ("ingested", "")
+    if flagged and not referenced:
+        return ("ingested", "DRIFT: flagged ingested but no doc references it")
+    if referenced and not flagged:
+        return ("ingested", "DRIFT: referenced by docs but not flagged ingested")
+    return ("pending", "")
+
+
+def _print_raw_line(rec: dict, status: str, drift: str) -> None:
+    parts = [rec["id"], f"[{status}]"]
+    if rec["title"]:
+        parts.append(f'"{rec["title"]}"')
+    if rec["children"]:
+        parts.append(f"({len(rec['children'])} shards)")
+    line = "  ".join(parts)
+    if drift:
+        line += f"   ⚠ {drift}"
+    print(line)
+
+
+def cmd_raw(kb: KB, args) -> int:
+    """Dispatch ldoc raw <subverb> commands."""
+    verb = args.raw_verb
+    if verb == "list":
+        return _raw_list(kb, args)
+    if verb == "show":
+        return _raw_show(kb, args)
+    if verb == "children":
+        return _raw_children(kb, args)
+    if verb == "mark-ingested":
+        return _raw_mark_ingested(kb, args)
+    _err(f"Unknown raw subcommand: {verb!r}")
+    return 1
+
+
+def _raw_show(kb: KB, args) -> int:
+    """Print a raw clipping's full content (frontmatter + verbatim body).
+
+    The raw tier is outside the graph, so `ldoc show`/`body` (graph readers) do
+    not resolve raw ids — this is the porcelain read path for a raw file.
+    """
+    from livedocs import RAW_DIR
+    path = _inbox_resolver(args.ref, RAW_DIR)
+    if path is None:
+        _err(f"Raw item {args.ref!r} not found. Use 'ldoc raw list' to see raw items.")
+        return 1
+    sys.stdout.write(path.read_text(encoding="utf-8"))
+    return 0
+
+
+def _raw_list(kb: KB, args) -> int:
+    """List raw items with derived ingest-state (hybrid flag+graph, shard-aware)."""
+    inv = _raw_inventory(kb)
+    if not inv:
+        print("(no raw items)")
+        return 0
+    pending_only = getattr(args, "pending", False)
+    any_shown = False
+    for rid in sorted(inv):
+        status, drift = _raw_status_for(inv, rid)
+        if pending_only and status != "pending":
+            continue
+        _print_raw_line(inv[rid], status, drift)
+        any_shown = True
+    if not any_shown:
+        print("(no pending raw items)" if pending_only else "(no raw items)")
+    return 0
+
+
+def _raw_children(kb: KB, args) -> int:
+    """List the child shards of a parent raw, each with its ingest-state."""
+    from livedocs import RAW_DIR
+    path = _inbox_resolver(args.ref, RAW_DIR)
+    if path is None:
+        _err(f"Raw item {args.ref!r} not found. Use 'ldoc raw list' to see raw items.")
+        return 1
+    inv = _raw_inventory(kb)
+    kids = inv.get(path.stem, {}).get("children", [])
+    if not kids:
+        print(f"(raw {path.stem} has no child shards)")
+        return 0
+    for cid in sorted(kids):
+        status, drift = _raw_status_for(inv, cid)
+        _print_raw_line(inv[cid], status, drift)
+    return 0
+
+
+def _raw_mark_ingested(kb: KB, args) -> int:
+    """Write the `ingested_at` flag onto a raw clipping (explicit half of hybrid).
+
+    ingest-reference calls this once decomposition completes. The raw BODY stays
+    immutable — only this lifecycle field is added to the frontmatter.
+    """
+    from datetime import datetime, timezone as _tz
+    from livedocs import RAW_DIR
+    path = _inbox_resolver(args.ref, RAW_DIR)
+    if path is None:
+        _err(f"Raw item {args.ref!r} not found. Use 'ldoc raw list' to see raw items.")
+        return 1
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:
+        _err(f"Cannot read {path}: {e}")
+        return 1
+
+    ts = datetime.now(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Raw-text surgery: scan for `---` fences by line position and splice in
+    # the field.  Fragile: a `---` inside a YAML block scalar or anywhere in
+    # the body would fool the fence detector.  The right fix is a shared
+    # raw-tier parse/emit layer (analogous to parse_doc/dump_doc for graph
+    # docs) so this becomes: parse → set field → dump.  That layer doesn't
+    # exist yet; add it here and in _read_frontmatter_field/_read_frontmatter_fields
+    # when it does.
+    lines = text.split("\n")
+    fence = [i for i, l in enumerate(lines) if l == "---"]
+    if len(fence) < 2:
+        _err(f"{path} has no frontmatter block; cannot mark ingested.")
+        return 1
+    fm_start, fm_end = fence[0], fence[1]
+
+    for i in range(fm_start + 1, fm_end):
+        if lines[i].startswith("ingested_at:"):
+            lines[i] = f'ingested_at: "{ts}"'
+            break
+    else:
+        lines.insert(fm_end, f'ingested_at: "{ts}"')
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Marked ingested: {path.stem}  ingested_at={ts}")
+    return 0
+
+
 def cmd_inbox(kb: KB, args) -> int:
     """Dispatch ldoc inbox <subverb> commands."""
     verb = args.inbox_verb
@@ -992,13 +1301,22 @@ def _inbox_add(args) -> int:
 
     title = getattr(args, "title", "") or ""
     source = getattr(args, "source", "") or ""
+    origin = getattr(args, "origin", "") or ""
+    medium = getattr(args, "medium", "") or ""
+    authored_at = getattr(args, "authored_at", "") or ""
 
     lines = ["---", f"id: {_yaml_str_inbox(inbox_id)}"]
     if title:
         lines.append(f"title: {_yaml_str_inbox(title)}")
     lines.append("status: inbox")
+    if origin:
+        lines.append(f"origin: {_yaml_str_inbox(origin)}")
+    if medium:
+        lines.append(f"medium: {_yaml_str_inbox(medium)}")
     if source:
         lines.append(f"source: {_yaml_str_inbox(source)}")
+    if authored_at:
+        lines.append(f"authored_at: {_yaml_str_inbox(authored_at)}")
     lines.append(f"captured: {_yaml_str_inbox(captured)}")
     lines.append("---")
     frontmatter = "\n".join(lines)
@@ -1117,9 +1435,14 @@ def _promote_one(inbox_id: str, inbox_path: Path, args) -> int:
     if body and not body.endswith("\n"):
         body += "\n"
 
-    # Pull useful fields from inbox frontmatter
+    # Pull useful fields from inbox frontmatter and carry the whole provenance
+    # bundle forward — capture-time metadata must not be lost at promotion.
     original_source = _read_frontmatter_field(inbox_path, "source") or "(promoted from inbox)"
     title = _read_frontmatter_field(inbox_path, "title") or ""
+    origin = _read_frontmatter_field(inbox_path, "origin") or ""
+    medium = _read_frontmatter_field(inbox_path, "medium") or ""
+    authored_at = _read_frontmatter_field(inbox_path, "authored_at") or ""
+    captured = _read_frontmatter_field(inbox_path, "captured") or ""
 
     # Generate a collision-safe id for the raw tier
     RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -1127,20 +1450,16 @@ def _promote_one(inbox_id: str, inbox_path: Path, args) -> int:
 
     imported = datetime.now(_tz.utc).strftime("%Y-%m-%d")
 
-    # Build raw-clipping frontmatter (matches ingest_raw.py format exactly)
-    fm_lines = ["---", f'id: "{raw_id}"']
-    if title:
-        fm_lines.append(f'title: "{title.replace(chr(34), chr(92)+chr(34))}"')
-    fm_lines += [
-        "type: reference",
-        "kind: clipping",
-        "status: historical",
-        f'original_source: "{original_source.replace(chr(34), chr(92)+chr(34))}"',
-        f'imported: "{imported}"',
-        "---",
-    ]
-    frontmatter = "\n".join(fm_lines)
-
+    frontmatter = build_raw_frontmatter(
+        raw_id=raw_id,
+        source=original_source,
+        title=title,
+        imported=imported,
+        origin=origin,
+        medium=medium,
+        authored_at=authored_at,
+        captured=captured,
+    )
     content = frontmatter + "\n\n" + body
 
     # Write to raw
@@ -1568,6 +1887,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tags-scope", default="", dest="tags_scope")
     p.add_argument("--kind", default="", choices=REFERENCE_KIND_CHOICES + [""])
     p.add_argument("--source", default="")
+    p.add_argument("--origin", default="",
+                   help='reference docs: corpus/system of origin (e.g. "notion", "codebase:foo").')
+    p.add_argument("--medium", default="",
+                   help='reference docs: medium of the source (e.g. "pdf", "scan", "notion-page").')
+    p.add_argument("--authored-at", dest="authored_at", default="",
+                   help='reference docs: when the SOURCE was written, possibly fuzzy (e.g. "2024-03").')
     p.add_argument("--body", default="", help="Body text or '-' to read from stdin.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview what would be created without writing.")
@@ -1636,11 +1961,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- ingest-raw ---
     p = sub.add_parser("ingest-raw", help="Write verbatim content into raw/ tier.")
-    p.add_argument("--source", required=True)
+    p.add_argument("--source", default="",
+                   help="Where the content came from. Required unless --inherit-from supplies it.")
     p.add_argument("--from-file", default="", dest="from_file")
     p.add_argument("--body", default="")
     p.add_argument("--title", default="")
     p.add_argument("--label", default="")
+    p.add_argument("--origin", default="",
+                   help='Corpus/system the material came from (e.g. "notion", "codebase:foo").')
+    p.add_argument("--medium", default="",
+                   help='Medium of the source (e.g. "pdf", "scan", "notion-page").')
+    p.add_argument("--authored-at", dest="authored_at", default="",
+                   help='When the SOURCE was written, possibly fuzzy (e.g. "2024-03").')
+    p.add_argument("--parent-raw", dest="parent_raw", default="",
+                   help="Shard (gate 1.5): parent raw ref (id or 'raw/<id>.md') this slice was cut from.")
+    p.add_argument("--inherit-from", dest="inherit_from", default="",
+                   help="Shard (gate 1.5): copy origin/medium/authored_at/captured/source from this "
+                        "parent raw and set parent_raw + shard_depth automatically.")
+    p.add_argument("--shard-depth", dest="shard_depth", type=int, default=None,
+                   help="Shard recursion depth; auto-derived from parent when --inherit-from is used.")
 
     # --- inbox ---
     p_inbox = sub.add_parser(
@@ -1662,6 +2001,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Human-readable title (stored in frontmatter only).")
     p_ia.add_argument("--source", default="",
                       help="Where the content came from (URL, file, description).")
+    p_ia.add_argument("--origin", default="",
+                      help='Corpus/system the material came from (e.g. "notion", "codebase:foo").')
+    p_ia.add_argument("--medium", default="",
+                      help='Medium of the source (e.g. "pdf", "scan", "notion-page", "source-file").')
+    p_ia.add_argument("--authored-at", dest="authored_at", default="",
+                      help='When the SOURCE was written, possibly fuzzy (e.g. "2024-03", "circa 2023").')
 
     inbox_sub.add_parser("list", help="List items currently in the inbox.")
 
@@ -1675,6 +2020,35 @@ def build_parser() -> argparse.ArgumentParser:
                    help="id or unique substring of an inbox item.")
     p.add_argument("--all", action="store_true",
                    help="Promote (drain) every item currently in the inbox.")
+
+    # --- raw ---
+    p_raw = sub.add_parser(
+        "raw",
+        help="Raw tier: inspect ingest-state and mark items ingested (gate 2 bookkeeping).",
+    )
+    raw_sub = p_raw.add_subparsers(dest="raw_verb", metavar="verb")
+    raw_sub.required = True
+    p_rl = raw_sub.add_parser(
+        "list",
+        help="List raw items with ingest-state (ingested_at flag + graph cross-check).",
+    )
+    p_rl.add_argument("--pending", action="store_true",
+                      help="Show only items not yet ingested (no flag AND no graph reference).")
+    p_rs = raw_sub.add_parser(
+        "show",
+        help="Print a raw clipping's full content (frontmatter + verbatim body).",
+    )
+    p_rs.add_argument("ref", help="id or unique substring of a raw item.")
+    p_rm = raw_sub.add_parser(
+        "mark-ingested",
+        help="Flag a raw item as ingested; ingest-reference calls this when decomposition completes.",
+    )
+    p_rm.add_argument("ref", help="id or unique substring of a raw item.")
+    p_rc = raw_sub.add_parser(
+        "children",
+        help="List the child shards of a parent raw (gate 1.5), each with its ingest-state.",
+    )
+    p_rc.add_argument("ref", help="id or unique substring of a parent raw item.")
 
     # --- validate ---
     sub.add_parser("validate", help="Run structural integrity checks.")
@@ -1766,6 +2140,7 @@ COMMANDS = {
     "ingest-raw": cmd_ingest_raw,
     "inbox": cmd_inbox,
     "promote": cmd_promote,
+    "raw": cmd_raw,
     "validate": cmd_validate,
     "reindex": cmd_reindex,
     "viewer": cmd_viewer,

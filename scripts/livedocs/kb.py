@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .model import generate_id, title_to_label, unique_label, display_label
-from .serialize import parse_doc, dump_doc, _yaml_str
+from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter
 from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges
 
 
@@ -653,6 +653,9 @@ class KB:
         # reference-type extras
         kind: str = "",
         source: str = "",
+        origin: str = "",
+        medium: str = "",
+        authored_at: str = "",
     ) -> str:
         """
         Create a new doc. Returns the new doc id.
@@ -710,6 +713,13 @@ class KB:
         if type == "reference":
             fm["kind"] = kind or "clipping"
             fm["source"] = source
+            # Optional provenance carried from the raw clipping (omitted if empty)
+            if origin:
+                fm["origin"] = origin
+            if medium:
+                fm["medium"] = medium
+            if authored_at:
+                fm["authored_at"] = authored_at
             fm["imported"] = created
 
         path = self.docs_dir / f"{doc_id}.md"
@@ -830,11 +840,15 @@ class KB:
         from_file: str = "",
         title: str = "",
         label: str = "",
+        origin: str = "",
+        medium: str = "",
+        authored_at: str = "",
+        captured: str = "",
+        parent_raw: str = "",
+        shard_depth: int = 0,
     ) -> str:
         """
         Write verbatim content into raw/ tier. Returns the raw id.
-
-        Mirrors ingest_raw.py behavior but operates through KB.
         """
         from datetime import date
         from .model import RAW_DIR
@@ -849,18 +863,18 @@ class KB:
                 raise FileNotFoundError(f"--from-file path does not exist: {p}")
             body = p.read_text(encoding="utf-8")
 
-        lines = ["---", f"id: {_yaml_str(raw_id)}"]
-        if title:
-            lines.append(f"title: {_yaml_str(title)}")
-        lines += [
-            "type: reference",
-            "kind: clipping",
-            "status: reference",
-            f"original_source: {_yaml_str(source)}",
-            f"imported: {_yaml_str(imported)}",
-            "---",
-        ]
-        fm_block = "\n".join(lines)
+        fm_block = build_raw_frontmatter(
+            raw_id=raw_id,
+            source=source,
+            title=title,
+            imported=imported,
+            origin=origin,
+            medium=medium,
+            authored_at=authored_at,
+            captured=captured,
+            parent_raw=parent_raw,
+            shard_depth=shard_depth,
+        )
         content = fm_block + "\n\n" + body
         if not content.endswith("\n"):
             content += "\n"
