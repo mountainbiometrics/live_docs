@@ -1,12 +1,14 @@
 ---
 name: cascade-check
+user-invocable: false
 description: >
   After one or more docs change, walk the dependency graph in BOTH directions
   (upstream dependencies and downstream dependents) and decide whether each
-  neighbor must be updated, is unaffected, conflicts, or needs clarification.
-  Use this skill whenever a doc is edited and you need to know what else may
-  have been invalidated. It is the primary consistency-enforcement mechanism
-  for the live_docs store.
+  neighbor must be updated, is unaffected, conflicts, or needs clarification,
+  then propagate the updates. The primary consistency-enforcement mechanism for
+  the live_docs store. A phase sub-skill run by the change-making skills
+  (`ingest-reference`, `revise-doc`, `apply-to-docs`, `garden`) or any agent that
+  just edited a doc — not run directly by a user.
 ---
 
 # cascade-check — Propagate or halt consistency across the dependency graph
@@ -19,49 +21,24 @@ subsequent verdict is reasoning about an inconsistent intermediate state.
 
 ---
 
-## Review-summary rule (read before proceeding)
+## Scope — a phase of a larger change
 
-**Nested invocations do NOT emit their own review summary.** When cascade-check
-is called by a higher-level skill (`ingest-reference`, `revise-doc`, `garden`,
-`apply-to-docs`), the top-level skill owns the single review summary for the
-episode. Duplicate or overlapping review records violate the one-summary-per-episode
-principle.
-
-Emit a review summary **only when cascade-check is invoked directly by the
-user** (standalone invocation). In that case, capture the start timestamp before
-Step 1 and run `ldoc review new --since "<that literal
-timestamp>"` as the final step after Step 7/8. See "Step 9" below.
-
-Review is **post-hoc and non-gating** (see `review-is-post-hoc`): the summary
-records the episode for later review/signoff and never blocks the cascade.
+cascade-check always runs as a step of a larger change-making process — invoked
+by `ingest-reference`, `revise-doc`, `apply-to-docs`, `garden`, or any agent that
+just changed a doc — never on its own, because assessing a cascade is pointless
+unless you then propagate it. It walks the graph and applies the propagation, but
+does **no episode bookkeeping**: no `START`, no `ldoc review new`. Whoever
+invoked it owns the single review summary for the episode.
 
 ---
 
 ## Inputs
 
-- **Changed doc id(s)** — one or more `docs/<id>.md` filenames (without `.md`).
-  If not given, check `git diff --name-only` (if a git repo) to find recently
-  modified docs; if that yields nothing, ask the user which doc changed.
+- **Changed doc id(s)** — one or more `docs/<id>.md` filenames (without `.md`),
+  supplied by the invoking process. If not given, check `git diff --name-only`
+  (if a git repo) to find recently modified docs.
 - **Change description** (optional but strongly preferred) — a plain-language
   summary of what changed and why. Richer context produces more reliable verdicts.
-- **Invocation context** — **standalone** (user called cascade-check directly)
-  or **nested** (called from another skill). Default: standalone.
-
-## Step 0 — Capture start time (standalone invocations only)
-
-If this is a **standalone invocation** (user called cascade-check directly, not
-from within another skill), capture the episode start time before doing anything
-else:
-
-```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
-```
-
-Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
-
-If this is a **nested invocation** (called from `ingest-reference`, `revise-doc`,
-`garden`, or `apply-to-docs`), skip this step entirely — the outer skill owns
-the timestamp and will emit the review summary.
 
 ---
 
@@ -277,31 +254,6 @@ If total cascaded docs > 3 from a single routine edit, emit this warning:
 > **Design smell**: This cascade touched N docs from a single edit of `<id>`.
 > The changed doc may carry more than one responsibility.
 > Consider running the `garden` skill (`single-responsibility` pass) on `<id>`.
-
----
-
-## Step 9 — Generate the review summary (standalone invocations only; FINAL step)
-
-**Skip this step entirely for nested invocations** — when cascade-check is
-called from within `ingest-reference`, `revise-doc`, `garden`, or `apply-to-docs`,
-the outer skill owns the single episode summary. Emitting one here would create
-a duplicate, overlapping review record.
-
-For **standalone invocations only**, after the walk and smell-check are complete:
-
-```bash
-ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
-```
-
-After it runs, confirm `touched` is non-empty and reflects the episode's changes.
-
-Report the returned review id to the user:
-
-```
-Review summary created: <id>   (reviews/<id>.md)
-```
-
-Review is post-hoc and non-gating: this never blocks the cascade result.
 
 ---
 

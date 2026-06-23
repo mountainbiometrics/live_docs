@@ -14,42 +14,28 @@ description: >
 
 # identify-key-concepts — Extract the typed concept list (shared phase)
 
-This skill owns the **one** definition of concept extraction for the whole
-store. The three governed-write orchestrators (`apply-to-docs`,
-`ingest-reference`, `revise-doc`) each invoke it instead of re-implementing the
-taxonomy. It reads an input and produces nothing but a typed list — no `ldoc`
-commands, no KB queries. Mapping that list to existing docs is a separate phase
-(`map-concepts-to-docs`).
+This skill owns the **one** definition of concept extraction for the store — the
+governed-write orchestrators invoke it rather than each re-implementing the
+taxonomy. It does exactly one thing: read an input and emit a typed concept list.
+It writes nothing, queries no KB, and runs no `ldoc` commands. It says nothing
+about what happens next — whoever invoked it still holds their own task and
+resumes it once the list exists. (Mapping the list to existing docs is a separate
+phase, `map-concepts-to-docs`.)
 
 ---
 
-## Nested-invocation rule (read first)
-
-This skill is **always a nested invocation** — it is called by an orchestrator
-that owns the episode. It therefore:
-
-- does NOT capture a `START` time,
-- does NOT run `ldoc review new` or emit any review summary,
-- does NOT re-invoke the calling orchestrator or any other write skill.
-
-It leaves its output in context as a clearly-labeled concept list for the
-orchestrator to read. The orchestrator emits the single review summary for the
-episode.
-
----
-
-## Inputs (supplied by the orchestrator)
+## Inputs
 
 - **The text to scan** — the normalized restatement (apply-to-docs), the
   normalized reference (ingest-reference), or the proposed change (revise-doc).
 - **The extraction count / label** — how many concepts to expect and what to
-  call them. The orchestrator passes this as a knob, e.g.:
+  call them. The calling flow sets this knob, e.g.:
   - apply-to-docs: "extract 3–10 concepts."
   - ingest-reference: "extract concepts, no upper limit; then apply the
     splitting test."
   - revise-doc: "extract 1–3 claims; label each record `Claim` not `Concept`."
 
-  Honor the count and label the orchestrator gives you. If none is given,
+  Honor the count and label the calling flow gives you. If none is given,
   default to extracting every distinct durable concept and labeling it
   `Concept`.
 
@@ -85,9 +71,8 @@ few, re-read through each type lens again.
 
 ## Step 2 — Record each concept
 
-Write each concept found in the record shape below. Use the label the
-orchestrator gave you (`Concept` or `Claim`); the field shape is identical
-either way:
+Write each concept found in the record shape below. Use the label you were given
+(`Concept` or `Claim`); the field shape is identical either way:
 
 ```
 Concept: "<short noun phrase>"
@@ -102,19 +87,17 @@ that get wrongly accepted.
 
 ---
 
-## Step 3 — Splitting refinement (only when the orchestrator asks for it)
+## Step 3 — Splitting refinement (only when the calling flow asks for it)
 
-When the orchestrator requests the splitting test (ingest-reference does), apply
+When the calling flow requests the splitting test (ingest-reference does), apply
 it to each concept already found: "This doc changes when ___." If that blank
 covers more than one concern, split the concept into two before finishing. This
 is a refinement tool, not a discovery lens — apply it only after the type-scan
-above is complete, and only when the calling orchestrator asks for it.
+above is complete, and only when the calling flow asks for it.
 
 ---
 
 ## Output
 
-Leave the completed concept list in context, clearly labeled (e.g.
-`## Concept list` or `## Claims`), for the orchestrator to read and pass to
-`map-concepts-to-docs`. Do not query the KB, write any doc, or emit a review
-summary — those belong to later phases owned by the orchestrator.
+Emit the completed concept list, clearly labeled (e.g. `## Concept list` or
+`## Claims`), in the record shape from Step 2.

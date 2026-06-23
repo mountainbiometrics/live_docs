@@ -15,34 +15,18 @@ description: >
 
 This skill owns the **one** read-only survey that turns a concept list into a
 relationship verdict map. It is invoked after `identify-key-concepts` by the
-governed-write orchestrators. **This entire skill is read-only** — it issues
-only `ldoc find`/`ls`/`show`/`neighbors` and writes nothing.
+governed-write orchestrators. **This entire skill is read-only** — it issues only
+`ldoc find`/`ls`/`show`/`neighbors`, writes nothing, and does no episode
+bookkeeping (no `START`, no review). It says nothing about what happens next —
+whoever invoked it resumes their own work once the verdict map exists.
 
 ---
 
-## Nested-invocation rule (read first)
-
-This skill is **always a nested invocation** — the calling orchestrator owns
-the episode. It therefore:
-
-- does NOT capture a `START` time or emit any review summary,
-- does NOT write, revise, or create any doc (synthesis is a later phase),
-- does NOT re-invoke the orchestrator or any write skill.
-
-It leaves a labeled verdict map in context for the orchestrator to read.
-
-Because this phase is purely read-only and can be token-heavy on a large store,
-the orchestrator MAY run it in an isolated context via `context: fork` — in
-which case it receives the concept list as input and returns only the verdict
-map. When run inline (the default), the concept list is already in context.
-
----
-
-## Inputs (supplied by the orchestrator)
+## Inputs
 
 - **The concept/claim list** from `identify-key-concepts` (each with its
   `Type` and `Asserts` sentence).
-- **The scan emphasis** — a knob the orchestrator passes:
+- **The scan emphasis** — a knob the caller passes:
   - apply-to-docs / ingest-reference: full concept survey across the store.
   - revise-doc: a dedup/conflict scan focused on the target doc's neighbors and
     same-type docs (does the revision duplicate or contradict an existing
@@ -114,7 +98,7 @@ silent drift is worse than a flagged conflict.
 
 ## Output — the relationship verdict map
 
-Leave a labeled map in context for the orchestrator:
+Emit a labeled verdict map:
 
 ```
 Concept: "<short noun phrase>"
@@ -129,6 +113,3 @@ Concepts with no match (or whose only matches are frozen/deprecated) are
 candidates for new docs. **Correcting stale existing docs is the highest-value
 output** — existing docs have dependents that cascade-check will propagate to;
 freshly created docs have none.
-
-Do not write anything. The orchestrator decides whether to assess blast radius
-(`assess-blast-radius`) and how to apply changes (`synthesize-doc-changes`).

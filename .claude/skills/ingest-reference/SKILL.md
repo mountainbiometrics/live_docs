@@ -50,29 +50,21 @@ passes through it.
 
 ---
 
-## This skill OWNS the episode (recursion / duplicate-review discipline)
+## You are the orchestrator — run every step through to Step 8
 
-Exactly like cascade-check's "orchestrator owns the episode" contract:
-
-> **What "invoke a sub-skill" means here — read this literally.** When a step says
-> to run a sub-skill (e.g. `/map-concepts-to-docs`), you invoke that skill
-> **yourself, inline, with the Skill tool, in THIS SAME turn** — exactly as if you
-> had typed the slash command — and then you **keep going** to the next step. It
-> does **NOT** mean: spawn a subagent; hand the work off to some other agent; or
-> stop and report a partial result for "something else" to continue. You are the
-> single agent that runs this whole skill start to finish. Producing an
-> intermediate artifact (a concept list, a conflict map) is **not** a stopping
-> point — it is the input to the very next step, which you run now.
+You run this skill from Step 0 to Step 8. Each sub-skill it names
+(`/identify-key-concepts`, `/map-concepts-to-docs`, …) runs **inline, in this
+same turn**, and its result feeds the step after it — running a sub-skill is
+never where you stop. A raw whose concepts were extracted but no docs written is
+not "partly ingested"; it is *not ingested*.
 
 - ingest-reference captures the single `START` timestamp (Step 0) and emits the
   **one** review summary for the whole episode (Step 8).
-- The sub-skills it runs in sequence — `/shard-clipping` (Step 2.5),
-  `/identify-key-concepts` (Step 4), `/map-concepts-to-docs` (Step 5a),
-  `/synthesize-doc-changes` (Step 5b), and `/cascade-check` (Step 6) — are
-  **nested**: each runs inline in this turn (per the box above) and must NOT
-  capture its own `START`, must NOT run `ldoc review new`, and must NOT re-invoke
-  this orchestrator. ("Nested" describes the review/episode ownership — it does
-  not mean a separate agent.)
+- The sub-skills — `/shard-clipping` (2.5), `/identify-key-concepts` (4),
+  `/map-concepts-to-docs` (5a), `/synthesize-doc-changes` (5b), `/cascade-check`
+  (6) — each do their one job and leave the result in context; none captures its
+  own `START`, runs `ldoc review new`, or emits a review. Episode bookkeeping is
+  this skill's alone.
 - **Exception — the shard branch.** If `shard-clipping` splits the raw, this
   episode created only the child raws (via the nested shard-clipping) and
   decomposes nothing itself; it then **ends**, leaving the children pending. It
@@ -138,11 +130,10 @@ This writes to the **raw/ tier** (repo root `/raw/<id>.md`), NOT to `docs/`.
 
 ---
 
-## Step 2.5 — Shard check (invoke `shard-clipping`, nested) — gate 1.5
+## Step 2.5 — Shard check (run `shard-clipping`) — gate 1.5
 
-Before any comprehension, run **`/shard-clipping`** on `RAW_ID` yourself, inline
-in this turn (nested — it must not capture its own `START` or emit its own
-review). It returns one verdict:
+Before any comprehension, run **`/shard-clipping`** on `RAW_ID`. It returns one
+verdict:
 
 - **`pass-through`** (the common case — clipping fits one pass, ≲50 concepts):
   continue to Step 3 with the single `RAW_ID`. This is a near-no-op; proceed
@@ -223,8 +214,9 @@ to `synthesize-doc-changes` in Step 5; every extracted doc gets
 
 ## Step 4 — Extract the concept list (invoke `identify-key-concepts`)
 
-Run **`/identify-key-concepts`** yourself (inline, this turn; nested) on the
-normalized reference from Step 3. Pass ingest's knobs:
+Run — but do not stop after — **`/identify-key-concepts`** on the normalized
+reference from Step 3, then carry its concept list into Step 5. Pass ingest's
+knobs:
 
 > Extract concepts with **no upper limit** (a dense document may yield dozens;
 > concepts are often presupposed rather than stated outright). Label each
@@ -232,13 +224,8 @@ normalized reference from Step 3. Pass ingest's knobs:
 > "This doc changes when ___." If that blank covers more than one concern, split
 > the concept in two.
 
-It returns the typed concept list (`Concept / Type / Asserts`) in context. This
-list is the input to Step 5.
-
-> **Do NOT stop here.** The concept list is an intermediate artifact, not a
-> deliverable to hand off. You produced it; now you continue to Step 5 in this
-> same turn. An ingest episode that ends after extracting concepts has done none
-> of its actual work (no docs written) — it is incomplete, not finished.
+It returns the typed concept list (`Concept / Type / Asserts`) in context — the
+input to Step 5.
 
 ---
 
@@ -249,12 +236,12 @@ composed from two sub-skills; never interleave their reads and writes.
 
 ### Step 5a — Survey (run `/map-concepts-to-docs`)
 
-Run **`/map-concepts-to-docs`** yourself (inline, this turn; nested) with the
-concept list from Step 4. Emphasis: a full conflict scan — for every concept,
-does its claim conflict with something already in live_docs? It returns the
-relationship verdict map (`compatible` / `partial-supersession` /
-`full-supersession` / `conflict-unresolved`) with a planned action per concept.
-(Read-only — safe to run via `context: fork` if the store is large.)
+Run — but do not stop after — **`/map-concepts-to-docs`** with the concept list
+from Step 4, then carry its verdict map into Step 5b. Emphasis: a full conflict
+scan — for every concept, does its claim conflict with something already in
+live_docs? It returns the relationship verdict map (`compatible` /
+`partial-supersession` / `full-supersession` / `conflict-unresolved`) with a
+planned action per concept. (Read-only.)
 
 **Correcting stale existing docs is the primary output — more valuable than any
 newly created doc**, because existing docs have dependents and cascade-check will
@@ -262,8 +249,7 @@ propagate the correction; freshly created docs have no dependents yet.
 
 ### Step 5b — Write (run `/synthesize-doc-changes`)
 
-Run **`/synthesize-doc-changes`** yourself (inline, this turn; nested), handing
-it:
+Run **`/synthesize-doc-changes`**, handing it:
 
 - the conflict map from Step 5a (each existing doc with its verdict / planned
   action — revise, deprecate, link-provenance),
@@ -277,13 +263,13 @@ new atomic docs for unmatched concepts. It returns the list of writes performed.
 
 ---
 
-## Step 6 — Cascade from corrected docs (run `/cascade-check`, nested)
+## Step 6 — Cascade from corrected docs (run `/cascade-check`)
 
-After Step 5b corrects or deprecates existing docs, run **`/cascade-check`**
-yourself (inline, this turn; nested) from **those corrected/deprecated docs** (not
-from freshly created docs — new docs have no dependents and surface nothing when
-cascaded from). Because it is nested, it does not emit its own review summary —
-this episode owns the one summary.
+After Step 5b corrects or deprecates existing docs, run **`/cascade-check`** from
+**those corrected/deprecated docs** (not from freshly created docs — new docs
+have no dependents and surface nothing when cascaded from), then continue to
+Step 7. (This ingest episode owns the single review summary — Step 8 — so
+cascade-check does not emit its own.)
 
 ---
 

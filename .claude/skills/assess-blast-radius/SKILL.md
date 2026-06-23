@@ -21,7 +21,9 @@ to know the full blast radius before deciding whether to pause and what to
 synthesize.
 
 **This entire skill is read-only.** It issues only `ldoc neighbors`/`graph`/
-`show` and writes nothing.
+`show`, writes nothing, and does no episode bookkeeping (no `START`, no review).
+It says nothing about what happens next — whoever invoked it resumes with the
+impact set in context.
 
 ---
 
@@ -45,26 +47,7 @@ batch from this impact set (apply-to-docs does).
 
 ---
 
-## Nested-invocation rule (read first)
-
-This skill is **always a nested invocation** — the calling orchestrator owns the
-episode. It therefore:
-
-- does NOT capture a `START` time or emit any review summary,
-- does NOT write, revise, or create any doc,
-- does NOT re-invoke the orchestrator, cascade-check, or any write skill.
-
-It leaves a labeled impact-set map in context for the orchestrator to read.
-
-Because this phase is purely read-only and can be token-heavy on a large graph,
-the orchestrator MAY run it in an isolated context via `context: fork` — passing
-in the concept/verdict map and receiving only the impact set back. Run inline
-(the default) when the orchestrator needs the impact set in the shared window
-(e.g. apply-to-docs feeds it directly to synthesis).
-
----
-
-## Inputs (supplied by the orchestrator)
+## Inputs
 
 - **The relationship verdict map** from `map-concepts-to-docs` — the directly-
   matched docs and their relationships.
@@ -131,8 +114,8 @@ tangential; prefer `conflict-unresolved` over a low-confidence guess.
 
 ## Output — the complete impact set
 
-Leave a labeled impact set in context for the orchestrator — every doc that will
-need any change, with its verdict, before any write occurs:
+Emit a labeled impact set — every doc that will need any change, with its
+verdict, before any write occurs:
 
 ```
 Impact set (pre-write)
@@ -141,6 +124,3 @@ Impact set (pre-write)
   ...
 Counts: full/cascade-full: N   partial/cascade-extend: N   conflict-unresolved: N   inconsequential: N
 ```
-
-The orchestrator uses these counts for its pause gate and hands the impact set
-to `synthesize-doc-changes`. Do not write anything here.

@@ -28,28 +28,18 @@ pause-before-implementing gate.
 
 ---
 
-## This skill OWNS the episode (recursion / duplicate-review discipline)
+## You are the orchestrator — run every step through to Step 9
 
-Exactly like cascade-check's "orchestrator owns the episode" contract:
-
-> **What "invoke a sub-skill" means here — read this literally.** When a step says
-> to run a sub-skill (e.g. `/map-concepts-to-docs`), you invoke that skill
-> **yourself, inline, with the Skill tool, in THIS SAME turn** — exactly as if you
-> had typed the slash command — and then you **keep going** to the next step. It
-> does **NOT** mean: spawn a subagent; hand the work off to another agent; or stop
-> and report a partial result for "something else" to continue. You are the single
-> agent that runs this whole skill start to finish. An intermediate artifact (a
-> concept list, a conflict map) is the **input to the next step you run now**, not
-> a stopping point.
+You run this skill through to Step 9 (the review summary). Each sub-skill it
+names (`/identify-key-concepts`, `/map-concepts-to-docs`, …) runs **inline, in
+this same turn**, and its result feeds the step after it — running a sub-skill is
+never where you stop.
 
 - apply-to-docs captures the single `START` timestamp and emits the **one**
   review summary for the whole episode (Step 9).
-- Every sub-skill it runs is **nested**: it executes inline in this turn (per the
-  box above) and must NOT capture its own `START`, must NOT run `ldoc review new`,
-  and must NOT re-invoke this orchestrator. Each leaves its labeled output in
-  context for the next step **that you then run** — the output is a handoff to
-  your own next step, not to another agent. ("Nested" describes review/episode
-  ownership; it does not mean a separate agent.)
+- The sub-skills each do their one job and leave the result in context; none
+  captures its own `START`, runs `ldoc review new`, or emits a review. Episode
+  bookkeeping is this skill's alone.
 
 ---
 
@@ -120,38 +110,35 @@ to `synthesize-doc-changes` in Step 6; every new doc will carry
 
 ## Step 2 — Extract concepts (invoke `identify-key-concepts`)
 
-Run **`/identify-key-concepts`** yourself (inline, this turn; nested) on the
-normalized restatement from Step 1. Pass apply-to-docs's knob:
+Run — but do not stop after — **`/identify-key-concepts`** on the normalized
+restatement from Step 1, then carry its concept list into Step 3. Pass
+apply-to-docs's knob:
 
 > Extract **3–10 key concepts**, labeled `Concept`. (No splitting test.)
 
-It returns a typed concept list (`Concept / Type / Asserts`) in context. Keep it
-for Step 3.
-
-> **Do NOT stop here.** The concept list is an intermediate artifact, not a
-> deliverable to hand off. You produced it; now you continue to Step 3 in this
-> same turn. An apply-to-docs episode that ends after extracting concepts has done
-> none of its actual work (no docs written) — it is incomplete, not finished.
+It returns a typed concept list (`Concept / Type / Asserts`) in context — the
+input to Step 3.
 
 ---
 
 ## Step 3 — Map concepts to existing docs (run `/map-concepts-to-docs`)
 
-Run **`/map-concepts-to-docs`** yourself (inline, this turn; nested) with the
-concept list from Step 2. Emphasis: full concept survey across the store. It
-returns a relationship verdict map (`compatible` / `partial-supersession` /
-`full-supersession` / `conflict-unresolved`) in context. (Read-only.)
+Run — but do not stop after — **`/map-concepts-to-docs`** with the concept list
+from Step 2, then carry its verdict map into Step 4. Emphasis: full concept
+survey across the store. It returns a relationship verdict map (`compatible` /
+`partial-supersession` / `full-supersession` / `conflict-unresolved`) in context.
+(Read-only.)
 
 ---
 
 ## Step 4 — Assess the blast radius (run `/assess-blast-radius`)
 
-Run **`/assess-blast-radius`** yourself (inline, this turn; nested) from every
+Run — but do not stop after — **`/assess-blast-radius`** from every
 non-`compatible` match in the Step 3 map, passing the restatement as the change
-description. It walks the graph and returns the **complete impact set** with
-verdicts (`cascade-extend` / `cascade-full` / `conflict-unresolved` /
-`inconsequential`) and the frozen-doc rule applied. (Read-only — safe to run via
-`context: fork` if the graph is large.)
+description, then evaluate the pause gate in Step 5. It walks the graph and
+returns the **complete impact set** with verdicts (`cascade-extend` /
+`cascade-full` / `conflict-unresolved` / `inconsequential`) and the frozen-doc
+rule applied. (Read-only.)
 
 ---
 
@@ -196,8 +183,7 @@ directly to Step 6.
 
 ## Step 6 — Batch-synthesize all changes (run `/synthesize-doc-changes`)
 
-Run **`/synthesize-doc-changes`** yourself (inline, this turn; nested), handing
-it:
+Run **`/synthesize-doc-changes`**, handing it:
 
 - the complete impact set from Step 4 (each affected doc with its verdict),
 - the concept list from Step 2 (for new-doc creation),
@@ -205,7 +191,6 @@ it:
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
 downstream, and returns the list of writes performed in context for the report.
-(This phase runs inline — it needs the whole impact set in view.)
 
 ---
 

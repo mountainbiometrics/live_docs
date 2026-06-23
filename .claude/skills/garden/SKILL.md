@@ -95,11 +95,9 @@ independent; run them in any order.
      ldoc link   <pointing-doc> --requires <A-id>
      ldoc history <pointing-doc> --add "rewired requires from <original-id> to <A-id> after split"
      ```
-5. After **all** split writes are complete for this pass, run `cascade-check`
-   as a **nested invocation** (garden owns the episode review summary; cascade-check
-   must not emit its own). Pass all new doc ids together so cascade-check collects
-   the full blast radius in a single read-only pass before writing any cascade
-   updates.
+5. After **all** split writes are complete for this pass, run `cascade-check`,
+   passing all new doc ids together so it collects the full blast radius in a
+   single read-only pass before writing any cascade updates.
 
 **Hot-file heuristic**: sort docs by history length descending — `ldoc get <id>
 --json` includes the `history` array (list of `{at, summary}` entries); count
@@ -368,10 +366,8 @@ Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating
 the summary never blocks the gardening result; it records the episode for later
 review/signoff.
 
-Cascade-check calls made internally by garden (e.g. after splits in Pass 1) are
-**nested invocations** — they must NOT emit their own review summary, and they
-use cascade-check's two-pass model (full read-only graph traversal first, then
-batch write). Garden owns the single summary for the episode.
+Garden owns the single summary for the episode — the cascade-check runs it
+invokes (e.g. after splits in Pass 1) never emit their own.
 
 After all changes for the pass are applied:
 

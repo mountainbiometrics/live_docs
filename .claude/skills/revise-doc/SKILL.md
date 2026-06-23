@@ -30,17 +30,16 @@ are composed from sub-skills — `identify-key-concepts` (as *claims*),
 
 ---
 
-## This skill OWNS the episode (recursion / duplicate-review discipline)
+## You are the orchestrator — own the episode through to Step 7
 
-Exactly like cascade-check's "orchestrator owns the episode" contract:
+You run this skill end to end. Each sub-skill it names (`identify-key-concepts`,
+`map-concepts-to-docs`, …) runs **inline, in this same turn**, and its result
+feeds the step after it — running a sub-skill is never where you stop.
 
 - revise-doc captures the single `START` timestamp (Step 0) and emits the **one**
-  review summary for the episode (Step 7), for substantive changes only.
-- Every sub-skill it invokes — `identify-key-concepts`, `map-concepts-to-docs`,
-  `assess-blast-radius`, `synthesize-doc-changes`, and `cascade-check` — is a
-  **nested invocation**: tell each one so. Nested sub-skills must NOT capture
-  their own `START`, run `ldoc review new`, or re-invoke this orchestrator.
-- If revise-doc is itself invoked nested by a higher-level skill (e.g.
+  review summary for the episode (Step 7), for substantive changes only. The
+  sub-skills it runs do no episode bookkeeping of their own.
+- If revise-doc is itself run as a step of a higher-level skill (e.g.
   `ingest-reference`), it does NOT emit a review summary — the outermost skill
   owns it (see Step 7).
 
@@ -77,9 +76,9 @@ see Step 7).
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
-4. **Extract the claims the revision introduces** — invoke the
-   **`identify-key-concepts`** skill on the proposed change, as a **nested
-   invocation**. Pass revise-doc's knobs:
+4. **Extract the claims the revision introduces** — run **`/identify-key-concepts`**
+   on the proposed change (don't stop after it; its claim list is the input to
+   Step 2). Pass revise-doc's knobs:
 
    > Extract **1–3 claims**, labeled **`Claim`** (not `Concept`). For a small or
    > purely corrective revision (typo, date, removing stale text), a single claim
@@ -97,11 +96,10 @@ see Step 7).
 
 ## Step 2 — Dedup and conflict scan (invoke `map-concepts-to-docs`)
 
-Invoke the **`map-concepts-to-docs`** skill with the claim list from Step 1, as a
-**nested invocation**. Emphasis: **a dedup/conflict scan focused on the target
-doc's neighbors and same-type docs** — does the revision duplicate or contradict
-an existing claim? It returns a relationship verdict map. (Read-only — safe to
-run via `context: fork` if the store is large.)
+Run **`/map-concepts-to-docs`** with the claim list from Step 1. Emphasis: **a
+dedup/conflict scan focused on the target doc's neighbors and same-type docs** —
+does the revision duplicate or contradict an existing claim? It returns a
+relationship verdict map. (Read-only.)
 
 Act on the map before writing:
 
@@ -139,7 +137,7 @@ ldoc link <id> --superseded-by <new-id>
 
 No gratuitous reformatting, no refactoring beyond scope. For a deprecation or a
 wider rewrite that affects several docs at once, hand the plan to
-`synthesize-doc-changes` (nested) rather than hand-writing each doc — it owns the
+`synthesize-doc-changes` rather than hand-writing each doc — it owns the
 coherent-batch write discipline. Single-field edits stay inline here.
 
 ---
@@ -186,15 +184,15 @@ edge.
 ldoc history <id> --add "<concise description of what changed and why>"
 ```
 
-**Action — assess impact, then cascade (nested invocations):**
+**Action — assess impact, then cascade:**
 
-For a substantive change you may first invoke the **`assess-blast-radius`** skill
-from this doc's id (nested) to survey the impact set read-only before writing
-neighbors — useful when the edit is large. Then invoke the **`cascade-check`**
-skill starting from this doc's id, passing the change description as context, as
-a **nested invocation** so it does not emit its own review summary (revise-doc
-owns the episode summary). cascade-check runs its own two-pass model (read-only
-walk, then batch write of `cascade` neighbors) and halts on `incompatible`.
+For a substantive change you may first run **`/assess-blast-radius`** from this
+doc's id to survey the impact set read-only before writing neighbors — useful
+when the edit is large. Then run **`/cascade-check`** from this doc's id, passing
+the change description as context. cascade-check runs its own two-pass model
+(read-only walk, then batch write of `cascade` neighbors) and halts on
+`incompatible`. (revise-doc owns the single episode summary — Step 7 — so the
+cascade does not emit its own.)
 
 Do not skip the cascade for substantive changes, even if the change seems
 minor — cascade decides impact, not the editor.

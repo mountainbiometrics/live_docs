@@ -20,24 +20,12 @@ This skill owns the **write pass**: given everything earlier phases discovered
 state in one coherent batch. It supplies the *judgment* (what each doc's correct
 state is); the deterministic I/O stays in `ldoc` verbs.
 
-This phase **must run inline** in the orchestrator's context — it needs the
-entire plan in view to write a coherent batch, so it is never forked.
-
----
-
-## Nested-invocation rule (read first)
-
-This skill is **always a nested invocation** — the calling orchestrator owns the
-episode. It therefore:
-
-- does NOT capture a `START` time or emit any review summary,
-- does NOT run `validate` as a gate or re-invoke the orchestrator (the
-  orchestrator validates and reports after synthesis),
-- does NOT re-walk the graph (that was `assess-blast-radius`) — it acts on the
-  plan it was handed.
-
-It leaves a labeled list of writes performed in context for the orchestrator's
-report.
+This phase runs inline — it needs the entire plan in view to write a coherent
+batch. It writes docs but does no episode bookkeeping: no `START`, no review
+summary, no `validate` gate (the caller validates after), and it does not re-walk
+the graph (that was `assess-blast-radius`) — it acts on the plan it was handed.
+It says nothing about what happens next; whoever invoked it resumes once the
+writes are done.
 
 ---
 
@@ -54,7 +42,7 @@ when a summary exceeds ~60 words.
 
 ---
 
-## Inputs (supplied by the orchestrator)
+## Inputs
 
 - **The plan** — the impact set / conflict map (each affected doc with a verdict
   or planned action) plus the concept list (for new-doc creation).
@@ -202,7 +190,7 @@ section (Step 1) rather than qualifying it.
 
 ## Output — writes performed
 
-Leave a labeled list in context for the orchestrator's report:
+Emit a labeled list of the writes performed:
 
 ```
 Synthesized writes
@@ -211,6 +199,3 @@ Synthesized writes
   <id>  "<title>"  created     — new doc for concept "<concept>"  (provenance <anchor>)
   <id>  "<title>"  provenance-linked — added <anchor>
 ```
-
-Do not validate or emit a review summary — the orchestrator does both after
-synthesis.

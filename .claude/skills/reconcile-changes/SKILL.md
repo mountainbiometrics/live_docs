@@ -64,17 +64,16 @@ to yourself before starting:
 
 ---
 
-## This skill OWNS the episode (recursion / duplicate-review discipline)
+## You are the orchestrator — run every step through to Step 8
 
-Exactly like the other orchestrators' "orchestrator owns the episode" contract:
+You run this skill end to end. Each sub-skill it names (`identify-key-concepts`,
+`map-concepts-to-docs`, …) runs **inline, in this same turn**, and its result
+feeds the step after it — running a sub-skill is never where you stop.
 
 - reconcile-changes captures the single `START` timestamp (Step 0) and emits the
   **one** review summary for the whole episode (Step 8).
-- Every sub-skill it invokes — `identify-key-concepts`, `map-concepts-to-docs`,
-  `assess-blast-radius`, `synthesize-doc-changes`, and `cascade-check` — is a
-  **nested invocation**: tell each one so. Nested sub-skills must NOT capture
-  their own `START`, must NOT run `ldoc review new`, and must NOT re-invoke this
-  orchestrator.
+- The sub-skills it runs do no episode bookkeeping of their own (no `START`, no
+  `ldoc review new`).
 
 ---
 
@@ -121,9 +120,9 @@ floating doc with no provenance and no graph edge.
 
 ## Step 2 — Extract concepts (invoke `identify-key-concepts`)
 
-Invoke the **`identify-key-concepts`** skill on the session digest (or, if Step 1
-was skipped, on the description of what changed), as a **nested invocation**.
-Pass reconcile-changes's knobs:
+Run — but do not stop after — **`/identify-key-concepts`** on the session digest
+(or, if Step 1 was skipped, on the description of what changed), then carry its
+concept list into Step 3. Pass reconcile-changes's knobs:
 
 > Extract concepts with **no upper limit** — a working session usually decided
 > several things at once. Label each `Concept`. **Bias strongly toward the
@@ -142,15 +141,15 @@ for Step 3.
 
 ## Step 3 — Map concepts to existing docs (invoke `map-concepts-to-docs`)
 
-Invoke the **`map-concepts-to-docs`** skill with the concept list from Step 2, as
-a **nested invocation**. Emphasis: **heavy dedup**. Because we are reconciling a
-gap rather than introducing wholly new knowledge, **many concepts will already
-have a doc** that is now stale or partially superseded. For each concept decide
-update-vs-create: prefer revising or strengthening an existing doc over creating
-a near-duplicate. It returns a relationship verdict map (`compatible` /
-`partial-supersession` / `full-supersession` / `conflict-unresolved`) with a
-planned action per concept. (Read-only — safe to run via `context: fork` if the
-store is large.)
+Run — but do not stop after — **`/map-concepts-to-docs`** with the concept list
+from Step 2, then carry its verdict map into Step 4. Emphasis: **heavy dedup**.
+Because we are reconciling a gap rather than introducing wholly new knowledge,
+**many concepts will already have a doc** that is now stale or partially
+superseded. For each concept decide update-vs-create: prefer revising or
+strengthening an existing doc over creating a near-duplicate. It returns a
+relationship verdict map (`compatible` / `partial-supersession` /
+`full-supersession` / `conflict-unresolved`) with a planned action per concept.
+(Read-only.)
 
 **Correcting stale existing docs is the highest-value output** — they have
 dependents that cascade-check will propagate to; freshly created docs have none.
@@ -159,11 +158,11 @@ dependents that cascade-check will propagate to; freshly created docs have none.
 
 ## Step 4 — Assess the blast radius (invoke `assess-blast-radius`)
 
-Invoke the **`assess-blast-radius`** skill from every non-`compatible` match in
-the Step 3 map, as a **nested invocation**, passing the session digest as the
-change description. It walks the graph and returns the **complete impact set**
-with verdicts and the frozen-doc rule applied. (Read-only — safe to run via
-`context: fork` if the graph is large.)
+Run — but do not stop after — **`/assess-blast-radius`** from every
+non-`compatible` match in the Step 3 map, passing the session digest as the
+change description, then continue to Step 5. It walks the graph and returns the
+**complete impact set** with verdicts and the frozen-doc rule applied.
+(Read-only.)
 
 **No pause gate.** Unlike apply-to-docs, reconcile-changes does NOT halt on a
 large blast radius — the change is already real, so there is nothing to ask
@@ -178,8 +177,7 @@ writing them, but do not gate the rest of the batch on a size threshold.
 
 ## Step 5 — Batch-synthesize all changes (invoke `synthesize-doc-changes`)
 
-Invoke the **`synthesize-doc-changes`** skill, as a **nested invocation**,
-handing it:
+Run **`/synthesize-doc-changes`**, handing it:
 
 - the complete impact set from Step 4 (each affected doc with its verdict),
 - the concept list from Step 2 (for new-doc creation),
@@ -197,13 +195,13 @@ downstream, and returns the list of writes performed in context for the report.
 
 ---
 
-## Step 6 — Cascade from corrected docs (invoke `cascade-check`, nested)
+## Step 6 — Cascade from corrected docs (run `/cascade-check`)
 
-After Step 5 corrects or deprecates existing docs, invoke the **`cascade-check`**
-skill from **those corrected/deprecated docs** (not from freshly created docs —
-new docs have no dependents and surface nothing when cascaded from). Tell
-cascade-check this is a **nested invocation** so it does not emit its own review
-summary.
+After Step 5 corrects or deprecates existing docs, run **`/cascade-check`** from
+**those corrected/deprecated docs** (not from freshly created docs — new docs
+have no dependents and surface nothing when cascaded from), then continue to
+Step 7. (reconcile-changes owns the single episode review summary — cascade-check
+does not emit its own.)
 
 ---
 
