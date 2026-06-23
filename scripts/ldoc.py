@@ -1749,6 +1749,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="live_docs porcelain CLI — query and mutate the KB.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument(
+        "--no-viewer",
+        dest="no_viewer",
+        action="store_true",
+        help="Skip auto-rebuilding build/viewer.html after mutating commands.",
+    )
     sub = parser.add_subparsers(dest="subcommand", metavar="subcommand")
     sub.required = True
 
@@ -2114,6 +2120,40 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 # ---------------------------------------------------------------------------
+# Auto viewer rebuild
+# ---------------------------------------------------------------------------
+
+# Subcommands that mutate tiers exported into viewer.html (docs/, reviews/).
+_VIEWER_MUTATING = frozenset({"new", "set", "edit", "link", "unlink", "history"})
+_REVIEW_MUTATING = frozenset({"new", "sign"})
+
+
+def _should_auto_rebuild_viewer(args, rc: int) -> bool:
+    """True when a successful invocation changed viewer-visible store content."""
+    if rc != 0:
+        return False
+    if getattr(args, "no_viewer", False):
+        return False
+
+    cmd = args.subcommand
+    if cmd == "viewer":
+        return False
+    if cmd in _VIEWER_MUTATING:
+        return not getattr(args, "dry_run", False)
+    if cmd == "review":
+        return getattr(args, "review_verb", None) in _REVIEW_MUTATING
+    return False
+
+
+def _maybe_auto_rebuild_viewer(args, rc: int) -> None:
+    if not _should_auto_rebuild_viewer(args, rc):
+        return
+    from livedocs.viewer import auto_rebuild_viewer
+
+    auto_rebuild_viewer()
+
+
+# ---------------------------------------------------------------------------
 # Dispatch table
 # ---------------------------------------------------------------------------
 
@@ -2177,7 +2217,9 @@ def main() -> int:
 
     from livedocs import DOCS_DIR
     kb = KB(DOCS_DIR)
-    return handler(kb, args)
+    rc = handler(kb, args)
+    _maybe_auto_rebuild_viewer(args, rc)
+    return rc
 
 
 if __name__ == "__main__":

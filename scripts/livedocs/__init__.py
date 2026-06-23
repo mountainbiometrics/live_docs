@@ -28,7 +28,7 @@ _EXPORT_MAP = [
                    "superseded_by_edges", "id_title_map"}),
     ("kb",        {"KB", "load_all"}),
     ("reviews",   {"ReviewLedger", "parse_review", "dump_review"}),
-    ("viewer",    {"build_viewer"}),
+    ("viewer",    {"build_viewer", "auto_rebuild_viewer", "auto_viewer_enabled"}),
 ]
 
 # Derived from _EXPORT_MAP — single source of truth.

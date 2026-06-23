@@ -12,10 +12,14 @@ export where frontmatter on disk is the contract.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .model import DOCS_DIR, REVIEWS_DIR, REPO_ROOT
 from .serialize import parse_doc
+
+AUTO_VIEWER_ENV = "LIVEDOCS_AUTO_VIEWER"
+AUTO_VIEWER_VERBOSE_ENV = "LIVEDOCS_AUTO_VIEWER_VERBOSE"
 
 # Packaged assets ship with the tooling, not inside the store.
 _VIEWER_DIR = Path(__file__).resolve().parent.parent / "viewer"
@@ -67,3 +71,39 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
 
     dest.write_text(html, encoding="utf-8")
     return dest, len(docs), len(reviews)
+
+
+def auto_viewer_enabled() -> bool:
+    """Return False when auto-rebuild is disabled via LIVEDOCS_AUTO_VIEWER."""
+    raw = os.environ.get(AUTO_VIEWER_ENV, "1").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def auto_rebuild_viewer(*, quiet: bool | None = None) -> Path | None:
+    """
+    Rebuild the viewer if auto-rebuild is enabled.
+
+    Returns the output path on success, None when skipped or disabled.
+    Failures are swallowed — a stale viewer must never break porcelain.
+    """
+    if not auto_viewer_enabled():
+        return None
+
+    if quiet is None:
+        quiet = os.environ.get(AUTO_VIEWER_VERBOSE_ENV, "").strip().lower() not in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+    try:
+        path, n_docs, n_reviews = build_viewer()
+    except (FileNotFoundError, OSError):
+        return None
+
+    if not quiet:
+        import sys
+
+        print(f"viewer: rebuilt {path} ({n_docs} docs, {n_reviews} reviews)", file=sys.stderr)
+    return path
