@@ -71,11 +71,12 @@ so each doc is written with its dependencies already settled.
 For each doc with verdict `full-supersession` or `cascade-full`:
 
 1. Draft the replacement doc body — the single correct current claim.
-2. Create the replacement:
+2. Create the replacement. Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
    ```bash
    ldoc new \
      --type <type> \
-     --title "<precise, single-responsibility title>" \
+     --label "<2–5 word Title-Case handle>" \
+     --title "<precise, single-responsibility title>" \   # optional; omit if label suffices
      --level <level> \
      --status living \
      --body "<new claim>"
@@ -114,12 +115,13 @@ For each doc with verdict `partial-supersession`, `cascade-extend`, or a planned
 ## Step 3 — Create new docs for unmatched concepts
 
 For each concept with no existing match (or whose only matches are frozen/
-deprecated), create a new doc:
+deprecated), create a new doc. Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
 
 ```bash
 ldoc new \
   --type <type> \
-  --title "<precise, single-responsibility title>" \
+  --label "<2–5 word Title-Case handle>" \
+  --title "<precise, single-responsibility title>" \   # optional; omit if label suffices
   --level <incidental|trial|preference|requirement> \
   --status <living|target> \
   --provenance "<anchor id>" \
@@ -130,6 +132,17 @@ ldoc new \
 Use `--belongs-to` per the shared placement policy whenever a visible coherent
 signpost exists in the concepts/edges already in hand. Omit only when no good
 parent is visible (defer to gardening rather than force a bad home).
+
+**Domain origination** — the parallel axis to `belongs_to` placement. **Read and
+apply** `.claude/skills/_shared/domain-tagging.md`; your role here is the
+**originator**. At doc creation, originate applicable `domain` tags via
+`--tags-domain "..."`. Because you are tagging in isolated context, **tag
+liberally** — apply every domain that plausibly applies (optimize for recall);
+do NOT guess conservatively, since gardening (with full-store context) is what
+prunes. Two rules from the shared policy: **consult `ldoc domains` and reuse an
+existing domain over coining a new synonym**; and a term that is really a domain
+goes in `--tags-domain`, not `keywords`. Ingest originates liberally; gardening
+prunes authoritatively (`20260624185902`).
 
 **Provenance rule**: every new doc must include `--provenance <anchor>` (the
 `REQ_ID`/`NORM_ID` the orchestrator supplied). The anchor lives in `docs/`, so

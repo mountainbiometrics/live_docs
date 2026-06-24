@@ -61,9 +61,10 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc map [--json]` | Entry points (signpost roots) with summaries — start here |
-| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--keyword] [--json]` | Full-text + faceted search (terms match title, label, body, keywords) |
+| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search (terms match title, label, body, keywords; facets filter by scope/domain only) |
 | `ldoc ls [--type T] [--json]` | List docs (optionally one type) |
 | `ldoc orphans` | Docs outside the belongs_to hierarchy |
+| `ldoc domains [--json]` | List in-use domain tags with doc counts (the domain registry) |
 | `ldoc count` / `ldoc log [--since ISO] [--limit N]` | Stats / recent-changes view |
 | `ldoc get <ref...>` | Frontmatter summary |
 | `ldoc show <ref...>` | Frontmatter + resolved edges + body |
@@ -75,7 +76,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 
 | Command | Purpose |
 |---|---|
-| `ldoc new --type T --title "..." [options]` | Create a doc (validates edge refs first) |
+| `ldoc new --type T --label "..." [--title "..."] [options]` | Create a doc (`--label` required; `--title` optional, defaults to label) |
 | `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--keywords][--body -\|TEXT]` | Update fields/body |
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
 | `ldoc unlink <ref> [same edge flags]` | Remove edges |
@@ -126,11 +127,11 @@ it; never rename files.
 
 | Field | Format | Role |
 |---|---|---|
-| `label` | Title Case, 2–5 words | Short identifier; how `ldoc` resolves refs |
-| `title` | Sentence-length phrase | The authoritative human name of the concept |
+| `label` | Title Case, 2–5 words | **Required** primary handle; names the subject; how `ldoc` resolves refs |
+| `title` | Sentence-length phrase | Optional fuller name; elaborates the label, and defaults to it when omitted |
 | `summary` | 1–3 sentences, ≤ ~50 words | The gist; mirrors the doc's opening line. Shown **verbatim** in `ldoc map`, search results, and review snapshots — keep it scannable |
 
-`label` auto-derives from `title` on `ldoc new` if you omit `--label`.
+`--label` is **required** on `ldoc new`; `--title` is optional and defaults to the label when omitted.
 
 ### Enums (these are the live values — `index` was retired)
 
@@ -213,8 +214,8 @@ ldoc find --domain "Ontology Mapping"
 ```bash
 ldoc new \
   --type decision \
-  --title "Sentence-length authoritative name of the concept" \
-  --label "Optional Title Case Label" \
+  --label "Short Noun Phrase" \
+  --title "Sentence-length fuller name of the concept" \   # optional; defaults to label
   --summary "1–3 sentence gist that mirrors the doc's opening line." \
   --level preference \
   --status living \
@@ -228,9 +229,7 @@ ldoc new \
   --dry-run            # preview without writing; drop it to commit
 ```
 
-`--label` is optional (auto-derived). Edge refs accept id | label | title and
-are validated before anything is written. Membership points UP: the child
-declares `--belongs-to <parent>`, never the reverse.
+`--label` is **required** — a 2–5 word Title-Case noun phrase naming the subject. `--title` is optional and defaults to the label. Edge refs accept id | label | title and are validated before anything is written. Membership points UP: the child declares `--belongs-to <parent>`, never the reverse.
 
 ---
 

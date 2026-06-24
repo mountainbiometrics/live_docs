@@ -178,13 +178,16 @@ Determine `kind`:
 - `external` — if it's an external spec, RFC, article, or third-party source.
 - `clipping` — only if none of the above fit.
 
+Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
+
 ```bash
 ldoc new \
   --type reference \
   --kind <kind> \
   --status reference \
   --level incidental \
-  --title "<descriptive title>" \  # no "Reference:" prefix — the type is shown automatically on display
+  --label "<2–5 word Title-Case handle>" \
+  --title "<descriptive title>" \  # optional; no "Reference:" prefix — the type is shown automatically on display
   --source "raw/<RAW_ID>.md" \
   --origin "<corpus/system>" \      # carry from the raw clipping if present
   --medium "<medium>" \             # carry from the raw clipping if present

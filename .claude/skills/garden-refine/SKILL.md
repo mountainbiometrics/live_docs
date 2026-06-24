@@ -59,6 +59,23 @@ concentrate every pass on the same well-worn center of the store.
    ```
    Terms a searcher might type; no governance bar.
 
+   **Keyword/domain non-overlap** (`20260623233935`): before adding a keyword,
+   check it against the domain registry:
+   ```bash
+   ldoc domains
+   ```
+   If a candidate keyword IS or MATCHES an existing domain, it belongs as a
+   `domain` tag — NOT a keyword. `--domain` has **replace semantics**, so
+   reconstruct the doc's full domain list with the matched value added (never
+   pass only the new domain, or you clobber existing ones):
+   ```bash
+   ldoc show <id>                                   # read current domains
+   ldoc set <id> --domain "Matched Domain,<existing-domains-unchanged>"
+   ```
+   Duplicating a domain as a keyword fragments the two axes and makes both
+   useless for filtering. Keywords are only the search aliases that are NOT
+   domains.
+
 ---
 
 ## Output

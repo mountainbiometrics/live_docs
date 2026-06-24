@@ -89,7 +89,7 @@ ldoc ingest-raw \
 Note the returned id: call it **RAW_ID**. This goes to `raw/` — outside the
 graph — and is the immutable original.
 
-Then create a normalized reference doc summarizing the request's intent:
+Then create a normalized reference doc summarizing the request's intent. Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
 
 ```bash
 ldoc new \
@@ -97,7 +97,8 @@ ldoc new \
   --kind plan \
   --status reference \
   --level incidental \
-  --title "<short description>" \   # no "Reference:" prefix — the type is shown automatically on display
+  --label "<2–5 word Title-Case handle>" \
+  --title "<short description>" \   # optional; no "Reference:" prefix — the type is shown automatically on display
   --source "raw/<RAW_ID>.md" \
   --body "<the one-paragraph restatement from Step 1>"
 ```

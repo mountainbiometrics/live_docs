@@ -54,8 +54,10 @@ members. Leave ungrouped rather than force a bad home.
 
 ### A3 — Apply structure
 
+Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
+
 ```bash
-ldoc new --type component --title "<theme>" --belongs-to <parent> --body "…"
+ldoc new --type component --label "<2–5 word Title-Case handle>" [--title "<theme>"] --belongs-to <parent> --body "…"
 ldoc link <member-id> --belongs-to <SIGNPOST_ID>
 ldoc history <member-id> --add "garden-hierarchy: grouped under <SIGNPOST_ID>"
 ```

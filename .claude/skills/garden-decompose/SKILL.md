@@ -43,9 +43,9 @@ it is a split candidate.
    entries with mixed-topic summaries.
 4. For each split, decide new doc A/B (title, type, ownership), rewire plan,
    and whether the original becomes a signpost over A/B or is deprecated.
-5. Apply each split:
+5. Apply each split. Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
    ```bash
-   ldoc new --type <type> --title "<title>" --level <level> --status <status> --requires <dep-id>,<dep-id>
+   ldoc new --type <type> --label "<2–5 word Title-Case handle>" [--title "<title>"] --level <level> --status <status> --requires <dep-id>,<dep-id>
    ```
    Add `## Correction` to the original body (via `ldoc set <original-id> --body -`), then
    deprecate — two-part operation; `ldoc set` has no `--superseded-by` flag:

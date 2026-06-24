@@ -29,6 +29,7 @@ Subcommands (grouped):
     orphans [--json] [--plain]
     log [--since <ISO>] [--limit N] [--json]
     count [--json]
+    domains [--json] [--plain]
 
   ── Graph ──
     graph <ref> [--depth N] [--direction up|down|both] [--json]
@@ -320,7 +321,6 @@ def cmd_find(kb: KB, args) -> int:
             status=args.status or None,
             scope=args.scope or None,
             domain=args.domain or None,
-            keyword=getattr(args, "keyword", None) or None,
         )
     except ValueError as e:
         _err(str(e))
@@ -614,6 +614,44 @@ def cmd_count(kb: KB, args) -> int:
     return 0
 
 
+def cmd_domains(kb: KB, args) -> int:
+    """Domain registry: list every distinct domain tag in use, with doc counts."""
+    try:
+        rows = kb.domain_counts()
+    except Exception as e:
+        _err(str(e))
+        return 1
+
+    plain = getattr(args, "plain", False)
+
+    if args.json:
+        _json(rows)
+        return 0
+
+    if not rows:
+        if plain:
+            pass  # plain empty-state: print nothing, exit 0
+        else:
+            print("domains — none in use")
+        return 0
+
+    if plain:
+        for r in rows:
+            print(f"{r['count']}\t{r['domain']}")
+        return 0
+
+    # Human output
+    total_distinct = len(rows)
+    total_docs = sum(r["count"] for r in rows)
+    print(f"domains — {total_distinct} distinct, {total_docs} docs tagged")
+    # Width of the widest domain name for alignment
+    max_name_len = max(len(r["domain"]) for r in rows)
+    for r in rows:
+        print(f"  {r['domain']:<{max_name_len}}  {r['count']}")
+
+    return 0
+
+
 def cmd_new(kb: KB, args) -> int:
     edges = _parse_edge_args(args)
     domain_tags = [s.strip() for s in args.tags_domain.split(",") if s.strip()] \
@@ -643,15 +681,13 @@ def cmd_new(kb: KB, args) -> int:
 
     # --dry-run preview
     if getattr(args, "dry_run", False):
-        from livedocs.model import title_to_label, unique_label
-        label = args.label or ""
-        if not label:
-            existing = (d.get("label", "") for d in kb._docs.values())
-            label = unique_label(title_to_label(args.title), existing)
+        # label is required; title is optional and falls back to the label.
+        label = args.label
+        title = args.title or label
         print("## DRY RUN — would create:\n")
         print(f"  type:    {args.type}")
-        print(f"  title:   {args.title}")
         print(f"  label:   {label}")
+        print(f"  title:   {title}")
         if args.summary:
             print(f"  summary: {args.summary}")
         print(f"  level:   {args.level}")
@@ -667,8 +703,8 @@ def cmd_new(kb: KB, args) -> int:
     try:
         doc_id = kb.new(
             type=args.type,
-            title=args.title,
-            label=args.label or "",
+            label=args.label,
+            title=args.title or "",
             summary=args.summary or "",
             level=args.level,
             status=args.status,
@@ -1694,11 +1730,14 @@ def cmd_help(kb: KB, args) -> int:
   ldoc orphans                            # docs outside the belongs_to hierarchy
   ldoc log --since 2026-06-15T00:00:00Z --limit 10
   ldoc count
+  ldoc domains                            # domain tag registry with counts
+  ldoc domains --json
+  ldoc domains --plain
 
   # Mutations
-  ldoc new --type decision --title "My Decision" --level preference \\
+  ldoc new --type decision --label "My Decision" --level preference \\
        --requires cognitive-load
-  ldoc new --type decision --title "Test" --dry-run
+  ldoc new --type decision --label "Test Decision" --dry-run
   ldoc set porcelain-roadmap --title "New Title"
   ldoc set porcelain-roadmap --summary "One-line gist."
   ldoc set porcelain-roadmap --domain "Ingest,Schema Evolution"   # set/clear domain tags
@@ -1797,8 +1836,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--status", default="", choices=VALID_STATUSES_SORTED + [""])
     p.add_argument("--scope", default="")
     p.add_argument("--domain", default="")
-    p.add_argument("--keyword", default="",
-                   help="Filter to docs whose keywords list contains this term (case-insensitive).")
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
@@ -1868,6 +1905,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("count", help="Doc and edge count statistics.")
     p.add_argument("--json", action="store_true")
 
+    # --- domains ---
+    p = sub.add_parser(
+        "domains",
+        help="Domain registry: list every distinct domain tag in use with doc counts.",
+    )
+    p.add_argument("--json", action="store_true",
+                   help='Emit [{"domain": str, "count": int}, ...] in sort order.')
+    p.add_argument("--plain", action="store_true",
+                   help="One <count>\\t<domain> per line, no header.")
+
     # --- new ---
     p = sub.add_parser("new", help="Create a new doc.",
                        description=(
@@ -1880,9 +1927,13 @@ def build_parser() -> argparse.ArgumentParser:
                        ),
                        formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--type", required=True, choices=VALID_TYPES_SORTED)
-    p.add_argument("--title", required=True)
-    p.add_argument("--label", default="",
-                   help="Short Title-Case label; auto-derived from title if omitted.")
+    p.add_argument("--label", required=True,
+                   help="Short (2–5 word) Title-Case handle. REQUIRED — the primary "
+                        "human-meaningful name; must say what the doc is about, not a "
+                        "fragment.")
+    p.add_argument("--title", default="",
+                   help="Optional sentence-length elaboration of the label. Defaults "
+                        "to the label when omitted.")
     p.add_argument("--summary", default="",
                    help="2–5 sentence overview of the doc's concept (omitted if empty).")
     p.add_argument("--level", default="incidental", choices=VALID_LEVELS_SORTED)
@@ -2185,6 +2236,7 @@ COMMANDS = {
     "graph": cmd_graph,
     "log": cmd_log,
     "count": cmd_count,
+    "domains": cmd_domains,
     "new": cmd_new,
     "set": cmd_set,
     "edit": cmd_edit,

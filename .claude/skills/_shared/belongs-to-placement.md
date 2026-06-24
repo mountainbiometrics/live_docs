@@ -41,8 +41,9 @@ adjudicating test: **"Would this placement mislead a navigator?"**
 
 You already hold the concepts and edges in hand. Pick the **best visible**
 signpost from that local context — semi-adequate, not perfect. Wire
-`--belongs-to <parent-id>` on `ldoc new`. Gardening refines later; you
-**originate** placement, not defer entirely to gardening.
+`--belongs-to <parent-id>` on `ldoc new` (alongside the required `--label`).
+Gardening refines later; you **originate** placement, not defer entirely to
+gardening.
 
 ## At gardening (full-store refiner)
 

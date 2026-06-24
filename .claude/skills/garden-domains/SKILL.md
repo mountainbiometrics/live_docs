@@ -2,40 +2,150 @@
 name: garden-domains
 user-invocable: false
 description: >
-  Gardening phase: cross-cutting domain tag curation — the ≥2-scopes test, align
-  untagged docs, retire/split stale or over-broad domains. Orthogonal to tree
-  topology; kept separate from garden-hierarchy. Nested phase; garden dispatcher
-  owns the episode.
+  Gardening phase: curate the domain vocabulary as a finite shared resource —
+  consolidate near-synonyms and underweight domains, assign untagged docs
+  conservatively, validate claimed memberships, and normalize convention drift.
+  Replaces the deprecated ≥2-scopes test. Nested phase; garden dispatcher owns
+  the episode.
 ---
 
-# garden-domains — Domain tag curation (structure phase)
+# garden-domains — Domain vocabulary curation (structure phase)
 
 **Contract:** nested phase only. Capture no START, run no `cascade-check`, emit
 no review.
 
-Read governing docs once — do not re-derive the model:
-- `scope` (topological): `ldoc show 20260619235018`
-- `domain` (cross-cutting tag): `ldoc show 20260615203839`
-- `domain` vs `keywords`: `ldoc show 20260623233935`
+**Read and apply** `.claude/skills/_shared/domain-tagging.md` — the shared
+definition. Your role here is the **curator** (the full-store half of the
+asymmetry). Then read the governing docs once — do not re-derive the model:
+- `domain` as finite shared resource: `ldoc show 20260624185845`
+- domain originates liberally, gardening prunes: `ldoc show 20260624185902`
+- `domain` definition and scope/domain orthogonality: `ldoc show 20260615203839`
+- `domain` vs `keywords` non-overlap: `ldoc show 20260623233935`
 
-`domain` is **not** `keywords`. Domain carries a governance bar; keywords do not.
+`domain` is **not** `keywords`. Domain is a governed grouping facet with a
+justify-its-existence bar. Keywords are ungoverned findability aliases with no
+such bar. The two must not overlap.
+
+---
+
+## The governing fear
+
+**An un-pruned vocabulary is the failure mode this phase exists to prevent.**
+Noisy, over-applied domains make the facet useless as a filter. Origination tags
+*liberally* and is right to — it lacks store-wide context. **You have that
+context, so pruning is your job, not the author's.** Prune and consolidate
+eagerly; the safe error here is removing one tag too many, never leaving drift in
+place. Every action must be answerable: "does this make the vocabulary more
+justified, or just busier?"
 
 ---
 
 ## Procedure
 
-1. Survey recurring cross-cutting concerns: `relates`/`requires` neighborhoods
-   that **cross subsystem boundaries**, repeated vocabulary in titles/summaries,
-   co-edited clusters. Ignore universal `requires → Foundational Principles` edges.
-2. For each candidate cluster, compute each member's **effective scope** and apply
-   the **≥2-scopes test**. Keep only clusters spanning two or more distinct scopes.
-3. For each surviving domain, propose name (reuse existing strings; watch synonym
-   drift), doc set, and one-line justification naming which scopes it cross-cuts.
-4. **Align untagged docs** — `ldoc set <id> --domain <name>` where clearly belongs.
-5. **Retire / split stale domains** — collapsed to one scope, or absorbed two
-   unrelated concerns. Under-proposing is correct.
+### 1. Survey the registry
 
-Record history on each touched doc. Do not invent domains to fill a slot.
+```bash
+ldoc domains
+```
+
+This lists every distinct domain currently in use across the store, with the
+count of docs carrying each. This is the shared vocabulary you are curating, not a
+suggestion list — it is the live resource. If the store has zero domains, the
+output is `domains — none in use`; when the registry is empty the phase's main
+work is limited to step 4 (validate) and conservative step 3 (assign), applied
+only where an obvious existing domain would apply. Do not invent domains to fill
+an empty registry.
+
+### 2. Consolidate what doesn't pull its weight
+
+**Fear:** leaving near-synonyms or singleton domains intact fragments the
+vocabulary — neither copy carries its weight, and both pollute the filter.
+
+Consolidation candidates (per `20260624185845`):
+- Near-synonyms (`acct_management` vs `Account Management`)
+- A domain applied to only one doc — strong consolidation signal unless the
+  domain is genuinely irreplaceable
+- A domain indistinguishable in meaning from another
+
+**Mechanic — a domain is not an object; it is a string on docs.**
+
+To consolidate `A` → `B`:
+
+```bash
+# Find every doc carrying domain A
+ldoc find --domain "A" --json
+
+# For each such doc <id>:
+ldoc show <id>          # read the full current domain list
+# Swap A → B within the list, then re-set the whole list:
+ldoc set <id> --domain "B,<other-domains-unchanged>"
+ldoc history <id> --add "garden-domains: consolidated domain A→B"
+```
+
+`ldoc set --domain` has **replace semantics**: it replaces the doc's entire
+domain list. Never pass only the new domain; always reconstruct the full list
+with A swapped out and all other domains preserved. When the last doc stops using
+A, A disappears from the registry automatically.
+
+### 3. Assign untagged docs to existing domains — conservatively
+
+**Fear:** inventing or speculatively applying domains inflates the vocabulary with
+noise and defeats the finite-shared-resource discipline. The wrong direction is
+invisible and accumulates.
+
+Only assign a domain when:
+- The doc clearly belongs to a domain already in the registry (prefer reuse over
+  coining), AND
+- You can state which concern the doc is about in that domain's terms, AND
+- The domain would pull its weight with this doc included
+
+If those conditions are not all met, leave the doc untagged. Under-proposing is
+correct. Never coin a new domain to satisfy a single untagged doc.
+
+```bash
+ldoc set <id> --domain "<existing-domain>,<other-domains-if-any>"
+ldoc history <id> --add "garden-domains: assigned to domain <name>"
+```
+
+### 4. Validate claimed memberships
+
+**Fear:** a doc asserting a domain it is not actually about poisons the filter —
+queries against that domain surface irrelevant results and erode trust in the
+facet.
+
+For each doc carrying a domain, confirm the doc is genuinely about that domain's
+concern, not just adjacent to it or historically tagged. Remove inaccurate
+memberships:
+
+```bash
+ldoc set <id> --domain "<corrected-list-without-erroneous-domain>"
+ldoc history <id> --add "garden-domains: removed inaccurate domain <name>"
+```
+
+### 5. Normalize convention drift
+
+**Fear:** inconsistent naming (`ui`, `UI`, `user-interface`) produces phantom
+duplicate domains in the registry and breaks filtering — a user querying `ui`
+misses `UI` docs.
+
+The system is **not opinionated about which convention** is used (casing,
+separators, singular vs plural) — only that whatever convention the store uses is
+applied **consistently**. Identify the dominant form; normalize outliers to it.
+Use the consolidate mechanic from step 2 (find docs carrying the variant, re-set
+with the canonical form).
+
+---
+
+## What to leave alone
+
+**Scope/domain value overlap is expected and fine.** Most docs in the `viewer`
+scope sharing a `ui` domain is not noise — scope and domain are orthogonal axes
+answering different questions (where a doc sits vs what concern it is about). Do
+not "fix" overlap. See `20260615203839`.
+
+**Keywords that match a domain** are a refine/domains boundary note, not a
+silent correction. If you spot a keyword duplicating a domain, flag it in the
+output rather than silently removing it — that is a `garden-refine` concern.
 
 ---
 
@@ -44,6 +154,7 @@ Record history on each touched doc. Do not invent domains to fill a slot.
 ```
 garden — phase: domains
 Scanned: N docs
+Registry: [list of domains in use, or "none"]
 Findings:
   …
 Actions:

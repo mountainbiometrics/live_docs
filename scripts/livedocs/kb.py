@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import generate_id, title_to_label, unique_label, display_label
+from .model import generate_id, display_label
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter
 from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges
 
@@ -290,7 +290,6 @@ class KB:
         status: str | None = None,
         scope: str | None = None,
         domain: str | None = None,
-        keyword: str | None = None,
         terms: list[str] | None = None,
         or_mode: bool = False,
         regex: str | None = None,
@@ -342,10 +341,6 @@ class KB:
                 continue
             if domain and domain not in doc_domain:
                 continue
-            if keyword:
-                kw = keyword.strip().lower()
-                if not any(k.lower() == kw for k in doc_keywords):
-                    continue
 
             # Build searchable text fields
             title_lower = doc.get("title", "").lower()
@@ -668,8 +663,8 @@ class KB:
     def new(
         self,
         type: str,
-        title: str,
-        label: str = "",
+        label: str,
+        title: str = "",
         summary: str = "",
         level: str = "incidental",
         status: str = "living",
@@ -710,10 +705,12 @@ class KB:
             ]
         }
 
-        # Generate label if not provided (word-boundary, never kebab)
-        if not label:
-            existing = (d.get("label", "") for d in self._docs.values())
-            label = unique_label(title_to_label(title), existing)
+        # label is the required primary handle; title is optional and falls back
+        # to the label when omitted (no lazy title-truncation derivation).
+        if not label or not label.strip():
+            raise ValueError("new() requires a non-empty label")
+        if not title:
+            title = label
 
         fm: dict[str, Any] = {
             "id": doc_id,
@@ -1036,6 +1033,24 @@ class KB:
             "provenance_count": provenance_count,
             "superseded_by_count": superseded_by_count,
         }
+
+    def domain_counts(self) -> list[dict]:
+        """
+        Return every distinct domain value in use across all docs, with counts.
+
+        Sort order: count descending, then domain value alphabetically (case-sensitive,
+        no folding — synonym consolidation is gardening's job, not the registry's).
+
+        Returns [{"domain": str, "count": int}, ...], empty list when none in use.
+        """
+        tally: dict[str, int] = {}
+        for doc in self._docs.values():
+            for tag in _doc_tag_list(doc, "domain"):
+                tally[tag] = tally.get(tag, 0) + 1
+        return sorted(
+            [{"domain": d, "count": c} for d, c in tally.items()],
+            key=lambda x: (-x["count"], x["domain"]),
+        )
 
     def validate_edge_refs(
         self,
