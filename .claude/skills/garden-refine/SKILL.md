@@ -15,9 +15,20 @@ no review. All writes non-destructive to meaning; history entry on each touch.
 
 Agentic pipelines produce intermittent inconsistency (see `20260624172719`) —
 **sample**, don't full-scan every doc unless triage flags many issues.
+Inconsistency is sporadic and unpredictably located; the intent is **progressive,
+rotating coverage across runs**, not a one-shot random dip that keeps
+re-inspecting the easy middle.
 
-Default sample size: **10–20 random living docs**, plus any docs flagged by
-dispatcher triage (e.g. near-duplicate titles from a cheap `ldoc ls` skim).
+Default sample size: **10–20 living docs**, plus any docs flagged by dispatcher
+triage (e.g. near-duplicate titles from a cheap `ldoc ls` skim). Bias the
+sample toward:
+- **Recently created docs** (high agentic-inconsistency risk; likely never
+  refined): sort `ldoc ls --json` by `created` descending, sample from the top.
+- **Docs with no prior `garden-refine:` history entry**: check `ldoc history
+  <id>` on candidates — prefer docs whose history shows no previous refine pass.
+
+This bias rotates coverage across runs without cross-run state. Do not
+concentrate every pass on the same well-worn center of the store.
 
 ---
 

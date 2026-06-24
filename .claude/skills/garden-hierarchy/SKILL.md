@@ -91,13 +91,31 @@ Leave root alone.
 
 *(New.)*
 
-Threshold: **≈12 direct children** (configurable judgment). A signpost over this
-is a navigability smell even when every child is correctly placed.
+**Master criterion: navigability** (see `20260624172702`). A reader must be able
+to scan a signpost's direct children and orient. That is what you are preserving
+or restoring; the count is only a proxy.
 
-1. For each overgrown signpost, cluster direct children by sub-theme.
-2. If clear sub-themes exist, create intermediate signposts one level down;
-   re-home children via `belongs_to`.
-3. Recurse if a new signpost is still overgrown (rare).
+**≈12 direct children** is a trigger to *examine* the branch, not a reason to
+split it. When you find a branch over this threshold:
+
+- **Split** only if the children genuinely cluster into coherent sub-themes AND
+  the flat list is actually hard to scan. A well-named, internally coherent list
+  of 14 siblings is fine — do not split it just to be under 12.
+- **Do not split** a clean, scannable list of well-named siblings solely because
+  the count exceeds 12.
+- **Do examine** an under-12 branch whose children span incoherent sub-themes —
+  navigability can fail below the threshold too.
+- **Do not manufacture a deep skinny tree** of 3-child intermediate nodes just
+  to reduce fan-out. A chain of shallow signposts (one hop per level) adds hops
+  without adding orientation — equally un-navigable in the other direction.
+
+Navigability is also the master of Part A's "prefer fewer, tighter groupings" —
+both rules serve the same goal: a reader can scan and orient at each level.
+
+When splitting is warranted:
+1. Cluster direct children by sub-theme.
+2. Create intermediate signposts one level down; re-home children via `belongs_to`.
+3. Recurse if a new signpost is still hard to scan (rare).
 
 This is the structural analogue of decompose: "in the tree" ≠ navigable tree.
 

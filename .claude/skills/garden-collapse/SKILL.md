@@ -26,7 +26,11 @@ no real owner.
 
 1. **Near-duplicates** — same claim in ≥2 docs (dedup notion from
    `map-concepts-to-docs`).
-2. **Shared-ownership smell** — one responsibility spread thin; none fully owns it.
+2. **Shared-ownership smell** — one claim spread thin across several docs, each
+   partially owning it, none fully. Detection: several docs whose summaries each
+   restate a *slice* of the same claim; a claim you cannot point a single owner
+   at. This is the headline case of `20260624172648` — it is the half of the work
+   that gets skipped when an agent only deduplicates and de-crufts. Do not skip it.
 3. **Cruft** — `level: incidental`, no dependents, thin body, not navigationally
    useful alone — candidate to **fold** into parent without overloading parent.
 
@@ -49,6 +53,37 @@ Add `## Correction` on deprecated docs. Rewire inbound edges to survivor.
 
 Merge trivial child content into parent body; deprecate child; rewire edges.
 **Only** when parent stays singular (would not become a decompose candidate).
+
+Read and apply `.claude/skills/_shared/belongs-to-placement.md` when rewiring
+the folded child's former member edges — you are re-placing docs; every actor
+that does so reads the one policy.
+
+### Consolidate (diffuse ownership)
+
+When a claim is scattered across several docs each partially owning it and none
+fully: designate ONE owner doc (an existing or newly created doc), port the
+scattered fragments into it, then thin the others to `relates` pointers or
+deprecate redundant ones. Distinct from Merge (which assumes near-duplicates of
+the whole claim) and Fold (which assumes one trivially thin child). Signal: you
+cannot point to a single owner without also pointing at its siblings.
+
+```bash
+ldoc set <owner-id> --body -          # consolidated body
+ldoc link <partial-id> --relates <owner-id>
+ldoc set <redundant-id> --status deprecated
+ldoc link <redundant-id> --superseded-by <owner-id>
+ldoc history <owner-id> --add "garden-collapse: consolidated ownership from <partial-ids>"
+```
+
+---
+
+## Guard against episode oscillation
+
+Do **not** merge or fold docs that were created by a `garden-decompose` split
+earlier in this same episode. Recognizable by: two docs sharing a `superseded_by`
+pointer to the same deprecated parent, or sibling docs whose ids were reported in
+`garden-decompose`'s `Changed-ids` this episode. Collapsing them would undo the
+split and produce an infinite decompose→collapse loop.
 
 ---
 

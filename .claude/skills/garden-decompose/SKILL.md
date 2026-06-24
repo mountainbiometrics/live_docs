@@ -13,6 +13,12 @@ description: >
 **Contract:** nested phase only. Capture no START, run no `cascade-check`, emit
 no review. Apply splits you judge correct; report changed ids for the dispatcher.
 
+**Placement policy:** when split docs get a home, read and apply
+`.claude/skills/_shared/belongs-to-placement.md` verbatim. You are an actor
+that places docs; every such actor reads the one policy. Pass `--belongs-to
+<parent-id>` on `ldoc new` when a home is clear; defer (omit the flag) when
+none is.
+
 The foundational test: **"Can this doc change for more than one reason?"** If yes,
 it is a split candidate.
 
@@ -39,10 +45,10 @@ it is a split candidate.
    and whether the original becomes a signpost over A/B or is deprecated.
 5. Apply each split:
    ```bash
-   ldoc new --type <type> --title "<title>" --level <level> --status <status> --requires <dep-id,dep-id>
+   ldoc new --type <type> --title "<title>" --level <level> --status <status> --requires <dep-id>,<dep-id>
    ```
    Add `## Correction` to the original body (via `ldoc set <original-id> --body -`), then
-   deprecate — two-part operation; `ldoc set` has no `--superseded-by`:
+   deprecate — two-part operation; `ldoc set` has no `--superseded-by` flag:
    ```bash
    ldoc set <original-id> --status deprecated
    ldoc link <original-id> --superseded-by <A-id>,<B-id>

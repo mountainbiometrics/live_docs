@@ -53,7 +53,12 @@ sample 1–2 maintenance phases.
 
 ### `/garden <natural-language intent>`
 
-Map intent to phase(s):
+The dispatcher **reasons** from arbitrary natural-language intent to the
+appropriate phase(s) — do not treat these as a fixed lookup table. Any intent
+not listed here still has a nearest phase; infer it. When intent spans axes,
+chain the relevant phases; still one episode (see `20260623233922`).
+
+Illustrative examples:
 - "clean up duplicates" / "merge duplicates" → `garden-collapse`
 - "find homes for orphans" / "grouping" / "hierarchy" → `garden-hierarchy`
 - "fix cut-off titles" / "surface quality" / "keywords" → `garden-refine`
@@ -61,8 +66,6 @@ Map intent to phase(s):
 - "domain tags" → `garden-domains`
 - "validate fixes" / "broken edges" → `garden-integrity`
 - "refresh signpost summaries" → `garden-summarize` (on named signposts)
-
-You may chain multiple phases when intent spans axes; still one episode.
 
 ### `/garden all` — full sweep (dependency order)
 

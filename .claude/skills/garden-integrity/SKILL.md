@@ -32,9 +32,13 @@ Then complement with graph checks:
    ```bash
    ldoc orphans
    ```
-   Skip frozen/`reference` docs and `type: type` schema docs. For genuine orphans,
-   propose `ldoc link --belongs-to` or deprecate with `## Correction` +
-   `--superseded-by`.
+   Skip frozen/`reference` docs and `type: type` schema docs. **Report** genuine
+   orphans as a structural observation in the output — do NOT home them here.
+   Homing requires full-store editorial judgment; that is `garden-hierarchy`'s
+   job (`20260624172648`: two owners = no owner). Forcing a `belongs_to` to close
+   a defect is exactly the bad placement rule 5 forbids. Exception: a genuinely
+   dangling orphan that has no plausible home and no dependents may be deprecated
+   with `## Correction` + `--superseded-by`.
 3. **Missing required fields** — apply via `ldoc set`.
 4. **id != filename** — fix frontmatter id to match filename stem; do NOT rename
    files.

@@ -26,6 +26,17 @@ full-store context. Read and apply this policy; do not paraphrase from memory.
    placement is worse than a deferred one. Leave it for gardening with full-store
    context rather than wiring a misleading membership.
 
+## Resolving the semi-adequate vs defer tension
+
+Rule 5 says defer when no good parent is visible; `20260623233949` says ingest
+should originate a *semi-adequate* parent. These collide at the margin. The
+adjudicating test: **"Would this placement mislead a navigator?"**
+
+- If no — originate it even if imperfect. A slightly-off-but-not-misleading home
+  is better than leaving the doc homeless; gardening refines it later.
+- If yes — defer (omit `--belongs-to`). A misleading membership is worse than a
+  deferred one; do not force a home to avoid an orphan.
+
 ## At doc birth (ingest / apply writer)
 
 You already hold the concepts and edges in hand. Pick the **best visible**
