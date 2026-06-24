@@ -20,9 +20,7 @@ them once after all phases (before cascade-check).
 `.claude/skills/_shared/belongs-to-placement.md` verbatim — the authoritative
 refiner with full-store context.
 
-Tree navigability and placement correctness are independent axes (see
-`20260624172702`): every child can be correctly placed while a branch is still
-overgrown.
+Tree navigability and placement correctness are independent axes: every child can be correctly placed while a branch is still a navigability failure.
 
 ---
 
@@ -43,8 +41,7 @@ ldoc find --domain "<domain>" --json             # cluster signals
 ldoc graph <id> --depth 2 --direction both --json
 ```
 
-Read `kb/02-docs/.index/hierarchy.md` for rollup cross-check (may be stale until
-reindex).
+Check the hierarchy index (`<docs>/.index/hierarchy.md`, where `<docs>` is the configured docs store path) for a rollup cross-check; it may be stale until `ldoc reindex` is run.
 
 ### A2 — Judge
 
@@ -72,8 +69,7 @@ signposts, reassign, deprecate over-broad signpost with `## Correction` +
 
 *(Former garden Pass 5 Part A.)*
 
-Read `ldoc show 20260619235018` once. Find descendant-bearing structural docs
-(typically `component`) that should declare a distinct `scope` anchor:
+Scope is a topology-derived facet: set on an "anchor" doc, it applies to that doc and its entire `belongs_to` subtree; effective scope is the union of `scope` values along the full `belongs_to` genealogy. Most docs inherit; only anchor docs (typically `component`) explicitly declare a `scope` value. Find descendant-bearing structural docs (typically `component`) that should declare a distinct `scope` anchor:
 
 - Bears descendants but declares **no** own `scope` (inherits coarser parent
   zone the subtree should specialize), **or**
@@ -93,9 +89,7 @@ Leave root alone.
 
 *(New.)*
 
-**Master criterion: navigability** (see `20260624172702`). A reader must be able
-to scan a signpost's direct children and orient. That is what you are preserving
-or restoring; the count is only a proxy.
+**Master criterion: navigability.** A reader must be able to scan a signpost's direct children and orient. That is what you are preserving or restoring; the count is only a proxy.
 
 **≈12 direct children** is a trigger to *examine* the branch, not a reason to
 split it. When you find a branch over this threshold:

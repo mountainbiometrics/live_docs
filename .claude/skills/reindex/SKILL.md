@@ -31,7 +31,7 @@ ldoc reindex
 ldoc reindex [docs_dir]
 ```
 
-`docs_dir` defaults to the configured docs store (`kb/02-docs/` in this repo) relative to the repo root.
+`docs_dir` defaults to the configured docs store (from `.live_docs.toml`) relative to the repo root.
 
 The script creates the index dir (`<docs>/.index/`) if it doesn't exist, then writes:
 - `<docs>/.index/dependents.json`

@@ -11,8 +11,7 @@ description: >
 
 # garden — Dispatcher over gardening phases
 
-Gardening is a **thin dispatcher** over single-purpose phases (see
-`20260623233922`). You own the **whole episode**; phases report changed ids only.
+Gardening is a **thin dispatcher** over single-purpose phases. You own the **whole episode**; phases report changed ids only.
 
 **Three axes:**
 - **Atomicity** — `garden-decompose`, `garden-collapse`
@@ -56,7 +55,7 @@ sample 1–2 maintenance phases.
 The dispatcher **reasons** from arbitrary natural-language intent to the
 appropriate phase(s) — do not treat these as a fixed lookup table. Any intent
 not listed here still has a nearest phase; infer it. When intent spans axes,
-chain the relevant phases; still one episode (see `20260623233922`).
+chain the relevant phases; still one episode.
 
 Illustrative examples:
 - "clean up duplicates" / "merge duplicates" → `garden-collapse`
@@ -129,7 +128,7 @@ Otherwise:
    ```
 5. Report review id. Note if `hierarchy.md` needs `ldoc reindex`.
 
-Review is post-hoc and non-gating (`20260616181719`).
+Review is post-hoc and non-gating: every change is blessed on creation; the review layer challenges changes after the fact, not before.
 
 ---
 

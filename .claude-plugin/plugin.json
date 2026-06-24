@@ -1,7 +1,7 @@
 {
   "name": "livedocs",
   "description": "Living-documentation knowledge base: skills for ingesting, revising, gardening, and validating an atomic-docs store driven by the ldoc CLI. Operates on whichever store the current directory's .live_docs.toml points at.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "Samuel Wecker",
     "email": "samuel@themtn.ai"

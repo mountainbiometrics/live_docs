@@ -35,7 +35,7 @@ Then complement with graph checks:
    Skip frozen/`reference` docs and `type: type` schema docs. **Report** genuine
    orphans as a structural observation in the output — do NOT home them here.
    Homing requires full-store editorial judgment; that is `garden-hierarchy`'s
-   job (`20260624172648`: two owners = no owner). Forcing a `belongs_to` to close
+   job (a claim should have exactly one responsible doc; two owners = no owner). Forcing a `belongs_to` to close
    a defect is exactly the bad placement rule 5 forbids. Exception: a genuinely
    dangling orphan that has no plausible home and no dependents may be deprecated
    with `## Correction` + `--superseded-by`.

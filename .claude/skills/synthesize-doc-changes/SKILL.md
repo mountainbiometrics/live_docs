@@ -142,7 +142,7 @@ do NOT guess conservatively, since gardening (with full-store context) is what
 prunes. Two rules from the shared policy: **consult `ldoc domains` and reuse an
 existing domain over coining a new synonym**; and a term that is really a domain
 goes in `--tags-domain`, not `keywords`. Ingest originates liberally; gardening
-prunes authoritatively (`20260624185902`).
+prunes authoritatively.
 
 **Provenance rule**: every new doc must include `--provenance <anchor>` (the
 `REQ_ID`/`NORM_ID` the orchestrator supplied). The anchor lives in `docs/`, so
@@ -152,10 +152,9 @@ prunes authoritatively (`20260624185902`).
 
 **Read first:** `.claude/skills/_shared/belongs-to-placement.md` — apply verbatim
 when choosing a parent. Ingest **originates** placement at birth; gardening
-refines later (`20260623233949`).
+refines later.
 
-These are two different axes (see [Edge Type Vocabulary](../../../kb/02-docs/20260617144634.md)
-and [Graph Cycles Are Legal](../../../kb/02-docs/20260617144556.md)):
+These are two different axes:
 
 - **`belongs_to` = the hierarchy / membership DAG.** It is the *acyclic* structural
   axis: a doc declares membership in the parent that defines its grouping, and

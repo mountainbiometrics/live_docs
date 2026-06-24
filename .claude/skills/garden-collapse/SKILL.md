@@ -17,8 +17,7 @@ no review.
 that would trip decompose's "two reasons to change" test. In a full sweep,
 decompose runs *before* this phase.
 
-Singular ownership (see `20260624172648`): a claim with three partial owners has
-no real owner.
+Singular ownership — a claim should have exactly one responsible doc; a claim with three partial owners has no real owner.
 
 ---
 
@@ -29,7 +28,7 @@ no real owner.
 2. **Shared-ownership smell** — one claim spread thin across several docs, each
    partially owning it, none fully. Detection: several docs whose summaries each
    restate a *slice* of the same claim; a claim you cannot point a single owner
-   at. This is the headline case of `20260624172648` — it is the half of the work
+   at. This is the headline signal for diffuse ownership — the half of the work
    that gets skipped when an agent only deduplicates and de-crufts. Do not skip it.
 3. **Cruft** — `level: incidental`, no dependents, thin body, not navigationally
    useful alone — candidate to **fold** into parent without overloading parent.

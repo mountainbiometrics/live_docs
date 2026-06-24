@@ -16,11 +16,12 @@ no review.
 
 **Read and apply** `.claude/skills/_shared/domain-tagging.md` — the shared
 definition. Your role here is the **curator** (the full-store half of the
-asymmetry). Then read the governing docs once — do not re-derive the model:
-- `domain` as finite shared resource: `ldoc show 20260624185845`
-- domain originates liberally, gardening prunes: `ldoc show 20260624185902`
-- `domain` definition and scope/domain orthogonality: `ldoc show 20260615203839`
-- `domain` vs `keywords` non-overlap: `ldoc show 20260623233935`
+asymmetry). Key points to hold while curating:
+
+- The vocabulary is a **finite shared resource**: each domain justifies its own existence by pulling its weight as a distinct grouping a reader would filter by — not by spanning a scope count.
+- `domain` originates **liberally** (isolated context, optimise for recall) and gardening prunes **authoritatively** (full-store context). You are on the pruning side.
+- `domain` and `scope` are orthogonal; their values may legitimately overlap. `domain` is the governed grouping facet; `keywords` is the ungoverned findability bag — the two must not overlap.
+- Reuse an existing domain over coining a new synonym (`ldoc domains` is the live registry).
 
 `domain` is **not** `keywords`. Domain is a governed grouping facet with a
 justify-its-existence bar. Keywords are ungoverned findability aliases with no
@@ -60,7 +61,7 @@ only where an obvious existing domain would apply.
 **Fear:** leaving near-synonyms or singleton domains intact fragments the
 vocabulary — neither copy carries its weight, and both pollute the filter.
 
-Consolidation candidates (per `20260624185845`):
+Consolidation candidates:
 - Near-synonyms (`acct_management` vs `Account Management`)
 - A domain applied to only one doc — strong consolidation signal unless the
   domain is genuinely irreplaceable
@@ -140,7 +141,7 @@ with the canonical form).
 **Scope/domain value overlap is expected and fine.** Most docs in the `viewer`
 scope sharing a `ui` domain is not noise — scope and domain are orthogonal axes
 answering different questions (where a doc sits vs what concern it is about). Do
-not "fix" overlap. See `20260615203839`.
+not "fix" overlap.
 
 **Keywords that match a domain** are a refine/domains boundary note, not a
 silent correction. If you spot a keyword duplicating a domain, flag it in the

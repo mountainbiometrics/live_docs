@@ -94,12 +94,13 @@ install_plugin() {
     claude plugin marketplace add "$REPO_ROOT" && ok "registered marketplace '$MARKETPLACE_NAME'"
   fi
 
+  # Always reinstall — plugin files are cached by Claude Code, so skipping on
+  # "already installed" means updates (new skills, manifest changes) never land.
   if claude plugin list 2>/dev/null | grep -q "$PLUGIN_NAME"; then
-    ok "plugin '$PLUGIN_NAME' already installed"
-  else
-    claude plugin install "${PLUGIN_NAME}@${MARKETPLACE_NAME}" --scope user \
-      && ok "installed '${PLUGIN_NAME}@${MARKETPLACE_NAME}' (user scope)"
+    claude plugin uninstall "$PLUGIN_NAME" --scope user 2>/dev/null || true
   fi
+  claude plugin install "${PLUGIN_NAME}@${MARKETPLACE_NAME}" --scope user \
+    && ok "(re)installed '${PLUGIN_NAME}@${MARKETPLACE_NAME}' (user scope)"
   warn "restart any running Claude Code session to pick up the skills."
 }
 

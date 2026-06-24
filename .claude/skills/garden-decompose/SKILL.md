@@ -35,7 +35,7 @@ it is a split candidate.
    - Body has multiple `##` sections addressing distinct concerns (not sub-sections
      of one concern).
    - `history` has many entries with varied summaries (hot-file: many parties
-     update for different reasons — see `20260615203928`).
+     update for different reasons — hot files with ≥5 varied history entries are first-class decomposition candidates).
    - Very long `requires` list pulling unrelated inputs.
    - Title uses "and" or contains a list ("X and Y", "A, B, C").
    - You would say "this doc owns X, but it also owns Y."

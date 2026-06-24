@@ -13,7 +13,7 @@ description: >
 **Contract:** nested phase only. Capture no START, run no `cascade-check`, emit
 no review. All writes non-destructive to meaning; history entry on each touch.
 
-Agentic pipelines produce intermittent inconsistency (see `20260624172719`) —
+Agentic pipelines produce intermittent, non-deterministic inconsistency — a structural property of multi-agent doc pipelines, not an occasional bug —
 **sample**, don't full-scan every doc unless triage flags many issues.
 Inconsistency is sporadic and unpredictably located; the intent is **progressive,
 rotating coverage across runs**, not a one-shot random dip that keeps
@@ -59,7 +59,7 @@ concentrate every pass on the same well-worn center of the store.
    ```
    Terms a searcher might type; no governance bar.
 
-   **Keyword/domain non-overlap** (`20260623233935`): before adding a keyword,
+   **Keyword/domain non-overlap**: before adding a keyword,
    check it against the domain registry:
    ```bash
    ldoc domains
