@@ -185,7 +185,7 @@ def cmd_get(kb: KB, args) -> int:
         print(f"type:   {fm.get('type', '')}")
         print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}")
         print(f"created: {fm.get('created', '')}")
-        print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', '') or '(none)'}")
+        print(f"domain: {fm.get('domain', [])}  keywords: {fm.get('keywords', [])}  scope: {fm.get('scope', '') or '(none)'}")
         hist = fm.get("history", [])
         print(f"history: {len(hist)} entries")
 
@@ -320,6 +320,7 @@ def cmd_find(kb: KB, args) -> int:
             status=args.status or None,
             scope=args.scope or None,
             domain=args.domain or None,
+            keyword=getattr(args, "keyword", None) or None,
         )
     except ValueError as e:
         _err(str(e))
@@ -617,6 +618,8 @@ def cmd_new(kb: KB, args) -> int:
     edges = _parse_edge_args(args)
     domain_tags = [s.strip() for s in args.tags_domain.split(",") if s.strip()] \
         if args.tags_domain else []
+    keyword_tags = [s.strip() for s in args.tags_keywords.split(",") if s.strip()] \
+        if getattr(args, "tags_keywords", "") else []
     scope_tags = [s.strip() for s in args.tags_scope.split(",") if s.strip()] \
         if args.tags_scope else []
 
@@ -671,6 +674,7 @@ def cmd_new(kb: KB, args) -> int:
             status=args.status,
             **edges,
             tags_domain=domain_tags,
+            tags_keywords=keyword_tags,
             tags_scope=scope_tags,
             body=body,
             kind=args.kind or "",
@@ -710,6 +714,9 @@ def cmd_set(kb: KB, args) -> int:
         # domain is a flat list of cross-cutting tags; comma-separated input,
         # empty string clears it (drops the field).
         fields["domain"] = [s.strip() for s in args.domain.split(",") if s.strip()]
+    if getattr(args, "keywords", None) is not None:
+        # keywords: flat findability synonym list; comma-separated, replace semantics.
+        fields["keywords"] = [s.strip() for s in args.keywords.split(",") if s.strip()]
 
     # --body: read new body from stdin or inline
     body_arg = getattr(args, "body", None)
@@ -720,7 +727,7 @@ def cmd_set(kb: KB, args) -> int:
         new_body = body_arg
 
     if not fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, or --body.")
+        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, --keywords, or --body.")
         return 1
 
     # --dry-run preview
@@ -1780,7 +1787,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- find ---
     p = sub.add_parser("find", help="Search/filter docs. Multiple terms = AND (use --or for OR).")
     p.add_argument("terms", nargs="*", metavar="term",
-                   help="Search terms (matches title + label + body, case-insensitive).")
+                   help="Search terms (matches title + label + body + keywords, case-insensitive).")
     p.add_argument("--or", dest="or_mode", action="store_true",
                    help="Combine multiple terms with OR instead of AND.")
     p.add_argument("--regex", default="", metavar="PATTERN",
@@ -1790,6 +1797,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--status", default="", choices=VALID_STATUSES_SORTED + [""])
     p.add_argument("--scope", default="")
     p.add_argument("--domain", default="")
+    p.add_argument("--keyword", default="",
+                   help="Filter to docs whose keywords list contains this term (case-insensitive).")
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
@@ -1890,6 +1899,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--superseded-by", default="", dest="superseded_by",
                    help="Comma-separated ids/labels/titles. Deprecation pointer. Validated before write.")
     p.add_argument("--tags-domain", default="", dest="tags_domain")
+    p.add_argument("--tags-keywords", default="", dest="tags_keywords",
+                   help="Comma-separated findability keywords (flat list, replace semantics).")
     p.add_argument("--tags-scope", default="", dest="tags_scope")
     p.add_argument("--kind", default="", choices=REFERENCE_KIND_CHOICES + [""])
     p.add_argument("--source", default="")
@@ -1919,6 +1930,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--domain", default=None,
                    help="Comma-separated cross-cutting domain tags (flat list, NOT "
                         "inherited). Replaces the doc's domain list; empty string clears it.")
+    p.add_argument("--keywords", default=None,
+                   help="Comma-separated findability keywords (flat list, NOT inherited). "
+                        "Replaces the doc's keywords list; empty string clears it.")
     p.add_argument("--body", default=None,
                    help="Replace body: TEXT value or '-' to read from stdin.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",

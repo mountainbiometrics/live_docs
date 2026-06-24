@@ -61,7 +61,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc map [--json]` | Entry points (signpost roots) with summaries — start here |
-| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search |
+| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--keyword] [--json]` | Full-text + faceted search (terms match title, label, body, keywords) |
 | `ldoc ls [--type T] [--json]` | List docs (optionally one type) |
 | `ldoc orphans` | Docs outside the belongs_to hierarchy |
 | `ldoc count` / `ldoc log [--since ISO] [--limit N]` | Stats / recent-changes view |
@@ -76,7 +76,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc new --type T --title "..." [options]` | Create a doc (validates edge refs first) |
-| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--body -\|TEXT]` | Update fields/body |
+| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--keywords][--body -\|TEXT]` | Update fields/body |
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
 | `ldoc unlink <ref> [same edge flags]` | Remove edges |
 | `ldoc history <ref> --add "what changed"` | Append a history entry (changes only — never creation) |
@@ -101,8 +101,11 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 ```
 id, title, label, summary, type, status, level,
 belongs_to, requires, relates, provenance, superseded_by,
-domain, scope, created, history
+domain, keywords, scope, created, history
 ```
+
+`keywords` — optional flat findability synonym list (same list shape as
+`domain`, distinct purpose; not inherited, not cascade). Omitted when empty.
 
 `reference`-type docs additionally carry `kind, source, imported` after
 `history`.
@@ -244,7 +247,8 @@ and the post-hoc review summary:
 | Edit / correct / amend an existing doc | **revise-doc** |
 | Record decisions already built in a working session | **reconcile-changes** |
 | Know what else went stale after a change | **cascade-check** |
-| Group orphans under signposts / tidy navigation | **curate-grouping** + **summarize-descendants** |
+| Tidy navigation, orphans, grouping, tree structure | **garden** (or `/garden find homes for orphans`) |
+| Refresh a signpost orientation guide | **garden** or **summarize-descendants** (alias → garden-summarize) |
 | Periodic cleanup, decomposition, drift repair | **garden** |
 | Structural integrity report (no fixes) | **validate** |
 | Rebuild `.index/` caches | **reindex** |

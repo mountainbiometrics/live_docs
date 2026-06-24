@@ -1,6 +1,6 @@
 # Gardening redesign — decomposition plan
 
-Status: **proposal for review** (no files changed yet).
+Status: **implemented** (skills + ldoc keywords; decision docs were already in KB).
 
 Goal: decompose the monolithic `garden` skill into a *thin dispatcher* over a
 family of independently-runnable, individually-tunable gardening sub-skills —

@@ -104,12 +104,21 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
     if level and level not in VALID_LEVELS:
         errors.append(f"{prefix}  invalid `level` value `{level}`")
 
-    # Tags: `domain` is a flat top-level list; `scope` is now a single STRING
-    # naming a topological zone (per the scope-as-topology reframe). Check each
-    # against its own shape.
-    domain_val = doc.get("domain")
-    if domain_val is not None and not isinstance(domain_val, list):
-        errors.append(f"{prefix}  `domain` is not a list")
+    # Tags: `domain` and `keywords` are flat top-level lists; `scope` is a single
+    # STRING naming a topological zone (per the scope-as-topology reframe).
+    for tag_key in ("domain", "keywords"):
+        tag_val = doc.get(tag_key)
+        if tag_val is not None and not isinstance(tag_val, list):
+            errors.append(f"{prefix}  `{tag_key}` is not a list")
+        elif isinstance(tag_val, list):
+            for item in tag_val:
+                if not isinstance(item, str):
+                    errors.append(f"{prefix}  `{tag_key}` contains non-string entry")
+                elif item != item.strip():
+                    warnings.append(f"{prefix}  `{tag_key}` entry {item!r} has leading/trailing whitespace")
+            lowered = [i.lower() for i in tag_val if isinstance(i, str)]
+            if len(lowered) != len(set(lowered)):
+                warnings.append(f"{prefix}  `{tag_key}` contains duplicate entries (case-insensitive)")
     scope_val = doc.get("scope")
     if scope_val is not None and not isinstance(scope_val, str):
         errors.append(f"{prefix}  `scope` is not a string (it now names a single topological zone)")

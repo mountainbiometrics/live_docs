@@ -129,15 +129,25 @@ When cascade-check is invoked from within another skill (ingest-reference, revis
 
 ### garden
 
-Run on a schedule or when triggered by a wide-cascade warning. Key passes:
+The sole user-facing entry point (`/garden`). It is a **thin dispatcher** over
+`garden-*` phase sub-skills; it owns START, routing, one cascade over the union
+of changes, and one review. Phases are never user-invocable directly.
 
-- **single-responsibility**: find docs that change for more than one reason and propose concrete splits
-- **staleness**: surface docs whose dependencies were updated more recently than the doc itself
-- **consistency**: orphan detection + broken edges + missing fields (proposes fixes; `validate` only reports)
-- **field-aliases**: normalize stale field names and enum values
-- **tag-curation**: curate `scope` anchors and `domain` tags — add missing anchors, remove redundant ones, normalize tag drift
+| Phase | Axis | Role |
+|-------|------|------|
+| `garden-decompose` | atomicity | split overloaded docs |
+| `garden-collapse` | atomicity | merge duplicates / fold cruft |
+| `garden-hierarchy` | structure | orphans, grouping, scope anchors, re-scoping (replaces `curate-grouping`) |
+| `garden-summarize` | structure | signpost orientation guides (alias: `summarize-descendants`) |
+| `garden-domains` | structure | cross-cutting `domain` curation |
+| `garden-refine` | form | sampling QA: titles, summaries, schema drift, `keywords` |
+| `garden-integrity` | form | mechanical repair (`validate` fixes) |
 
-Garden always proposes before applying; it never silently rewrites meaning.
+Invoke `/garden` (triage), `/garden <intent>`, or `/garden all`. Staleness detection
+is a dispatcher triage signal only — `cascade-check` owns stale writes.
+
+Garden applies judgment directly; correctness is caught post-hoc by the review
+summary. It never silently rewrites meaning.
 
 ---
 
@@ -164,8 +174,11 @@ Fields must appear in this order in the frontmatter:
 ```
 id, title, label, summary, type, status, level,
 belongs_to, requires, relates, provenance, superseded_by,
-domain, scope, created, history
+domain, keywords, scope, created, history
 ```
+
+`keywords` is an optional flat findability synonym list (like `domain` in shape,
+distinct in purpose — see `20260623233935`). Omitted when empty.
 
 `reference` type docs additionally carry `kind`, `source`, `imported` after `history`.
 

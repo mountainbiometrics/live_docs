@@ -123,14 +123,23 @@ ldoc new \
   --level <incidental|trial|preference|requirement> \
   --status <living|target> \
   --provenance "<anchor id>" \
+  --belongs-to <nearest-signpost-id> \
   --body "<the claim>"
 ```
+
+Use `--belongs-to` per the shared placement policy whenever a visible coherent
+signpost exists in the concepts/edges already in hand. Omit only when no good
+parent is visible (defer to gardening rather than force a bad home).
 
 **Provenance rule**: every new doc must include `--provenance <anchor>` (the
 `REQ_ID`/`NORM_ID` the orchestrator supplied). The anchor lives in `docs/`, so
 `--provenance` is the correct edge — do not use `--source` for a graph node.
 
 ### Wiring `belongs_to` and `requires` (do not conflate them)
+
+**Read first:** `.claude/skills/_shared/belongs-to-placement.md` — apply verbatim
+when choosing a parent. Ingest **originates** placement at birth; gardening
+refines later (`20260623233949`).
 
 These are two different axes (see [Edge Type Vocabulary](../../../kb/02-docs/20260617144634.md)
 and [Graph Cycles Are Legal](../../../kb/02-docs/20260617144556.md)):
@@ -152,7 +161,7 @@ turn `belongs_to` whatever broader grouping it sits in. Wiring those members
 straight to the broad top-level signpost instead — flattening the cluster — is not
 caution; it misreads `belongs_to`, because each member *would* be orphaned without
 the concept it elaborates. The defining doc thereby becomes a descendant-bearing
-signpost (signposts are structural, not a type — see curate-grouping).
+signpost (signposts are structural, not a type — see garden-hierarchy).
 
 What conservatism actually forbids is `belongs_to` for **mere topical proximity**:
 two docs that merely share a subject, where neither would be orphaned by the

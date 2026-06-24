@@ -46,11 +46,11 @@ def _yaml_wikilink_list(items: list) -> str:
 
 # Canonical order for ALL doc types (baseline)
 # Spec: id, title, label, summary, type, status, level, belongs_to, requires,
-#       relates, provenance, superseded_by, domain, scope, created, history
+#       relates, provenance, superseded_by, domain, keywords, scope, created, history
 CANONICAL_FIELD_ORDER = [
     "id", "title", "label", "summary", "type", "status", "level",
     "belongs_to", "requires", "relates", "provenance", "superseded_by",
-    "domain", "scope", "created", "history",
+    "domain", "keywords", "scope", "created", "history",
 ]
 
 # Edge fields that use wikilink-wrapped lists on disk.
@@ -274,15 +274,15 @@ def parse_doc(path: Path) -> dict:
     elif not isinstance(hist, list):
         fm["history"] = []
 
-    # Normalize domain: flat top-level inline list.
+    # Normalize domain / keywords: flat top-level inline lists.
     # Absent fields are left absent — callers use .get("domain", []).
-    domain = fm.get("domain")
-    if isinstance(domain, list):
-        fm["domain"] = domain
-    elif domain is not None:
-        # Wrap a stray scalar (shouldn't occur in current format)
-        fm["domain"] = [domain]
-    # else: leave absent
+    for tag_key in ("domain", "keywords"):
+        tag_val = fm.get(tag_key)
+        if isinstance(tag_val, list):
+            fm[tag_key] = tag_val
+        elif tag_val is not None:
+            fm[tag_key] = [tag_val]
+        # else: leave absent
 
     # Normalize scope: a single STRING naming a topological zone (per the
     # scope-as-topology reframe). A legacy single-element list (scope: [live_docs])
@@ -337,8 +337,8 @@ def _emit_field(key: str, value: Any) -> list[str]:
     if value is None:
         return []
 
-    # domain: flat inline tag list — omitted entirely when empty
-    if key == "domain" and isinstance(value, list):
+    # domain / keywords: flat inline tag lists — omitted entirely when empty
+    if key in ("domain", "keywords") and isinstance(value, list):
         if not value:
             return []
         return [f"{key}: {_yaml_list(value)}"]
