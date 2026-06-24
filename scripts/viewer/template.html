@@ -89,14 +89,50 @@
   }
   details.typekey .keyrow { display: flex; align-items: center; padding: 3px 2px; font-size: 13px; }
   details.typekey .keyrow .ticon { margin-right: 8px; }
-  /* effective-scope pill: colored per scope name (inline style sets the hue) */
-  .scopepill {
+  /* scope breadcrumbs + domain facet pills */
+  .scopecrumbs {
+    display: inline-flex; align-items: center; flex-wrap: wrap;
+    font-size: 11px; font-weight: 500; vertical-align: middle; margin-left: 4px;
+  }
+  .scopecrumbs .sep { color: var(--faint); margin: 0 1px; user-select: none; }
+  .scopecrumbs .crumb { color: var(--muted); }
+  .domainpill {
     display: inline-block; font-size: 10.5px; line-height: 1.5; padding: 0 7px;
     border-radius: 10px; border: 1px solid transparent; margin-left: 4px;
     vertical-align: middle; font-weight: 600; letter-spacing: .2px;
   }
-  #tooltip .scopepill { border-color: transparent; }
-  .meta-line .scopepill { margin-left: 0; margin-right: 2px; }
+  #tooltip .domainpill { border-color: transparent; }
+  .meta-line .scopecrumbs { margin-left: 0; margin-right: 2px; }
+  .meta-line .domainpill { margin-left: 0; margin-right: 2px; }
+  /* catalog facet chips — clickable but not link-styled */
+  button.cat-facet {
+    background: none; border: none; margin: 0; font: inherit;
+    color: inherit; cursor: pointer; padding: 0;
+    border-radius: 4px;
+  }
+  button.cat-facet:hover { background: var(--accent-soft); }
+  table.catalog .scopecrumbs { margin-left: 0; font-size: 11px; }
+  table.catalog .scopecrumbs button.cat-facet.crumb {
+    color: var(--muted); font-size: 11px; font-weight: 500; padding: 1px 3px;
+  }
+  table.catalog button.cat-facet.facet-plain {
+    font-size: 13px; color: var(--ink); padding: 1px 4px;
+  }
+  table.catalog button.cat-facet.domainpill,
+  button.cat-facet.domainpill {
+    display: inline-block; font-size: 10.5px; line-height: 1.5;
+    padding: 0 7px; border-radius: 10px; border: 1px solid transparent;
+    margin-right: 2px; vertical-align: middle; font-weight: 600; letter-spacing: .2px;
+  }
+  table.catalog button.cat-facet.pill,
+  button.cat-facet.pill {
+    display: inline-block; font-size: 11px; line-height: 1.5;
+    padding: 1px 7px; border-radius: 10px; border: none; vertical-align: middle;
+  }
+  button.cat-facet.pill.deprecated { background: #f3e0e0; color: var(--broken); }
+  button.cat-facet.pill.target { background: var(--warn-bg); color: var(--warn); }
+  button.cat-facet.pill.reference { background: #e4ecf3; color: var(--accent); }
+  button.cat-facet.pill.living { background: var(--tag-bg); color: var(--muted); }
 
   /* dashboard */
   .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 24px 18px; }
@@ -461,28 +497,112 @@ function effectiveScopes(id) {
   return out;
 }
 
-/* stable color per scope name — hashed hue so distinct scopes read distinctly
-   and the same scope is always the same color across every surface. */
-const _scopeColorCache = new Map();
-function scopeColor(name) {
-  if (_scopeColorCache.has(name)) return _scopeColorCache.get(name);
+/* scope PATH for display: anchor scopes along the belongs_to chain root→leaf. */
+const _scopePathPartsCache = new Map();
+function scopePathParts(id) {
+  const sid = String(id);
+  if (_scopePathPartsCache.has(sid)) return _scopePathPartsCache.get(sid);
+  _scopePathPartsCache.set(sid, []); // cycle guard
+  const parts = [];
+  const nodes = [];
+  const seen = new Set();
+  let cur = sid;
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    nodes.unshift(cur);
+    const ps = parentsOf(cur);
+    if (!ps.length) break;
+    cur = ps.slice().sort()[0];
+  }
+  nodes.forEach(nid => {
+    const d = byId.get(nid);
+    if (d) ownScopes(d).forEach(s => { if (!parts.includes(s)) parts.push(s); });
+  });
+  _scopePathPartsCache.set(sid, parts);
+  return parts;
+}
+function scopePath(id) { return scopePathParts(id).join("/"); }
+
+function ownDomains(d) {
+  const v = d && d.domain;
+  if (v == null) return [];
+  const arr = Array.isArray(v) ? v : [v];
+  return arr.map(x => String(x).trim()).filter(Boolean).sort();
+}
+
+/* Built-in schema enums → Title Case for display; scope/domain stay store-defined. */
+function titleCaseEnum(s) {
+  if (!s) return "";
+  return String(s).split(/[-_]+/).filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+function enumDisplay(field, val) {
+  if (!val || val === "(none)") return val === "(none)" ? "(none)" : "";
+  if (field === "type" || field === "status" || field === "level") return titleCaseEnum(val);
+  return String(val);
+}
+
+const _domainColorCache = new Map();
+function domainColor(name) {
+  if (_domainColorCache.has(name)) return _domainColorCache.get(name);
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  const hue = h % 360;
-  const c = { bg: `hsl(${hue} 52% 92%)`, fg: `hsl(${hue} 45% 32%)`, border: `hsl(${hue} 40% 78%)` };
-  _scopeColorCache.set(name, c);
+  const hue = (h + 160) % 360;
+  const c = { bg: `hsl(${hue} 42% 93%)`, fg: `hsl(${hue} 38% 30%)`, border: `hsl(${hue} 35% 80%)` };
+  _domainColorCache.set(name, c);
   return c;
 }
-// render a doc's effective scope as colored pill(s). Empty -> "" (renders nothing).
-function scopePills(id, opts) {
+// scope as breadcrumb trail (not a pill). Catalog mode: each segment filters scope.
+function scopeBreadcrumbs(id, opts) {
   opts = opts || {};
-  const scopes = effectiveScopes(id);
-  if (!scopes.length) return "";
-  const title = opts.title ? ` title="effective scope (own + inherited via belongs_to)"` : "";
-  return scopes.map(s => {
-    const c = scopeColor(s);
-    return `<span class="scopepill" style="background:${c.bg};color:${c.fg};border-color:${c.border}"${title}>${escapeHtml(s)}</span>`;
+  const parts = scopePathParts(id);
+  if (!parts.length) return "";
+  const title = opts.title ? ` title="effective scope path (anchors along belongs_to chain)"` : "";
+  if (opts.catalog) {
+    return `<span class="scopecrumbs"${title}>`
+      + parts.map((p, i) => (i ? `<span class="sep">/</span>` : "")
+        + `<button type="button" class="crumb cat-facet" data-cf="scope" data-cv="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join("")
+      + `</span>`;
+  }
+  return `<span class="scopecrumbs"${title}>`
+    + parts.map((p, i) => (i ? `<span class="sep">/</span>` : "") + `<span class="crumb">${escapeHtml(p)}</span>`).join("")
+    + `</span>`;
+}
+// domain tags as colored pill(s). Catalog mode: each pill filters domain.
+function domainTags(id, opts) {
+  opts = opts || {};
+  const d = byId.get(String(id));
+  const domains = d ? ownDomains(d) : [];
+  if (!domains.length) return "";
+  const title = opts.title ? ` title="domain tags (cross-cutting, not inherited)"` : "";
+  return domains.map(s => {
+    const c = domainColor(s);
+    if (opts.catalog) {
+      return `<button type="button" class="domainpill cat-facet" style="background:${c.bg};color:${c.fg};border-color:${c.border}"${title} `
+        + `data-cf="domain" data-cv="${escapeHtml(s)}">${escapeHtml(s)}</button>`;
+    }
+    return `<span class="domainpill" style="background:${c.bg};color:${c.fg};border-color:${c.border}"${title}>${escapeHtml(s)}</span>`;
   }).join("");
+}
+function facetDisplay(id, opts) {
+  const sb = scopeBreadcrumbs(id, opts);
+  const dt = domainTags(id, opts);
+  return [sb, dt].filter(Boolean).join(" ");
+}
+// catalog cell: clickable facet chip for type/status/level
+function catEnumFacet(field, value) {
+  if (!value) return '<span class="sub">—</span>';
+  const label = enumDisplay(field, value);
+  if (field === "status") {
+    return `<button type="button" class="pill ${escapeHtml(value)} cat-facet" data-cf="${field}" data-cv="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+  }
+  return `<button type="button" class="facet-plain cat-facet" data-cf="${field}" data-cv="${escapeHtml(value)}">${escapeHtml(label)}</button>`;
+}
+function groupKeyLabel(field, k) {
+  if (k === "(none)") return "(none)";
+  if (field === "type" || field === "status" || field === "level") return enumDisplay(field, k);
+  return k;
 }
 
 // who points AT this doc, by edge type (the reverse/incoming edges). Computed
@@ -646,7 +766,7 @@ function typeIcon(type, opts) {
   const t = type ? String(type) : "";
   if (!t) return "";
   const def = TYPE_ICONS[t] || TYPE_ICON_FALLBACK;
-  const title = opts.title === false ? "" : ` title="${escapeHtml(def.label || t)}"`;
+  const title = opts.title === false ? "" : ` title="${escapeHtml(titleCaseEnum(t) || def.label || t)}"`;
   return `<span class="ticon" style="color:${def.color}"${title}>`
     + `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" `
     + `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.svg}</svg></span>`;
@@ -703,15 +823,15 @@ function showTip(el) {
   const id = el.getAttribute("data-ref");
   const d = byId.get(String(id));
   if (!d) return;
-  const status = d.status ? `<span class="pill ${d.status}">${d.status}</span>` : "";
+  const status = d.status ? `<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>` : "";
   // next-hop affordance: show how many connections this doc has so the reader
   // knows there's somewhere to go without opening it.
   const count = edgeBadge(d.id);
-  const scopes = scopePills(d.id);
+  const facets = facetDisplay(d.id);
   // type icon before the label; the type name still reads in the meta line
   tooltip.innerHTML =
     `<div class="tt-label">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)}</div>` +
-    `<div class="tt-meta">${escapeHtml(d.type || "")} ${status} ${scopes} ${count}</div>` +
+    `<div class="tt-meta">${escapeHtml(enumDisplay("type", d.type))} ${status} ${facets} ${count}</div>` +
     `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
   tooltip.style.display = "block";
 }
@@ -773,7 +893,7 @@ function toggleExpand(a) {
   // member list for SIGNPOSTS (descendant-bearing docs) comes from belongs_to edges
   const sign = isSignpost(id);
   const memberPart = sign ? memberListHtml(id) : "";
-  box.innerHTML = `<div class="eh">${typeIcon(d.type)}${escapeHtml(d.label || id)} · ${escapeHtml(d.type || "")} ${scopePills(id)} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
+  box.innerHTML = `<div class="eh">${typeIcon(d.type)}${escapeHtml(d.label || id)} · ${escapeHtml(enumDisplay("type", d.type))} ${facetDisplay(id)} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
     + `<div class="md">${renderMarkdown(d.body, 1)}</div>`
     + memberPart
     + connectionsHtml(d, { skipChildren: sign });
@@ -835,10 +955,10 @@ function renderHome() {
   let html = `<h1 class="pagetitle">Dashboard</h1><div class="sub">Orientation for the live_docs store — every link below resolves to a label; hover for summary, single-click to expand, double-click to open in Reader.</div>`;
   html += `<div class="stats">`;
   html += statBox(DOCS.length, "total docs");
-  sortTypes(Object.keys(byType)).forEach(t => html += statBox(byType[t], t));
+  sortTypes(Object.keys(byType)).forEach(t => html += statBox(byType[t], titleCaseEnum(t)));
   html += `</div>`;
   html += `<div class="stats">`;
-  Object.keys(byStatus).sort().forEach(s => html += statBox(byStatus[s], "status: " + s));
+  Object.keys(byStatus).sort().forEach(s => html += statBox(byStatus[s], "status: " + enumDisplay("status", s)));
   html += `</div>`;
 
   // surface the root component prominently — the single doc whose subtree is the
@@ -848,7 +968,7 @@ function renderHome() {
     const rsum = byId.get(String(root.id));
     html += `<div class="card" style="border-left:3px solid var(--accent)">`
       + `<h3>The store root</h3>`
-      + `<div style="font-size:15px;font-weight:600">${linkHtml(root.id, null, {icon:1})} ${scopePills(root.id, {title:1})} <span class="edgecount" title="docs in this subtree">⤵ ${descCount(root.id)} descendants</span></div>`
+      + `<div style="font-size:15px;font-weight:600">${linkHtml(root.id, null, {icon:1})} ${facetDisplay(root.id, {title:1})} <span class="edgecount" title="docs in this subtree">⤵ ${descCount(root.id)} descendants</span></div>`
       + `<div class="sub" style="margin:4px 0 0">${escapeHtml((rsum && rsum.summary) || "")}</div></div>`;
   }
 
@@ -859,7 +979,7 @@ function renderHome() {
     + `<div class="sub" style="margin:0 0 6px">Descendant-bearing docs, ranked by subtree size.</div><ul class="tight">`;
   signposts.forEach(d => {
     const sub = escapeHtml(d.summary || "");
-    html += `<li>${linkHtml(d.id, null, {icon:1})} ${scopePills(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
+    html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
       + (sub ? `<div class="sub" style="margin:2px 0 0">${sub}</div>` : "") + `</li>`;
   });
   html += `</ul></div>`;
@@ -872,7 +992,7 @@ function renderHome() {
   // orphans — belongs_to roots that bear no descendants (unplaced by curation)
   html += `<div class="card"><h3>Orphans — no belongs_to, no descendants (${orphans.length})</h3><ul class="tight">`;
   if (!orphans.length) html += `<li class="sub">none</li>`;
-  orphans.slice().sort(compareDocsByTypeThenLabel).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${scopePills(d.id)}</li>`);
+  orphans.slice().sort(compareDocsByTypeThenLabel).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)}</li>`);
   html += `</ul></div>`;
 
   // deprecated -> superseded_by
@@ -1031,15 +1151,14 @@ function renderReader(focusId) {
 
 function metaLine(d) {
   const bits = [];
-  if (d.type) bits.push(d.type);
-  if (d.status) bits.push(`<span class="pill ${d.status}">${d.status}</span>`);
-  if (d.level) bits.push("level: " + d.level);
+  if (d.type) bits.push(enumDisplay("type", d.type));
+  if (d.status) bits.push(`<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>`);
+  if (d.level) bits.push("level: " + enumDisplay("level", d.level));
   if (d.created) bits.push("created " + String(d.created).slice(0, 10));
   bits.push(`<code>${d.id}</code>`);
   let line = bits.join(" · ");
-  // effective-scope pills (own + inherited via belongs_to); nothing if unresolved
-  const sp = scopePills(d.id, { title: 1 });
-  if (sp) line += ` · <span class="scope-wrap">${sp}</span>`;
+  const fp = facetDisplay(d.id, { title: 1 });
+  if (fp) line += ` · <span class="scope-wrap">${fp}</span>`;
   return line;
 }
 
@@ -1064,7 +1183,7 @@ function memberListHtml(indexId) {
     const md = byId.get(mid);
     if (!md) return `<li>${linkHtml(mid)}</li>`;
     const sum = md.summary ? `<span class="msum">— ${escapeHtml(md.summary)}</span>` : "";
-    return `<li>${linkHtml(mid, null, {icon:1})} ${scopePills(mid)} ${edgeBadge(mid)}${sum}</li>`;
+    return `<li>${linkHtml(mid, null, {icon:1})} ${facetDisplay(mid)} ${edgeBadge(mid)}${sum}</li>`;
   }).join("");
   return `<div class="members"><h2>Members (${members.length})</h2><ul>${li}</ul></div>`;
 }
@@ -1144,7 +1263,7 @@ function renderFocusDoc(content, id) {
       members.forEach(mid => {
         const md = byId.get(mid);
         if (!md) return;
-        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid, null, {icon:1})} ${scopePills(mid)} ${edgeBadge(mid)}</h2>`;
+        m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid, null, {icon:1})} ${facetDisplay(mid)} ${edgeBadge(mid)}</h2>`;
         m += `<div class="md">${renderMarkdown(md.body)}</div>`;
         m += connectionsHtml(md);   // backlinks/next-hops visible in compose too
         m += `</div>`;
@@ -1505,38 +1624,50 @@ function mountGraph(container, focusId) {
 }
 
 /* ===== CATALOG ===== */
-const catalogState = { type: "", status: "", level: "", scope: "", q: "", group: "", sort: "", dir: 1 };
+const catalogState = { type: "", status: "", level: "", scope: "", domain: "", q: "", group: "", sort: "", dir: 1 };
+let catalogFacetBound = false;
+function applyCatalogFilter(field, value) {
+  if (!(field in catalogState)) return;
+  catalogState[field] = value;
+  renderCatalog();
+}
 function renderCatalog() {
   const el = document.getElementById("page-catalog");
   const types = sortTypes([...new Set(DOCS.map(d => d.type).filter(Boolean))]);
   const statuses = [...new Set(DOCS.map(d => d.status).filter(Boolean))].sort();
   const levels = [...new Set(DOCS.map(d => d.level).filter(Boolean))].sort();
-  // effective-scope facet: the union of every doc's resolved scope set (computed
-  // client-side along belongs_to). This is the axis the Catalog was missing.
   const scopes = [...new Set(DOCS.flatMap(d => effectiveScopes(d.id)))].sort();
-  const opt = (arr, sel) => `<option value="">all</option>` + arr.map(v => `<option ${v===sel?"selected":""}>${v}</option>`).join("");
+  const domains = [...new Set(DOCS.flatMap(d => ownDomains(d)))].sort();
+  const optEnum = (arr, sel, field) => `<option value="">all</option>`
+    + arr.map(v => `<option value="${escapeHtml(v)}" ${v===sel?"selected":""}>${escapeHtml(enumDisplay(field, v))}</option>`).join("");
+  const optRaw = (arr, sel) => `<option value="">all</option>`
+    + arr.map(v => `<option value="${escapeHtml(v)}" ${v===sel?"selected":""}>${escapeHtml(v)}</option>`).join("");
 
-  let html = `<h1 class="pagetitle">Catalog</h1><div class="sub">Every doc as a row. Filter, group, and sort — the "query like rows" view.</div>`;
+  let html = `<h1 class="pagetitle">Catalog</h1><div class="sub">Every doc as a row. Filter, group, and sort — click any facet chip to filter.</div>`;
   html += `<div class="catalog-tools">`;
   html += `<span class="preset" data-preset="decisions">Decisions</span>`;
   html += `<span class="preset" data-preset="principles">Principles</span>`;
   html += `<span class="preset" data-preset="living">Living</span>`;
   html += `<span class="preset" data-preset="clear">Clear</span>`;
-  html += `&nbsp; type <select id="f-type">${opt(types, catalogState.type)}</select>`;
-  html += ` status <select id="f-status">${opt(statuses, catalogState.status)}</select>`;
-  html += ` level <select id="f-level">${opt(levels, catalogState.level)}</select>`;
-  if (scopes.length) html += ` scope <select id="f-scope">${opt(scopes, catalogState.scope)}</select>`;
+  html += `&nbsp; type <select id="f-type">${optEnum(types, catalogState.type, "type")}</select>`;
+  html += ` status <select id="f-status">${optEnum(statuses, catalogState.status, "status")}</select>`;
+  html += ` level <select id="f-level">${optEnum(levels, catalogState.level, "level")}</select>`;
+  if (scopes.length) html += ` scope <select id="f-scope">${optRaw(scopes, catalogState.scope)}</select>`;
+  if (domains.length) html += ` domain <select id="f-domain">${optRaw(domains, catalogState.domain)}</select>`;
   html += ` group by <select id="f-group"><option value="">none</option>`
-    + ["type","status","level"].concat(scopes.length ? ["scope"] : [])
+    + ["type","status","level"].concat(scopes.length ? ["scope"] : []).concat(domains.length ? ["domain"] : [])
         .map(g => `<option ${g===catalogState.group?"selected":""}>${g}</option>`).join("") + `</select>`;
   html += ` <input id="f-q" placeholder="search label/title…" value="${escapeHtml(catalogState.q)}">`;
   html += `</div>`;
   html += `<div class="count-note" id="cat-count"></div>`;
   html += `<table class="catalog"><thead><tr>`;
-  ["label","title","type","status","level"].forEach(c =>
-    html += `<th data-sort="${c}">${c}${catalogState.sort===c?(catalogState.dir>0?" ▲":" ▼"):catalogState.sort===""&&c==="type"?" ▲":""}</th>`);
-  html += `<th>scope</th>`;  // effective scope — computed, so not click-sortable
-  html += `<th data-sort="created">created${catalogState.sort==="created"?(catalogState.dir>0?" ▲":" ▼"):""}</th>`;
+  const sortMark = c => catalogState.sort === c ? (catalogState.dir > 0 ? " ▲" : " ▼") : (catalogState.sort === "" && c === "type" ? " ▲" : "");
+  html += `<th data-sort="created">created${sortMark("created")}</th>`;
+  html += `<th data-sort="label">label${sortMark("label")}</th>`;
+  html += `<th data-sort="type">type${sortMark("type")}</th>`;
+  html += `<th>scope</th><th>domain</th>`;
+  html += `<th data-sort="level">level${sortMark("level")}</th>`;
+  html += `<th data-sort="status">status${sortMark("status")}</th>`;
   html += `</tr></thead><tbody id="cat-body"></tbody></table>`;
   el.innerHTML = html;
 
@@ -1546,34 +1677,41 @@ function renderCatalog() {
       (!catalogState.status || d.status === catalogState.status) &&
       (!catalogState.level || d.level === catalogState.level) &&
       (!catalogState.scope || effectiveScopes(d.id).includes(catalogState.scope)) &&
+      (!catalogState.domain || ownDomains(d).includes(catalogState.domain)) &&
       (!catalogState.q || ((d.label||"")+" "+(d.title||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
     const s = catalogState.sort;
     if (!s) {
       rows.sort((a, b) => compareDocsByTypeThenLabel(a, b) * catalogState.dir);
     } else if (s === "type") {
       rows.sort((a, b) => (compareDocsByTypeThenLabel(a, b)) * catalogState.dir);
+    } else if (s === "label") {
+      rows.sort((a, b) => docSortKey(a).localeCompare(docSortKey(b)) * catalogState.dir);
     } else {
       rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
     }
     document.getElementById("cat-count").textContent = `${rows.length} of ${DOCS.length} docs`;
     const body = document.getElementById("cat-body");
-    const cell = d => `<td>${linkHtml(d.id, null, {icon:1})}</td><td>${escapeHtml(d.title||"")}</td><td>${escapeHtml(d.type||"")}</td>`
-      + `<td><span class="pill ${d.status||''}">${escapeHtml(d.status||"")}</span></td><td>${escapeHtml(d.level||"")}</td>`
-      + `<td>${scopePills(d.id, { title: 1 }) || '<span class="sub">—</span>'}</td>`
-      + `<td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`;
+    const cell = d => `<td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`
+      + `<td>${linkHtml(d.id, null, {icon:1})}</td>`
+      + `<td>${catEnumFacet("type", d.type)}</td>`
+      + `<td>${scopeBreadcrumbs(d.id, { catalog: 1, title: 1 }) || '<span class="sub">—</span>'}</td>`
+      + `<td>${domainTags(d.id, { catalog: 1, title: 1 }) || '<span class="sub">—</span>'}</td>`
+      + `<td>${catEnumFacet("level", d.level)}</td>`
+      + `<td>${catEnumFacet("status", d.status)}</td>`;
     if (catalogState.group) {
-      // grouping by effective scope is multi-valued: a doc lands in every zone it
-      // resolves to (and "(none)" if it resolves to none). Other axes are single.
       const groups = {};
       const push = (k, d) => { (groups[k]=groups[k]||[]).push(d); };
       rows.forEach(d => {
         if (catalogState.group === "scope") {
           const es = effectiveScopes(d.id);
           if (!es.length) push("(none)", d); else es.forEach(z => push(z, d));
+        } else if (catalogState.group === "domain") {
+          const ds = ownDomains(d);
+          if (!ds.length) push("(none)", d); else ds.forEach(z => push(z, d));
         } else push(d[catalogState.group]||"(none)", d);
       });
       body.innerHTML = sortGroupKeys(catalogState.group, Object.keys(groups)).map(k =>
-        `<tr class="grouphdr"><td colspan="7">${escapeHtml(catalogState.group)}: ${escapeHtml(k)} (${groups[k].length})</td></tr>`
+        `<tr class="grouphdr"><td colspan="7">${escapeHtml(catalogState.group)}: ${escapeHtml(groupKeyLabel(catalogState.group, k))} (${groups[k].length})</td></tr>`
         + groups[k].map(d => `<tr>${cell(d)}</tr>`).join("")).join("");
     } else {
       body.innerHTML = rows.map(d => `<tr>${cell(d)}</tr>`).join("");
@@ -1585,6 +1723,8 @@ function renderCatalog() {
   el.querySelector("#f-level").addEventListener("change", e => { catalogState.level = e.target.value; draw(); });
   const scopeSel = el.querySelector("#f-scope");
   if (scopeSel) scopeSel.addEventListener("change", e => { catalogState.scope = e.target.value; draw(); });
+  const domainSel = el.querySelector("#f-domain");
+  if (domainSel) domainSel.addEventListener("change", e => { catalogState.domain = e.target.value; draw(); });
   el.querySelector("#f-group").addEventListener("change", e => { catalogState.group = e.target.value; draw(); });
   el.querySelector("#f-q").addEventListener("input", e => { catalogState.q = e.target.value; draw(); });
   el.querySelectorAll("th[data-sort]").forEach(th => th.addEventListener("click", () => {
@@ -1594,12 +1734,22 @@ function renderCatalog() {
   }));
   el.querySelectorAll(".preset").forEach(p => p.addEventListener("click", () => {
     const k = p.getAttribute("data-preset");
-    Object.assign(catalogState, { type: "", status: "", level: "", scope: "", q: "", group: "" });
+    Object.assign(catalogState, { type: "", status: "", level: "", scope: "", domain: "", q: "", group: "" });
     if (k === "decisions") catalogState.type = "decision";
     else if (k === "principles") catalogState.type = "principle";
     else if (k === "living") catalogState.status = "living";
     renderCatalog();
   }));
+  if (!catalogFacetBound) {
+    catalogFacetBound = true;
+    el.addEventListener("click", e => {
+      const btn = e.target.closest(".cat-facet");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      applyCatalogFilter(btn.getAttribute("data-cf"), btn.getAttribute("data-cv"));
+    });
+  }
   draw();
 }
 
@@ -1667,7 +1817,7 @@ function renderTypeKey() {
   if (!panel) return;
   const typeKeys = sortTypes(Object.keys(TYPE_ICONS).filter(t => present.has(t)));
   const rows = typeKeys
-    .map(t => `<div class="keyrow">${typeIcon(t, { title: false })}<span>${escapeHtml(TYPE_ICONS[t].label)}</span></div>`)
+    .map(t => `<div class="keyrow">${typeIcon(t, { title: false })}<span>${escapeHtml(titleCaseEnum(t))}</span></div>`)
     .join("");
   panel.innerHTML = rows || `<div class="keyrow sub">no typed docs</div>`;
 }
