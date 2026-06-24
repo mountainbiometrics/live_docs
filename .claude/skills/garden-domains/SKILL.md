@@ -53,8 +53,7 @@ count of docs carrying each. This is the shared vocabulary you are curating, not
 suggestion list — it is the live resource. If the store has zero domains, the
 output is `domains — none in use`; when the registry is empty the phase's main
 work is limited to step 4 (validate) and conservative step 3 (assign), applied
-only where an obvious existing domain would apply. Do not invent domains to fill
-an empty registry.
+only where an obvious existing domain would apply.
 
 ### 2. Consolidate what doesn't pull its weight
 
