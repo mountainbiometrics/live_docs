@@ -1075,9 +1075,3 @@ class KB:
                 unresolved.append(r)
         return unresolved
 
-    def delete(self, doc_id: str) -> None:
-        """Delete a doc by id. Use only for throwaway/test docs."""
-        path = self.docs_dir / f"{doc_id}.md"
-        if path.exists():
-            path.unlink()
-        self._reload()

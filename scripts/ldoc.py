@@ -50,6 +50,7 @@ Subcommands (grouped):
     unlink <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
                  [--provenance a,b] [--superseded-by a,b]
     history <ref> --add "summary"
+    rm <ref> [--force] [--dry-run]
     ingest-raw (--from-file P | --body T|-) --source S [--title T] [--label L]
                [--origin O] [--medium M] [--authored-at A]
                [--parent-raw R] [--inherit-from R] [--shard-depth N]
@@ -910,6 +911,53 @@ def _normalize_raw_pointer(ref: str):
     return f"raw/{path.stem}.md", path.stem
 
 
+def cmd_rm(kb: KB, args) -> int:
+    """Delete a doc from the store, with a dependents safety check, then reindex."""
+    import subprocess
+
+    try:
+        doc_id = kb.resolve(args.ref)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+
+    neighbors = kb.neighbors(doc_id, kind="dependents")
+    hard_dependents = neighbors.get("dependents", [])
+
+    if hard_dependents and not args.force:
+        lines = "\n".join(
+            f"  {d['id']}  {d.get('label', '')}  ({d.get('type', '')})"
+            for d in hard_dependents
+        )
+        _err(
+            f"Cannot delete {doc_id}: {len(hard_dependents)} doc(s) point at it "
+            f"via requires/belongs_to edges:\n{lines}\n\n"
+            "Remove those edges first, or use --force to delete anyway."
+        )
+        return 1
+
+    doc = kb.get(doc_id)
+    label = doc.get("label", doc_id)
+    title = doc.get("title", label)
+
+    if args.dry_run:
+        print("## DRY RUN — would delete:\n")
+        print(f"  id:    {doc_id}")
+        print(f"  label: {label}")
+        print(f"  title: {title}")
+        if hard_dependents:
+            print(f"\n  WARNING: {len(hard_dependents)} dependent(s) will have dangling edges (--force bypassed check)")
+        print("\n(No doc deleted.)")
+        return 0
+
+    (kb.docs_dir / f"{doc_id}.md").unlink()
+    print(f"Deleted {doc_id}  ({label})")
+
+    script = Path(__file__).resolve().parent / "reindex.py"
+    result = subprocess.run([sys.executable, str(script)], capture_output=False)
+    return result.returncode
+
+
 def cmd_ingest_raw(kb: KB, args) -> int:
     body = ""
     from_file = ""
@@ -1747,6 +1795,9 @@ def cmd_help(kb: KB, args) -> int:
   ldoc link porcelain-roadmap --relates batch-operations --dry-run
   ldoc unlink porcelain-roadmap --requires batch-operations
   ldoc history porcelain-roadmap --add "Updated approach"
+  ldoc rm <ref>                           # delete doc + reindex (blocked if has dependents)
+  ldoc rm <ref> --force                   # delete even if dependents exist
+  ldoc rm <ref> --dry-run                 # preview without deleting
 
   # Inbox pipeline (gate 0 → gate 1 → gate 2)
   echo "quick thought" | ldoc inbox add --body - --title "quick thought"
@@ -2030,6 +2081,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("ref", help="id | label | title")
     p.add_argument("--add", required=True, help="Summary text for the history entry.")
 
+    # --- rm ---
+    p = sub.add_parser(
+        "rm",
+        help="Delete a doc from the store and reindex. Blocked by dependents unless --force.",
+    )
+    p.add_argument("ref", help="id | label | title")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Delete even if other docs have requires/belongs_to edges pointing here.",
+    )
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   help="Preview what would be deleted without writing.")
+
     # --- ingest-raw ---
     p = sub.add_parser("ingest-raw", help="Write verbatim content into raw/ tier.")
     p.add_argument("--source", default="",
@@ -2189,7 +2254,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 # Subcommands that mutate tiers exported into viewer.html (docs/, reviews/).
-_VIEWER_MUTATING = frozenset({"new", "set", "edit", "link", "unlink", "history"})
+_VIEWER_MUTATING = frozenset({"new", "set", "edit", "link", "unlink", "history", "rm"})
 _REVIEW_MUTATING = frozenset({"new", "sign"})
 
 
@@ -2243,6 +2308,7 @@ COMMANDS = {
     "link": cmd_link,
     "unlink": cmd_unlink,
     "history": cmd_history,
+    "rm": cmd_rm,
     "ingest-raw": cmd_ingest_raw,
     "inbox": cmd_inbox,
     "promote": cmd_promote,

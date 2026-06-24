@@ -22,13 +22,17 @@ quick-reference so you don't have to reverse-engineer the system each session.
 
 **The two rules that matter most:**
 
-1. **All KB access goes through `ldoc`.** Never `cat`, `grep`, `jq`, or
-   hand-edit doc files or frontmatter. The CLI is the only sanctioned reader and
-   writer.
-2. **Mutators are dumb; judgment lives in the skills.** `ldoc new/set/link` write
-   exactly what you tell them and validate refs — they do NOT decide cascade,
-   impact, or consistency. For any *substantive* change, run the matching skill
-   (below), not raw `ldoc` calls.
+1. **Operate the store through `ldoc`.** Reading, searching, and mutating docs —
+   frontmatter, edges, body — should all be reachable via the CLI. If you find
+   yourself about to use `cat`, `grep`, `jq`, hand-edits, or similar for a store
+   operation, check whether `ldoc` already covers it. When it doesn't, that may
+   mean you're working around the system (and its validation), or it may mean the
+   CLI still needs that capability — both are plausible; prefer `ldoc` when it
+   can do the job.
+2. **Mutators are dumb; judgment lives in the skills.** `ldoc new/set/link/rm`
+   write exactly what you tell them and validate refs — they do NOT decide
+   cascade, impact, or consistency. For any *substantive* change, run the
+   matching skill (below), not raw `ldoc` calls.
 
 ---
 
@@ -81,6 +85,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
 | `ldoc unlink <ref> [same edge flags]` | Remove edges |
 | `ldoc history <ref> --add "what changed"` | Append a history entry (changes only — never creation) |
+| `ldoc rm <ref> [--force] [--dry-run]` | Delete a doc; blocked by dependents unless `--force`; reindexes automatically |
 
 **Inbox pipeline & maintenance**
 
@@ -253,6 +258,19 @@ and the post-hoc review summary:
 | Rebuild `.index/` caches | **reindex** |
 
 When the plugin is installed, these are namespaced `/livedocs:<skill>`.
+
+**Delete vs. deprecate — two distinct retirement paths:**
+
+- **Delete** (`ldoc rm <ref>`) when the doc has no content not already captured
+  elsewhere: duplicates, empty stubs, structurally redundant variants where the
+  merge preserved everything. Nothing is lost. `ldoc rm` checks for dependents
+  and reindexes automatically; use `--force` only after clearing dangling edges.
+- **Deprecate** (`status: deprecated` + `superseded_by`) when the doc recorded a
+  genuine decision or belief that was later overturned. The historical record has
+  value even though the doc is no longer authoritative.
+
+The default is NOT to deprecate — that's the right choice only when history
+matters. When in doubt: if removing the doc loses no information, delete it.
 
 Deprecation is a protocol, not a flag flip: add a `## Correction` section, set
 `--superseded-by`, then `--status deprecated`, then a history entry — or just let
