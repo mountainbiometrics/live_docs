@@ -4,6 +4,44 @@ Single source of truth for every actor that places or re-places a doc in the
 hierarchy — the ingest/apply writer at doc birth and the gardening refiner with
 full-store context. Read and apply this policy; do not paraphrase from memory.
 
+## What the hierarchy means
+
+`belongs_to` is the **system's mental model**, not a mirror of the file tree. It
+should **generally match the code structure** — so a scoped decision lands where
+the code that honors it lives — but it is a **hybrid with the mental model of the
+system**: code isn't always organized well, and the docs exist to explain the
+*system*, not merely the codebase. Where the two diverge, **follow the mental
+model** and let the tree teach a reader how the system actually hangs together.
+
+Placement also carries **scope**: a decision binds at the level it is placed.
+Put "use Redis for caching" under the project that made that call and it binds
+that project, not its siblings; leave a doc with no `belongs_to` and it is
+**global** — which is right for genuinely cross-cutting architectural decisions
+and wrong for one that should bind only a single subtree. (See the doc-types
+shared definition; effective scope is the union along the `belongs_to` ancestry.)
+
+## Right-sizing the tree (shape)
+
+The hierarchy should be a **roughly balanced tree** — dense enough that groupings
+are meaningful, not so flat that a reader must scan a long sibling list to find
+anything. The governing principle is **width proportional to depth**: a shallower
+tree tolerates fewer children per node; a deeper tree can support more. There is
+no fixed target — the goal is **search balance**: the trade between how much you
+take in at a glance and how far you must dig to reach specifics.
+
+The common failure in practice is the **overly wide branch** — a signpost with
+many direct children that could cluster into a few sub-themes. This collapses
+depth to save navigation steps but shifts the cost onto the reader, who must scan
+every sibling at once. The fix is structural: introduce intermediate signposts
+where children cluster into sub-themes, and re-home them one level down (the
+branch-level analogue of decompose).
+
+The rarer failure is the opposite: a chain of single-child signposts that forces
+many hops to reach anything. If a path narrows to one or two children per level
+for several levels, consider collapsing it.
+
+This is the operative form of rule 4 below.
+
 ## Rules
 
 1. **Prefer the nearest coherent signpost over the root.** Place the doc under

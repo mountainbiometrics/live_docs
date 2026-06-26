@@ -150,9 +150,28 @@ level:  incidental (calcified, no decision) | trial | preference | requirement
 
 reference-type `kind`: `brainstorm | plan | clipping | external`.
 
-Type-choice rule of thumb: prefer **`decision`** over `principle` when you're
-describing HOW the system behaves; reserve `principle` for bedrock values.
-(`identify-key-concepts` owns the full taxonomy protocol.)
+### Type-choice — pick the most specific, don't default to `decision`
+
+Almost anything can be framed as a "decision"; if you reach for it by default the
+taxonomy collapses (it is already this store's most over-applied type). Ask
+**"what is this *most*?"** and pick the most specific:
+
+- `principle` bedrock value guiding many choices · `decision` one architectural
+  choice among alternatives (scope it) · `constraint` external force we didn't
+  choose · `requirement` property that must hold · `goal` outcome we're moving
+  toward · `use-case` workflow/scenario served · `component` a thing that exists
+  (module / boundary / contract) · `guide` how to do or think · `reference`
+  frozen source material · `type` defines a type (meta).
+
+Before typing anything `decision`: if it just says a thing *exists* →
+`component`; if it's *how to work* → `guide`; if it's *given, not chosen* →
+`constraint`; if it *must hold* → `requirement`/`goal`. Use `decision` only for a
+real choice among alternatives with a rationale — then **scope it** under the
+subtree it binds (no `belongs_to` = global, which is right only for genuinely
+cross-cutting decisions).
+
+The full classification ladder is **`.claude/skills/_shared/doc-types.md`** — the
+source `identify-key-concepts` and gardening apply.
 
 ---
 
@@ -177,6 +196,15 @@ bare ids for you. There are five outbound edge types:
 - **A signpost is not a type.** Any doc that is the `belongs_to` target of other
   docs is structurally a navigational signpost (the retired `index` type,
   re-derived from topology). `ldoc map` surfaces them.
+
+**What the hierarchy means.** `belongs_to` is the system's **mental model**, not a
+mirror of the code's file tree — it *generally* matches code structure but is a
+hybrid shaped by how the system actually hangs together (the docs explain the
+system, not just the codebase). A doc's placement sets what it **binds**: a
+decision under a subtree binds that subtree; no `belongs_to` = global. Keep the
+tree **roughly balanced** — width proportional to depth — so navigation trades
+breadth-at-a-glance against depth-to-detail. Operative placement rules + sizing:
+**`.claude/skills/_shared/belongs-to-placement.md`**.
 
 ---
 
