@@ -125,6 +125,67 @@ def _fmt_edge_list(edges: list[dict], plain: bool = False) -> str:
     return "\n".join(lines)
 
 
+def _fields_row(kb: KB, doc_id: str, fields: list[str]) -> str:
+    """Return a TSV row for doc_id, extracting named fields from the in-memory doc."""
+    doc = kb._docs.get(doc_id, {})
+    values = []
+    for f in fields:
+        if f == "id":
+            val = doc_id
+        elif f in ("title", "display"):
+            val = doc.get("title", "") or doc.get("label", "")
+        elif f == "history":
+            val = str(len(doc.get("history", [])))
+        else:
+            raw = doc.get(f, "")
+            if isinstance(raw, list):
+                raw = ",".join(str(v) for v in raw)
+            val = str(raw) if raw else ""
+        values.append(val)
+    return "\t".join(values)
+
+
+def _split_csv(val: str) -> list[str]:
+    return [s.strip() for s in (val or "").split(",") if s.strip()]
+
+
+def _parse_fields(args) -> list[str] | None:
+    parsed = _split_csv(getattr(args, "fields", None) or "")
+    return parsed if parsed else None
+
+
+def _apply_count_limit(results: list, args) -> tuple[list, bool]:
+    """Slice results by --limit, then print count and signal early-exit if --count."""
+    if args.limit is not None:
+        results = results[:args.limit]
+    if args.count:
+        print(len(results))
+        return results, True
+    return results, False
+
+
+def _print_result(kb: "KB", r: dict, fields: list[str] | None, plain: bool, snippet: bool = False) -> None:
+    if fields:
+        print(_fields_row(kb, r["id"], fields))
+    elif plain:
+        label_part = f" [{r['label']}]" if r.get("label") else ""
+        print(f"{r['id']}{label_part}  {r.get('display', '')}")
+    else:
+        print(f"[{r.get('display', '')}]({r['id']}.md)")
+    if snippet and r.get("snippet") and not fields:
+        print(f"  {r['snippet']}")
+
+
+def _kb(fn, *a, **kw) -> bool:
+    """Call fn(*a, **kw); print error and return True on ValueError."""
+    try:
+        fn(*a, **kw)
+        return False
+    except ValueError as e:
+        _err(str(e))
+        return True
+
+
 def _resolve_refs(kb: KB, raw_refs: list[str]) -> list[str] | None:
     """
     Resolve a list of raw ref strings (possibly containing '-' for stdin).
@@ -165,6 +226,18 @@ def cmd_get(kb: KB, args) -> int:
     refs = _resolve_refs(kb, args.refs)
     if refs is None:
         return 1
+
+    fields = _parse_fields(args)
+
+    if fields:
+        for ref in refs:
+            try:
+                result = kb.get(ref)
+            except ValueError as e:
+                _err(str(e))
+                return 1
+            print(_fields_row(kb, result["id"], fields))
+        return 0
 
     def render(ref: str) -> None:
         try:
@@ -311,6 +384,7 @@ def cmd_find(kb: KB, args) -> int:
     # terms is nargs='*', may be empty list
     terms = args.terms or []
     plain = getattr(args, "plain", False)
+    fields = _parse_fields(args)
 
     try:
         results = kb.find(
@@ -327,6 +401,10 @@ def cmd_find(kb: KB, args) -> int:
         _err(str(e))
         return 1
 
+    results, done = _apply_count_limit(results, args)
+    if done:
+        return 0
+
     if args.json:
         _json(results)
         return 0
@@ -336,39 +414,30 @@ def cmd_find(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        if plain:
-            label_part = f" [{r['label']}]" if r.get("label") else ""
-            print(f"{r['id']}{label_part}  {r.get('display', '')}")
-        else:
-            doc_id = r["id"]
-            display = r.get("display", "")
-            print(f"[{display}]({doc_id}.md)")
-        if r.get("snippet"):
-            print(f"  {r['snippet']}")
+        _print_result(kb, r, fields, plain, snippet=True)
 
     return 0
 
 
 def cmd_ls(kb: KB, args) -> int:
     plain = getattr(args, "plain", False)
+    fields = _parse_fields(args)
     try:
         results = kb.ls(type=args.type or None)
     except Exception as e:
         _err(str(e))
         return 1
 
+    results, done = _apply_count_limit(results, args)
+    if done:
+        return 0
+
     if args.json:
         _json(results)
         return 0
 
     for r in results:
-        if plain:
-            label_part = f" [{r['label']}]" if r.get("label") else ""
-            print(f"{r['id']}{label_part}  {r.get('display', '')}")
-        else:
-            doc_id = r["id"]
-            display = r.get("display", "")
-            print(f"[{display}]({doc_id}.md)")
+        _print_result(kb, r, fields, plain)
 
     return 0
 
@@ -376,11 +445,16 @@ def cmd_ls(kb: KB, args) -> int:
 def cmd_orphans(kb: KB, args) -> int:
     """List docs outside the belongs_to hierarchy (no belongs_to in or out)."""
     plain = getattr(args, "plain", False)
+    fields = _parse_fields(args)
     try:
         results = kb.orphans()
     except Exception as e:
         _err(str(e))
         return 1
+
+    results, done = _apply_count_limit(results, args)
+    if done:
+        return 0
 
     if args.json:
         _json(results)
@@ -391,13 +465,7 @@ def cmd_orphans(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        if plain:
-            label_part = f" [{r['label']}]" if r.get("label") else ""
-            print(f"{r['id']}{label_part}  {r.get('display', '')}")
-        else:
-            doc_id = r["id"]
-            display = r.get("display", "")
-            print(f"[{display}]({doc_id}.md)")
+        _print_result(kb, r, fields, plain)
 
     return 0
 
@@ -497,6 +565,20 @@ def cmd_neighbors(kb: KB, args) -> int:
                 _err(str(e))
                 return 1
         _json(all_results)
+        return 0
+
+    if getattr(args, "count", False):
+        for ref in refs:
+            try:
+                result = kb.neighbors(ref, kind=args.kind)
+            except ValueError as e:
+                _err(str(e))
+                return 1
+            total = sum(len(v) for v in result.values())
+            if len(refs) > 1:
+                print(f"{ref}\t{total}")
+            else:
+                print(total)
         return 0
 
     def render(ref: str) -> None:
@@ -730,74 +812,77 @@ def cmd_new(kb: KB, args) -> int:
 
 
 def cmd_set(kb: KB, args) -> int:
-    fields = {}
-    if args.title is not None:
-        fields["title"] = args.title
-    if args.summary is not None:
-        fields["summary"] = args.summary
-    if args.label is not None:
-        label = args.label.strip()
-        fields["label"] = label
-    if args.level is not None:
-        fields["level"] = args.level
-    if args.status is not None:
-        fields["status"] = args.status
-    if args.type is not None:
-        fields["type"] = args.type
-    if args.scope is not None:
-        # scope is a single string naming a topological zone; empty string clears it
-        fields["scope"] = args.scope
-    if args.domain is not None:
-        # domain is a flat list of cross-cutting tags; comma-separated input,
-        # empty string clears it (drops the field).
-        fields["domain"] = [s.strip() for s in args.domain.split(",") if s.strip()]
-    if getattr(args, "keywords", None) is not None:
-        # keywords: flat findability synonym list; comma-separated, replace semantics.
-        fields["keywords"] = [s.strip() for s in args.keywords.split(",") if s.strip()]
-
-    # --body: read new body from stdin or inline
+    # Conflict: stdin can't serve both refs and body
     body_arg = getattr(args, "body", None)
+    if args.refs == ["-"] and body_arg == "-":
+        _err("Cannot use '-' for both refs and --body. Provide refs explicitly when using --body -.")
+        return 1
+
+    set_fields = {}
+    if args.title is not None:
+        set_fields["title"] = args.title
+    if args.summary is not None:
+        set_fields["summary"] = args.summary
+    if args.label is not None:
+        set_fields["label"] = args.label.strip()
+    if args.level is not None:
+        set_fields["level"] = args.level
+    if args.status is not None:
+        set_fields["status"] = args.status
+    if args.type is not None:
+        set_fields["type"] = args.type
+    if args.scope is not None:
+        set_fields["scope"] = args.scope
+    if args.domain is not None:
+        set_fields["domain"] = _split_csv(args.domain)
+    if getattr(args, "keywords", None) is not None:
+        set_fields["keywords"] = _split_csv(args.keywords)
+
+    # --body: read new body from stdin or inline (before resolving refs, which may also use stdin)
     new_body = None
     if body_arg == "-":
         new_body = sys.stdin.read()
     elif body_arg:
         new_body = body_arg
 
-    if not fields and new_body is None:
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
+        return 1
+
+    if not set_fields and new_body is None:
         _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, --keywords, or --body.")
         return 1
+
+    note = getattr(args, "note", "")
 
     # --dry-run preview
     if getattr(args, "dry_run", False):
         print("## DRY RUN — would update:\n")
-        try:
-            doc_id = kb.resolve(args.ref)
-        except ValueError as e:
-            _err(str(e))
-            return 1
-        print(f"  doc: {doc_id}")
-        for k, v in fields.items():
-            print(f"  {k}: {v!r}")
-        if new_body is not None:
-            print(f"  body: (replace, {len(new_body)} chars)")
+        for ref in refs:
+            try:
+                doc_id = kb.resolve(ref)
+            except ValueError as e:
+                _err(str(e))
+                return 1
+            print(f"  doc: {doc_id}")
+            for k, v in set_fields.items():
+                print(f"  {k}: {v!r}")
+            if new_body is not None:
+                print(f"  body: (replace, {len(new_body)} chars)")
+            if note:
+                print(f"  --note: {note!r}")
         print("\n(No doc written.)")
         return 0
 
-    if fields:
-        try:
-            kb.set(args.ref, **fields)
-        except ValueError as e:
-            _err(str(e))
+    for ref in refs:
+        if set_fields and _kb(kb.set, ref, **set_fields):
+            return 1
+        if new_body is not None and _kb(kb.set_body, ref, new_body):
+            return 1
+        if note and _kb(kb.add_history, ref, note):
             return 1
 
-    if new_body is not None:
-        try:
-            kb.set_body(args.ref, new_body)
-        except ValueError as e:
-            _err(str(e))
-            return 1
-
-    print(f"Updated {args.ref}")
+    print(f"Updated {', '.join(refs)}")
     return 0
 
 
@@ -815,18 +900,20 @@ def cmd_edit(kb: KB, args) -> int:
 
 def _parse_edge_args(args) -> dict:
     """Parse all edge CLI args into lists of ref strings."""
-    def _split(val: str) -> list:
-        return [s.strip() for s in val.split(",") if s.strip()] if val else []
     return {
-        "requires": _split(getattr(args, "requires", "") or ""),
-        "belongs_to": _split(getattr(args, "belongs_to", "") or ""),
-        "relates": _split(getattr(args, "relates", "") or ""),
-        "provenance": _split(getattr(args, "provenance", "") or ""),
-        "superseded_by": _split(getattr(args, "superseded_by", "") or ""),
+        "requires": _split_csv(getattr(args, "requires", "") or ""),
+        "belongs_to": _split_csv(getattr(args, "belongs_to", "") or ""),
+        "relates": _split_csv(getattr(args, "relates", "") or ""),
+        "provenance": _split_csv(getattr(args, "provenance", "") or ""),
+        "superseded_by": _split_csv(getattr(args, "superseded_by", "") or ""),
     }
 
 
 def cmd_link(kb: KB, args) -> int:
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
+        return 1
+
     edges = _parse_edge_args(args)
 
     if not any(edges.values()):
@@ -843,26 +930,39 @@ def cmd_link(kb: KB, args) -> int:
         )
         return 1
 
+    replace = getattr(args, "replace", False)
+    note = getattr(args, "note", "")
+
     # --dry-run preview
     if getattr(args, "dry_run", False):
         print("## DRY RUN — would link:\n")
-        for field, refs in edges.items():
-            if refs:
-                print(f"  --{field.replace('_', '-')}: {refs}")
+        print(f"  refs: {refs}")
+        for field, edge_refs in edges.items():
+            if edge_refs:
+                print(f"  --{field.replace('_', '-')}: {edge_refs}")
+        if replace and edges.get("belongs_to"):
+            print("  (existing belongs_to edges will be replaced)")
+        if note:
+            print(f"  --note: {note!r}")
         print("\n(No doc written.)")
         return 0
 
-    try:
-        kb.link(args.ref, **{k: v or None for k, v in edges.items()})
-    except ValueError as e:
-        _err(str(e))
-        return 1
+    for ref in refs:
+        if _kb(kb.link, ref, **{k: v or None for k, v in edges.items()},
+               replace_belongs_to=replace):
+            return 1
+        if note and _kb(kb.add_history, ref, note):
+            return 1
 
-    print(f"Linked {args.ref}")
+    print(f"Linked {', '.join(refs)}")
     return 0
 
 
 def cmd_unlink(kb: KB, args) -> int:
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
+        return 1
+
     edges = _parse_edge_args(args)
 
     if not any(edges.values()):
@@ -870,13 +970,15 @@ def cmd_unlink(kb: KB, args) -> int:
              "--provenance, --superseded-by.")
         return 1
 
-    try:
-        kb.unlink(args.ref, **{k: v or None for k, v in edges.items()})
-    except ValueError as e:
-        _err(str(e))
-        return 1
+    note = getattr(args, "note", "")
 
-    print(f"Unlinked {args.ref}")
+    for ref in refs:
+        if _kb(kb.unlink, ref, **{k: v or None for k, v in edges.items()}):
+            return 1
+        if note and _kb(kb.add_history, ref, note):
+            return 1
+
+    print(f"Unlinked {', '.join(refs)}")
     return 0
 
 
@@ -885,13 +987,15 @@ def cmd_history(kb: KB, args) -> int:
         _err("Specify --add 'summary text'.")
         return 1
 
-    try:
-        kb.add_history(args.ref, args.add)
-    except ValueError as e:
-        _err(str(e))
+    refs = _resolve_refs(kb, args.refs)
+    if refs is None:
         return 1
 
-    print(f"History entry added to {args.ref}")
+    for ref in refs:
+        if _kb(kb.add_history, ref, args.add):
+            return 1
+
+    print(f"History entry added to {', '.join(refs)}")
     return 0
 
 
@@ -1441,9 +1545,10 @@ def _inbox_list(args) -> int:
 
     for p in items:
         doc_id = p.stem
-        title = _read_frontmatter_field(p, "title")
-        source = _read_frontmatter_field(p, "source")
-        captured = _read_frontmatter_field(p, "captured")
+        _fm = _read_frontmatter_fields(p, "title", "source", "captured")
+        title = _fm["title"]
+        source = _fm["source"]
+        captured = _fm["captured"]
         label_parts = [doc_id]
         if title:
             label_parts.append(f'"{title}"')
@@ -1528,12 +1633,13 @@ def _promote_one(inbox_id: str, inbox_path: Path, args) -> int:
 
     # Pull useful fields from inbox frontmatter and carry the whole provenance
     # bundle forward — capture-time metadata must not be lost at promotion.
-    original_source = _read_frontmatter_field(inbox_path, "source") or "(promoted from inbox)"
-    title = _read_frontmatter_field(inbox_path, "title") or ""
-    origin = _read_frontmatter_field(inbox_path, "origin") or ""
-    medium = _read_frontmatter_field(inbox_path, "medium") or ""
-    authored_at = _read_frontmatter_field(inbox_path, "authored_at") or ""
-    captured = _read_frontmatter_field(inbox_path, "captured") or ""
+    _ifm = _read_frontmatter_fields(inbox_path, "source", "title", "origin", "medium", "authored_at", "captured")
+    original_source = _ifm["source"] or "(promoted from inbox)"
+    title = _ifm["title"] or ""
+    origin = _ifm["origin"] or ""
+    medium = _ifm["medium"] or ""
+    authored_at = _ifm["authored_at"] or ""
+    captured = _ifm["captured"] or ""
 
     # Generate a collision-safe id for the raw tier
     RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -1860,6 +1966,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("refs", nargs="+", metavar="ref",
                    help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--fields", default="", metavar="FIELDS",
+                   help="Comma-separated fields for TSV output: id,label,title,type,status,"
+                        "level,scope,summary,domain,keywords,created,history.")
 
     # --- body ---
     p = sub.add_parser("body", help="Print the body text of one or more docs.")
@@ -1890,6 +1999,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
+    p.add_argument("--fields", default="", metavar="FIELDS",
+                   help="Comma-separated fields for TSV output: id,label,title,type,status,"
+                        "level,scope,summary,domain,keywords,created,history.")
+    p.add_argument("--count", action="store_true", help="Print result count only.")
+    p.add_argument("--limit", type=int, default=None, metavar="N",
+                   help="Show at most N results.")
 
     # --- ls ---
     p = sub.add_parser("ls", help="List all docs (optionally filter by type).")
@@ -1897,6 +2012,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
+    p.add_argument("--fields", default="", metavar="FIELDS",
+                   help="Comma-separated fields for TSV output: id,label,title,type,status,"
+                        "level,scope,summary,domain,keywords,created,history.")
+    p.add_argument("--count", action="store_true", help="Print doc count only.")
+    p.add_argument("--limit", type=int, default=None, metavar="N",
+                   help="Show at most N results.")
 
     # --- orphans ---
     p = sub.add_parser(
@@ -1906,6 +2027,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
+    p.add_argument("--fields", default="", metavar="FIELDS",
+                   help="Comma-separated fields for TSV output: id,label,title,type,status,"
+                        "level,scope,summary,domain,keywords,created,history.")
+    p.add_argument("--count", action="store_true", help="Print orphan count only.")
+    p.add_argument("--limit", type=int, default=None, metavar="N",
+                   help="Show at most N results.")
 
     # --- map ---
     p = sub.add_parser(
@@ -1934,6 +2061,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label edge format instead of typed wiki-links.")
+    p.add_argument("--count", action="store_true",
+                   help="Print neighbor count only (total edges in the requested --kind).")
 
     # --- graph ---
     p = sub.add_parser("graph", help="BFS traversal over hard edges (requires + belongs_to).")
@@ -2018,7 +2147,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- set ---
     p = sub.add_parser("set", help="Update frontmatter fields or body of a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--title", default=None)
     p.add_argument("--summary", default=None,
                    help="Replace the summary scalar (empty string removes it).")
@@ -2037,6 +2167,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "Replaces the doc's keywords list; empty string clears it.")
     p.add_argument("--body", default=None,
                    help="Replace body: TEXT value or '-' to read from stdin.")
+    p.add_argument("--note", default="",
+                   help="Add a history entry to each ref after updating.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview what would change without writing.")
 
@@ -2047,7 +2179,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- link ---
     p = sub.add_parser("link", help="Add edge(s) to a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles. Cascade-hard. Validated before write.")
     p.add_argument("--belongs-to", default="", dest="belongs_to",
@@ -2059,12 +2192,17 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Comma-separated ids/labels/titles. Immutable derivation lineage.")
     p.add_argument("--superseded-by", default="", dest="superseded_by",
                    help="Comma-separated ids/labels/titles. Deprecation pointer.")
+    p.add_argument("--replace", action="store_true",
+                   help="Replace existing belongs_to edge(s) instead of adding. Only affects --belongs-to.")
+    p.add_argument("--note", default="",
+                   help="Add a history entry to each ref after linking.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview the edges that would be added without writing.")
 
     # --- unlink ---
     p = sub.add_parser("unlink", help="Remove edge(s) from a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles.")
     p.add_argument("--belongs-to", default="", dest="belongs_to",
@@ -2075,10 +2213,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Comma-separated ids/labels/titles.")
     p.add_argument("--superseded-by", default="", dest="superseded_by",
                    help="Comma-separated ids/labels/titles.")
+    p.add_argument("--note", default="",
+                   help="Add a history entry to each ref after unlinking.")
 
     # --- history ---
     p = sub.add_parser("history", help="Add a history entry to a doc.")
-    p.add_argument("ref", help="id | label | title")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--add", required=True, help="Summary text for the history entry.")
 
     # --- rm ---

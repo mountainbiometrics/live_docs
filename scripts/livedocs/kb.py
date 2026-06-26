@@ -573,8 +573,8 @@ class KB:
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
 
-        rev = reverse_edges(self._docs)
-        ref_by = referenced_by(self._docs)
+        rev = reverse_edges(self._docs) if kind in ("dependents", "all") else {}
+        ref_by = referenced_by(self._docs) if kind in ("provenance_of", "all") else {}
 
         result = {}
         if kind in ("requires", "all"):
@@ -796,10 +796,12 @@ class KB:
         relates: list[str] = None,
         provenance: list[str] = None,
         superseded_by: list[str] = None,
+        replace_belongs_to: bool = False,
     ) -> None:
         """
         Add edges. Deduplicates; does NOT remove existing edges.
 
+        replace_belongs_to=True replaces the entire belongs_to list atomically.
         All ref args resolved via resolve().
         """
         doc_id = self.resolve(ref)
@@ -813,10 +815,13 @@ class KB:
             ("superseded_by", superseded_by),
         ]:
             if new_refs:
-                existing = set(fm.get(field, []))
-                for r in new_refs:
-                    existing.add(self.resolve(r))
-                fm[field] = sorted(existing)
+                if field == "belongs_to" and replace_belongs_to:
+                    fm[field] = sorted({self.resolve(r) for r in new_refs})
+                else:
+                    existing = set(fm.get(field, []))
+                    for r in new_refs:
+                        existing.add(self.resolve(r))
+                    fm[field] = sorted(existing)
 
         self._write_doc(doc_id, fm, body)
 
