@@ -82,17 +82,29 @@ relationship of the concept's claim to that doc's claim:
 
 | Relationship | Meaning |
 |---|---|
-| `compatible` | Existing doc's claim is fully consistent with the new concept. |
-| `partial-supersession` | New concept changes part of the existing doc's claim; the rest remains valid. |
+| `compatible` | Existing doc **already asserts** the new concept's claim — no write needed. |
+| `partial-supersession` | Existing doc asserts a thinner, partial, narrower, or staler version of the claim (or changes only part of it); REVISE it to carry the fuller claim. |
 | `full-supersession` | New concept renders the entire existing doc's claim obsolete. |
 | `conflict-unresolved` | The two claims are incompatible and need human judgment. |
 
 The source rarely says "doc 1234 is wrong" outright — it just asserts a concept
 that contradicts an existing claim. Judge the substance, not the wording.
 
-**Bias rule**: prefer `compatible` when the relationship is weak or tangential.
-Prefer surfacing a `conflict-unresolved` over silently accepting a weak match —
-silent drift is worse than a flagged conflict.
+**`compatible` requires the doc to already make the same claim — not merely the
+same subject.** Being about the same topic, or being adjacent, is not
+`compatible`. Before writing `compatible`, apply this test: **does this doc, as
+written, already state the concept's `Asserts` sentence?** If it only states a
+weaker, partial, or narrower version — e.g. it covers the mechanical rule but not
+the conceptual claim behind it — that is `partial-supersession` (→ REVISE), not
+`compatible`. Cleaning up the doc to carry the updated claim is the entire point
+of the system; a `compatible` verdict that leaves a thinner doc in place is
+silent drift.
+
+**Bias rule**: reserve `compatible` for genuine full matches where the claim is
+already present; when the existing doc is only topically related, weak, or
+partial, prefer `partial-supersession` over `compatible`, and prefer surfacing a
+`conflict-unresolved` over silently accepting a weak match — silent drift is
+worse than a flagged conflict or a surfaced revision.
 
 ---
 
