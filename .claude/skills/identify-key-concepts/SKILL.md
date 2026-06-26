@@ -4,19 +4,17 @@ user-invocable: false
 description: >
   Read an input — a request, a normalized reference, or a proposed doc revision
   — and emit a typed list of the durable concepts (or claims) it asserts. Owns
-  the single shared concept-extraction protocol: the principle/decision/
-  constraint/requirement/use-case/component taxonomy, the "prefer decision over
-  principle when describing HOW the system behaves" rule, and the
-  Concept/Type/Asserts record shape. This is a phase sub-skill invoked by
-  apply-to-docs, ingest-reference, and revise-doc; it is not meant to be run
-  directly by a user.
+  the single shared concept-extraction protocol: how to read an input and emit
+  the Concept/Type/Asserts record shape. The type taxonomy it assigns from lives
+  in _shared/doc-types.md. This is a phase sub-skill invoked by apply-to-docs,
+  ingest-reference, and revise-doc; it is not meant to be run directly by a user.
 ---
 
 # identify-key-concepts — Extract the typed concept list (shared phase)
 
 This skill owns the **one** definition of concept extraction for the store — the
 governed-write orchestrators invoke it rather than each re-implementing the
-taxonomy. It does exactly one thing: read an input and emit a typed concept list.
+extraction protocol. It does exactly one thing: read an input and emit a typed concept list.
 It writes nothing, queries no KB, and runs no `ldoc` commands. It says nothing
 about what happens next — whoever invoked it still holds their own task and
 resumes it once the list exists. (Mapping the list to existing docs is a separate
@@ -43,22 +41,13 @@ phase, `map-concepts-to-docs`.)
 
 ## Step 1 — Scan by type
 
-Use the table below as a recognition checklist. For each category, ask: "Does
-the input contain an instance of this?" Hunt top-down through the text for each
-type in turn before moving on.
+The type taxonomy — what each type means, and the "is this really a decision?"
+ladder — lives in `.claude/skills/_shared/doc-types.md`. **Read and apply it**;
+do not restate it here. Every concept you extract is typed from that file.
 
-| What you find | Type |
-|---|---|
-| A design truth or rule that should guide future work | `principle` |
-| A significant choice with a rationale | `decision` |
-| An external force limiting options | `constraint` |
-| A must-have behavior or property | `requirement` |
-| A user story or workflow | `use-case` |
-| A system capability or component | `component` |
-
-**Prefer `decision` over `principle` when the input describes HOW the system
-should behave** — a behavioral choice among alternatives with a rationale.
-Principles are universal guidelines; decisions are specific choices.
+Scan the input as a **recognition pass**: for each type in the taxonomy, ask
+"does the input assert an instance of this?", hunting top-down through the text
+for each type in turn before moving on.
 
 Extract concepts at the level of **durable claims**, not ephemeral
 implementation steps. "We will add a field to the schema" is not a durable

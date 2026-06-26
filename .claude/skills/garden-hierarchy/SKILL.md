@@ -120,6 +120,68 @@ Do **not** invoke `garden-summarize` — list affected signpost ids in output.
 
 ---
 
+## Part D — Mental-model restructuring
+
+*(New.)*
+
+The `belongs_to` hierarchy is the **system's mental model** — generally mirroring
+code but a hybrid; placement carries scope; kept roughly balanced. The *what/why*
+of good vs bad placement (group by what docs are about not where they came from;
+shared concepts belong at a shared parent; one label spanning scopes is
+mis-scoped) lives in `_shared/belongs-to-placement.md`, "What groups well, what
+doesn't" — read it; this part does not re-explain it. Parts A–C keep the tree
+*navigable*; Part D corrects branches that are navigable yet *wrong about the
+system*. Each signal below names the shared definition it detects, then gives the
+full-store-pass detection and the remediation.
+
+### D1 — Provenance cluster vs real structural node
+
+**Detect.** The "group by what, not where they came from" trap (shared file). On a
+full-store pass, flag any signpost whose children are heterogeneous by topic but
+homogeneous by `provenance`/source under a generic "Guide:"/"Notes:"/"<Source>
+docs" label. `ldoc ls --json` for labels; `ldoc neighbors <id> --kind dependents`
++ child `provenance` to confirm the children share a source but span themes.
+
+**Remediate.** **Dissolve** it: for each child, find the real structural parent by
+topic and `ldoc link --belongs-to` it there; where the real node does not yet
+exist, create it (Part A) and re-home. When the signpost is emptied, deprecate it
+(`## Correction` + `--superseded-by` the dominant new home, or unlink-and-retire
+if it fragments across several).
+
+### D2 — Lift shared cluster up
+
+**Detect.** The "shared concept belongs at a shared parent" trap (shared file). On
+a full-store pass, flag a cluster filed under one subsystem whose
+`ldoc neighbors <id> --kind dependents` and `requires` web show inbound edges from
+two or more *sibling* subsystems, not just its parent. A single inbound edge is a
+`requires`, not a lift — lift only when one-sibling membership misleads about the
+concept's reach.
+
+**Remediate.** **Lift to a shared parent** — the nearest ancestor that contains
+all referencing siblings (create one per Part A if absent). `ldoc unlink` from the
+implementation subsystem, `ldoc link --belongs-to` the shared parent, and set a
+scope anchor there if the lift creates a new shared zone (Part B).
+
+### D3 — One label spans multiple scopes → split + re-home
+
+**Detect.** The "one label spanning scopes is mis-scoped" trap (shared file). On a
+full-store pass, flag a label/concept you cannot give one coherent scope anchor or
+summary without equivocating — a single label that means materially different
+things in different parts of the system (so its one summary has to hedge across
+all of them).
+
+**Remediate.** The atomic *split* is **garden-decompose's** job — refer the
+overloaded doc there, do not duplicate it. garden-hierarchy then **re-homes and
+re-scopes** the resulting pieces: place each under the structural parent for its
+scope (Part A) and re-scope its anchor to that zone (Part B), so each lands where
+its scope actually binds.
+
+Each of D1–D3 changes membership or scope — report the affected signpost ids in
+`Signposts-changed:` as elsewhere. Do **not** call `reindex` or
+`garden-summarize`; the dispatcher owns cascade and summary.
+
+---
+
 ## Output
 
 ```

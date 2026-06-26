@@ -56,6 +56,24 @@ misses:
 ldoc ls --type <type> --json
 ```
 
+**`ldoc find` alone is insufficient — add cluster-scoped reasoning.** Lexical
+search queries the store with the NEW claim's vocabulary, so a stale doc whose
+text predates the new terminology is *never retrieved* — the systematic miss.
+This is the core detection gap, so for every concept that touches a subsystem,
+ALSO pull all living docs in that `belongs_to` cluster / `scope` zone and
+**reason** over them rather than trusting lexical overlap:
+
+```bash
+ldoc find --scope <zone>              # everything anchored in the scope zone
+ldoc graph <signpost> --direction down   # the cluster under the relevant signpost
+ldoc ls                               # / neighbors, to walk the cluster
+```
+
+Then, for each living doc in the cluster, ask: **"does the new architecture make
+this obsolete?"** — a reasoning judgment, not a keyword match. A doc the new
+intent supersedes will routinely share zero query terms with it; cluster-scoped
+reasoning is how those are caught.
+
 For a dedup/conflict scan around an existing target doc (revise-doc's emphasis),
 also pull the doc's neighbors so upstream and downstream candidates are included:
 
@@ -106,6 +124,27 @@ partial, prefer `partial-supersession` over `compatible`, and prefer surfacing a
 `conflict-unresolved` over silently accepting a weak match — silent drift is
 worse than a flagged conflict or a surfaced revision.
 
+**Sibling / back-reference scan.** When a concept is classified
+`full-supersession` against doc X, the OLDER victim the new concept contradicts
+is usually X's `belongs_to` sibling — a replacement and the thing it replaces
+typically share a parent signpost. So scan X's siblings (same parent) and
+classify the new concept against them too:
+
+```bash
+ldoc neighbors <X-id> --json     # read X's belongs_to parent, then its children
+```
+
+Don't stop at the first match; the more important supersession target is often
+the sibling, not X itself.
+
+**Document-level re-ingestion dedup.** Track, across the whole concept list, how
+each source's concepts map. When a HIGH FRACTION of a single source's concepts
+all map to one prior normalized/NORM reference doc, the source is a
+**re-ingestion of already-ingested material** — not new knowledge. Flag this in
+the output so the caller updates the existing docs instead of silently creating a
+duplicate NORM. map-concepts owns the *detection* and surfaces the flag; the
+*reaction* (update-existing vs create-new) lives in ingest-reference.
+
 ---
 
 ## Output — the relationship verdict map
@@ -125,3 +164,21 @@ Concepts with no match (or whose only matches are frozen/deprecated) are
 candidates for new docs. **Correcting stale existing docs is the highest-value
 output** — existing docs have dependents that cascade-check will propagate to;
 freshly created docs have none.
+
+When the re-ingestion dedup above fires, surface it alongside the map:
+
+```
+Re-ingestion flag: <N of M> concepts from this source map to <NORM-id>
+  → likely re-ingestion; caller should update existing docs, not create a duplicate NORM.
+```
+
+### Verdict-map sanity check — zero supersessions is a red flag
+
+Before emitting, look at the whole map. **If the input is a system-changing
+initiative yet the map produced NO `full-supersession` / `partial-supersession`
+verdicts, treat that as a likely MISS, not a conservative win.** "The new intent
+changes how X is built, yet no X-doc changed" is suspicious — almost always a
+lexical miss where the stale doc's vocabulary predates the new claim. Do not ship
+the all-`compatible` map: re-run the cluster-scoped reasoning above over the
+affected `scope` zones and re-examine each living doc by reasoning before
+concluding nothing was superseded.

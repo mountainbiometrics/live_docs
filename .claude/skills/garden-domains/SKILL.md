@@ -15,17 +15,11 @@ description: >
 no review.
 
 **Read and apply** `.claude/skills/_shared/domain-tagging.md` — the shared
-definition. Your role here is the **curator** (the full-store half of the
-asymmetry). Key points to hold while curating:
-
-- The vocabulary is a **finite shared resource**: each domain justifies its own existence by pulling its weight as a distinct grouping a reader would filter by — not by spanning a scope count.
-- `domain` originates **liberally** (isolated context, optimise for recall) and gardening prunes **authoritatively** (full-store context). You are on the pruning side.
-- `domain` and `scope` are orthogonal; their values may legitimately overlap. `domain` is the governed grouping facet; `keywords` is the ungoverned findability bag — the two must not overlap.
-- Reuse an existing domain over coining a new synonym (`ldoc domains` is the live registry).
-
-`domain` is **not** `keywords`. Domain is a governed grouping facet with a
-justify-its-existence bar. Keywords are ungoverned findability aliases with no
-such bar. The two must not overlap.
+definition. Do not restate it here. Your phase-specific role is the **curator**:
+the full-store, pruning half of the originate-liberally / prune-authoritatively
+asymmetry. Origination tags liberally (isolated context, optimising for recall);
+you have store-wide context, so consolidating and pruning the vocabulary is your
+job, not the author's. `ldoc domains` is the live registry to curate against.
 
 ---
 

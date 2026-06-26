@@ -231,13 +231,13 @@ differently:
 
 ```bash
 # On creation:
-ldoc new ... --tags-scope sinai --tags-domain "Ontology Mapping,Schema Evolution"
+ldoc new ... --tags-scope <zone> --tags-domain "Area One,Area Two"
 # On an existing doc:
-ldoc set <ref> --scope sinai            # single string; "" clears it
+ldoc set <ref> --scope <zone>           # single string; "" clears it
 ldoc set <ref> --domain "A,B Tag"       # comma list; "" clears it
 # Search:
-ldoc find --scope sinai --json
-ldoc find --domain "Ontology Mapping"
+ldoc find --scope <zone> --json
+ldoc find --domain "Area One"
 ```
 
 ---

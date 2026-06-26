@@ -312,7 +312,7 @@ They ship as the **`livedocs` Claude Code plugin** (`.claude-plugin/`), so insta
 | **ingest-reference** | Bringing external material (meeting notes, RFCs, research, URLs) into the store: creates a raw clipping, a normalized reference doc, then decomposes into single-responsibility atomic docs |
 | **revise-doc** | Editing an existing doc with full discipline: dedup/conflict scan, history entry, cascade-check for substantive changes |
 | **cascade-check** | After one or more docs change, walk the dependency graph in both directions and decide which neighbors need updates; the primary consistency-enforcement mechanism |
-| **garden** | Periodic maintenance: enforces Single Responsibility (decompose hot files), catches staleness, repairs orphans, normalizes schema drift |
+| **garden** | Periodic maintenance: removes cruft (excavate dead implementation off live decisions, drop refactor-chore docs), enforces Single Responsibility (decompose hot files), repairs orphans, densifies the edge graph (materialize prose wikilinks and add missing dependencies so cascade can self-heal), catches staleness, normalizes schema drift |
 | **validate** | Read-only mechanical integrity check — reports errors/warnings but fixes nothing; use before releases or after bulk edits |
 | **reindex** | Rebuild `kb/02-docs/.index/` derived artifacts after bulk doc creation/deletion or graph restructuring |
 

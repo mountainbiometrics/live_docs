@@ -250,6 +250,16 @@ planned action per concept. (Read-only.)
 newly created doc**, because existing docs have dependents and cascade-check will
 propagate the correction; freshly created docs have no dependents yet.
 
+**Heed the re-ingestion flag.** `map-concepts-to-docs` now detects when a high
+fraction of this source's concepts all map to a single existing normalized / NORM
+reference doc — the signal that this source is a **re-ingestion of
+already-ingested material** (not new knowledge). When that flag fires, do NOT let
+Step 5b mint a fresh duplicate NORM doc and a parallel set of extracted docs.
+Instead route to **revise / reconcile**: update the existing NORM doc and its
+already-extracted children in place (per `/revise-doc` discipline), folding in
+only what genuinely changed since the prior ingest. Treat the prior NORM doc as
+the canonical anchor rather than creating a second one beside it.
+
 ### Step 5b — Write (run `/synthesize-doc-changes`)
 
 Run **`/synthesize-doc-changes`**, handing it:
@@ -263,6 +273,32 @@ Run **`/synthesize-doc-changes`**, handing it:
 
 It applies all changes in one batch: revise/deprecate stale existing docs, create
 new atomic docs for unmatched concepts. It returns the list of writes performed.
+
+### Status inference — classify by INTENT, never inherit it from source prose
+
+As `synthesize-doc-changes` assigns each *new* extracted doc its `status`, do not
+let it default everything to `living`, and do **not** inherit status from
+celebratory source language. A plan that says "done / all todos complete!" is
+recording intent at the moment it was written, not the current state of the
+system — cheap-model ingestion that stamped plan/design docs `living` wholesale
+off such prose is the root cause of stale-cluster drift. Classify each concept's
+status by what the material **is**:
+
+- A **plan of future work**, an aspiration, or something proposed-but-not-yet-in-
+  force → `status: target` (intended, not yet in force).
+- A **statement of in-force design / current reality** — the architecture or
+  decision the system is currently built around (or currently intends to be built
+  around) → `status: living`.
+
+The discriminator is **intent: plan-of-work vs in-force-design — NOT whether code
+corroborates the claim.** Docs capture the *why* (decisions, rationale,
+constraints, use-cases), not the *what* the code already encodes — docs lead,
+code aligns: an in-force design doc is `living` even when the code
+hasn't caught up yet — implementation lag is the only thing separating it from a
+fully realized doc. So do not gate `living` on code-presence; doing so would
+wrongly pin every brand-new design doc at `target`. When intent is genuinely
+ambiguous, prefer `target` and surface the doc for human confirmation rather than
+defaulting to `living`.
 
 ---
 
@@ -348,9 +384,9 @@ Report the returned review id:
 Review summary created: <id>   (reviews/<id>.md)
 ```
 
-Review is **post-hoc and non-gating** (see `review-is-post-hoc`): it records the
-ingest episode for later signoff and never blocks the change. Reviewers inspect
-it via `ldoc review show <id>`.
+Review is **post-hoc and non-gating**: it records the ingest episode for later
+signoff and never blocks the change. Reviewers inspect it via
+`ldoc review show <id>`.
 
 ---
 

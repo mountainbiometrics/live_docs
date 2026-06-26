@@ -20,6 +20,37 @@ that project, not its siblings; leave a doc with no `belongs_to` and it is
 and wrong for one that should bind only a single subtree. (See the doc-types
 shared definition; effective scope is the union along the `belongs_to` ancestry.)
 
+## What groups well, what doesn't
+
+Taking the mental-model principle seriously fixes which groupings are real
+structure and which only look like it. Three definitional traps — apply these
+whether you are originating a placement at birth or refining one later:
+
+- **Group by what the docs are about in the system, not by where they came
+  from.** A signpost must name a part of the system its children describe. A
+  pile of docs from the same ingest/source — heterogeneous by topic but
+  homogeneous by provenance, often wearing a generic "Guide:"/"Notes:"/
+  "<Source> docs" hat — is *not* a structural node; it records *where the docs
+  arrived* rather than *what part of the system they describe*. A
+  provenance/same-source dump is an ingest artifact, not a grouping.
+
+- **A concept depended on across sibling subsystems belongs at a shared
+  parent**, not filed under the single subsystem that happens to implement it.
+  Docs describe the *system*, not the code's accident of where a thing was
+  built. When a cluster sits under one subsystem yet two or more *sibling*
+  subsystems depend on it, its true home is the nearest shared ancestor that
+  contains all the referencing siblings — filing it under the lone implementer
+  misleads a navigator about the concept's actual reach. (One inbound edge is a
+  `requires`, not a reason to lift; this is about a concept whose reach genuinely
+  spans the siblings.)
+
+- **A single label that spans multiple scopes is mis-scoped.** When one
+  label/concept means materially different things in different parts of the
+  system — you cannot write one coherent scope anchor or one summary for it
+  without equivocating — it is filed in one place as though it were one thing.
+  It should be split so each piece sits where its scope actually binds, rather
+  than all sharing one misleading home.
+
 ## Right-sizing the tree (shape)
 
 The hierarchy should be a **roughly balanced tree** — dense enough that groupings
@@ -66,8 +97,9 @@ This is the operative form of rule 4 below.
 
 ## Resolving the semi-adequate vs defer tension
 
-Rule 5 says defer when no good parent is visible; `20260623233949` says ingest
-should originate a *semi-adequate* parent. These collide at the margin. The
+Rule 5 says defer when no good parent is visible; ingest originates a doc's
+placement at birth (a best-visible, semi-adequate parent) and gardening refines
+it later. These collide at the margin. The
 adjudicating test: **"Would this placement mislead a navigator?"**
 
 - If no — originate it even if imperfect. A slightly-off-but-not-misleading home

@@ -5,19 +5,13 @@ Single source of truth for every actor that assigns or re-assigns a doc's
 `identify-key-concepts`) and the gardener that re-types it later. Read and apply
 this; do not paraphrase from memory.
 
-The *why* behind the taxonomy lives in the KB (see the "Decisions are
-architectural and scoped" guide and `Type documents make the system
-self-defining`); this file is the operative *how*.
-
-## The one failure mode this prevents
+## The most common failure mode this prevents
 
 **Almost anything can be rationalized as a "decision."** Every fact about the
 system was, at some level, decided. If you reach for `decision` by default the
-taxonomy collapses — and that is exactly what has happened to this store, where
-`decision` is the largest and most misapplied type. The discipline is the
-opposite of the default: **ask "what is this *most*?" and pick the most
-specific type that fits.** `decision` is the answer only when nothing more
-specific does.
+taxonomy collapses — which makes `decision` the largest and most misapplied
+type. `decision` type should be used only for docs recording an "Architectural
+Decision".
 
 ## The types and their intended use
 
@@ -74,5 +68,6 @@ behaves** (a behavioral choice); reserve `principle` for bedrock values.
 
 Regardless of type, a non-signpost doc must carry its *why* (the rationale,
 constraint, use-case, or decision it serves). A doc that states only a *what*,
-with no why, is repaired or removed — see the "Capture the why" principle.
-Signposts (docs that exist to group their children) are the one exception.
+with no why, is repaired or removed — docs capture the *why*, not the *what* the
+code already encodes. Signposts (docs that exist to group their children) are the
+one exception.
