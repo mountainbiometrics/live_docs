@@ -10,7 +10,7 @@ With --json: prints a machine-readable JSON object with keys:
     forward    — {id: [dep_ids]}
     reverse    — {id: [dependent_ids]}
     titles     — {id: title}
-    dangling   — [[from_id, missing_dep_id], ...]
+    dangling   — [[from_id, missing_target_id, edge_field], ...]
 
 This is the canonical tool for building edge maps; cascade-check and other
 verification scripts should call this rather than re-implementing the logic.
@@ -42,7 +42,7 @@ def main() -> int:
             "forward": {k: sorted(v) for k, v in sorted(fwd.items())},
             "reverse": {k: sorted(v) for k, v in sorted(rev.items())},
             "titles": {k: v for k, v in sorted(titles.items())},
-            "dangling": [[a, b] for a, b in sorted(dangling)],
+            "dangling": [[a, b, c] for a, b, c in sorted(dangling)],
         }
         print(json.dumps(output, indent=2))
         return 1 if dangling else 0
@@ -72,10 +72,13 @@ def main() -> int:
     print()
 
     if dangling:
-        print("DANGLING EDGES (hard-edge targets that do not exist):")
-        for from_id, missing_id in sorted(dangling):
+        print("DANGLING EDGES (outbound refs to missing docs):")
+        for from_id, missing_id, field in sorted(dangling):
             from_title = titles.get(from_id, from_id)
-            print(f"  [DANGLING] {_node(from_id)} ({from_title!r}) → {missing_id} (missing)")
+            print(
+                f"  [DANGLING] {_node(from_id)} ({from_title!r}) "
+                f"— {field} → {missing_id} (missing)"
+            )
         print()
         print(f"Summary: {len(docs)} docs, {len(dangling)} dangling edge(s)")
         return 1

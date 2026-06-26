@@ -83,9 +83,9 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc new --type T --label "..." [--title "..."] [options]` | Create a doc (`--label` required; `--title` optional, defaults to label) |
 | `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--keywords][--body -\|TEXT]` | Update fields/body |
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
-| `ldoc unlink <ref> [same edge flags]` | Remove edges |
+| `ldoc unlink <ref> [same edge flags]` | Remove edges; accepts literal 14-digit dead ids as edge targets |
 | `ldoc history <ref> --add "what changed"` | Append a history entry (changes only — never creation) |
-| `ldoc rm <ref> [--force] [--dry-run]` | Delete a doc; blocked by dependents unless `--force`; reindexes automatically |
+| `ldoc rm <ref> [--force] [--dry-run]` | Delete a doc; blocked when any inbound edge exists unless `--force` (strips all inbound edges then deletes); reindexes automatically |
 
 **Inbox pipeline & maintenance**
 
@@ -93,7 +93,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 |---|---|
 | `ldoc inbox add (--from-file P\|--body T\|-) [--title T] [--source S]` | Gate 0: capture verbatim, no processing |
 | `ldoc inbox list` / `ldoc promote <ref> [--all]` | List / Gate 1: inbox → raw |
-| `ldoc validate` | Read-only structural integrity check |
+| `ldoc validate` | Structural integrity check; warns on staged-incomplete retirement, prose-not-edged body wikilinks, malformed wikilink syntax |
 | `ldoc reindex` | Rebuild `<docs>/.index/` derived caches |
 | `ldoc viewer [--out PATH]` | Build the read-only HTML viewer |
 | `ldoc review new\|list\|show\|sign ...` | Post-hoc review ledger |
@@ -291,8 +291,8 @@ When the plugin is installed, these are namespaced `/livedocs:<skill>`.
 
 - **Delete** (`ldoc rm <ref>`) when the doc has no content not already captured
   elsewhere: duplicates, empty stubs, structurally redundant variants where the
-  merge preserved everything. Nothing is lost. `ldoc rm` checks for dependents
-  and reindexes automatically; use `--force` only after clearing dangling edges.
+  merge preserved everything. Nothing is lost. `ldoc rm` blocks when **any inbound
+  edge** exists; `--force` strips **all inbound edges** then deletes and reindexes.
 - **Deprecate** (`status: deprecated` + `superseded_by`) when the doc recorded a
   genuine decision or belief that was later overturned. The historical record has
   value even though the doc is no longer authoritative.

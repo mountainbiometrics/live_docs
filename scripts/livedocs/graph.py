@@ -15,6 +15,12 @@ forward_edges / reverse_edges cover ONLY cascade-hard edges (requires + belongs_
 relate_edges / provenance_edges are navigation-only and must NEVER drive cascade.
 """
 
+# Outbound edge fields whose broken refs are blocking errors in validate / edges.
+BLOCKING_EDGE_FIELDS = ("requires", "belongs_to", "relates", "superseded_by")
+
+# All five edge fields — includes provenance (warning-only when dangling).
+ALL_EDGE_FIELDS = BLOCKING_EDGE_FIELDS + ("provenance",)
+
 
 def _hard_edge_ids(doc: dict) -> list:
     """Return all ids in cascade-hard edge fields (requires + belongs_to)."""
@@ -59,16 +65,37 @@ def dangling_edges(docs: dict) -> list:
     Return list of (from_id, target_id, edge_field) tuples where target_id
     does not exist in docs.
 
-    Covers cascade-hard edges (requires + belongs_to).
+    Covers all blocking edge types: requires, belongs_to, relates, superseded_by.
+    Shared by ldoc edges and validate.
     """
     all_ids = set(docs.keys())
     dangling = []
     for doc_id, doc in docs.items():
-        for field in ("requires", "belongs_to"):
+        for field in BLOCKING_EDGE_FIELDS:
             for target_id in doc.get(field, []):
-                if target_id not in all_ids:
+                if target_id and target_id not in all_ids:
                     dangling.append((doc_id, target_id, field))
     return dangling
+
+
+def inbound_edges(docs: dict, target_id: str) -> list[tuple[str, str]]:
+    """
+    Return sorted unique (referrer_id, edge_field) for every inbound ref to target_id.
+
+    Covers requires, belongs_to, relates, provenance (in-graph doc ids only),
+    and superseded_by.
+    """
+    if target_id not in docs:
+        return []
+
+    inbound: set[tuple[str, str]] = set()
+
+    for referrer_id, doc in docs.items():
+        for field in ALL_EDGE_FIELDS:
+            if target_id in doc.get(field, []):
+                inbound.add((referrer_id, field))
+
+    return sorted(inbound)
 
 
 # ---------------------------------------------------------------------------

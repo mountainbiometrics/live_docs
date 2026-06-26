@@ -26,6 +26,9 @@ Checks performed:
   8. domain is a list; scope is a single string (topological zone)
   9. Per-edge-type acyclicity: belongs_to (a DAG) must have NO cycles (blocking)
  10. summary presence + length guideline for non-reference docs (warnings)
+ 11. reference doc with superseded_by but not deprecated (staged-incomplete retirement)
+ 12. body [[id]] wikilinks not present in any edge field (prose-not-edged)
+ 13. malformed body wikilinks ([[id|label]], [[id]] (label)) — canonical form is bare [[id]]
 
 Note: empty edge fields and empty history are VALID (absent == empty).
 Human output always carries the label (and title), never a bare id.
@@ -42,6 +45,7 @@ from livedocs import (
     DOCS_DIR, load_all, dangling_edges, dangling_references, doc_prefix,
     VALID_TYPES, VALID_STATUSES, VALID_LEVELS, VALID_REFERENCE_KINDS,
 )
+from livedocs.lint import prose_links_not_edged, malformed_body_wikilinks
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +172,13 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
                 f"add a superseded_by edge pointing to the replacement doc(s)"
             )
 
+    # 11. staged-incomplete retirement: superseded_by set but status is not deprecated
+    if superseded_by and status != "deprecated":
+        warnings.append(
+            f"{prefix}  has `superseded_by` but status is `{status}` — "
+            f"staged retirement incomplete (add `status: deprecated` or remove the edge)"
+        )
+
     # Summary: non-reference docs should carry a tight summary — 1–3 sentences,
     # ~50 words, mirroring the doc's opening. WARN on missing or over-long.
     summary_text = (doc.get("summary") or "").strip()
@@ -183,6 +194,27 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
                     f"{prefix}  `summary` is {wc} words — aim for ≤ ~50 "
                     f"(1–3 tight sentences, not a run-on)"
                 )
+
+    # 12. body wikilinks not mirrored in edge fields (report only)
+    body = doc.get("body", "") or ""
+    for linked_id in sorted(prose_links_not_edged(doc)):
+        warnings.append(
+            f"{prefix}  body links `[[{linked_id}]]` not in any edge field "
+            f"(requires/belongs_to/relates/provenance/superseded_by)"
+        )
+
+    # 13. malformed body wikilink syntax
+    for kind, token in malformed_body_wikilinks(body):
+        if kind == "pipe":
+            warnings.append(
+                f"{prefix}  body malformed wikilink {token!r} — use bare `[[<id>]]`; "
+                f"labels resolve at display time"
+            )
+        else:
+            warnings.append(
+                f"{prefix}  body malformed wikilink {token!r} — use bare `[[<id>]]` only; "
+                f"do not append a parenthetical label"
+            )
 
     # NOTE: empty edge lists and empty history are valid; no check here.
     #

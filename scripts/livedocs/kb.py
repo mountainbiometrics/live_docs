@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from .model import generate_id, display_label
-from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter
-from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges
+from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
+from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges, inbound_edges
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +163,26 @@ class KB:
             )
 
         raise ValueError(f"No doc found for ref: {ref!r}")
+
+    _DOC_ID_RE = re.compile(r"^\d{14}$")
+
+    def resolve_edge_value(self, ref: str, *, allow_missing: bool = False) -> str:
+        """
+        Resolve an edge target ref to a bare doc id.
+
+        By default uses resolve() and requires a live doc. When allow_missing=True,
+        a bare 14-digit id (or [[id]] / [[id|alias]] wrapper) is accepted even if
+        the target doc no longer exists — for unlink remediation only.
+        """
+        try:
+            return self.resolve(ref)
+        except ValueError:
+            if not allow_missing:
+                raise
+            bare = _unwrap_wikilink(ref.strip())
+            if self._DOC_ID_RE.match(bare):
+                return bare
+            raise ValueError(f"No doc found for edge ref: {ref!r}")
 
     def display_label(self, doc_id: str) -> str:
         """Return '<Type>: <Title>' display string for a doc id."""
@@ -654,11 +674,12 @@ class KB:
         body = doc.pop("body", "")
         return doc, body
 
-    def _write_doc(self, doc_id: str, fm: dict, body: str) -> None:
+    def _write_doc(self, doc_id: str, fm: dict, body: str, defer_reload: bool = False) -> None:
         """Write a doc to disk using canonical dump_doc, then reload."""
         path = self.docs_dir / f"{doc_id}.md"
         path.write_text(dump_doc(fm, body), encoding="utf-8")
-        self._reload()
+        if not defer_reload:
+            self._reload()
 
     def new(
         self,
@@ -837,7 +858,9 @@ class KB:
         """
         Remove edges.
 
-        All ref args resolved via resolve().
+        The doc ref is resolved via resolve(). Edge targets normally resolve too;
+        unlink accepts literal 14-digit ids (or [[id]] wrappers) for targets that
+        no longer exist, so dangling edges can be cleared without hand-editing.
         """
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
@@ -850,7 +873,10 @@ class KB:
             ("superseded_by", superseded_by),
         ]:
             if remove_refs:
-                remove = {self.resolve(r) for r in remove_refs}
+                remove = {
+                    self.resolve_edge_value(r, allow_missing=True)
+                    for r in remove_refs
+                }
                 remaining = [i for i in fm.get(field, []) if i not in remove]
                 if remaining:
                     fm[field] = remaining
@@ -858,6 +884,37 @@ class KB:
                     fm.pop(field, None)  # omit empty edge fields
 
         self._write_doc(doc_id, fm, body)
+
+    def strip_inbound_edges(
+        self, target_id: str, inbound: list[tuple[str, str]] | None = None
+    ) -> list[tuple[str, str]]:
+        """
+        Remove every inbound edge pointing at target_id from other docs.
+
+        Returns the list of (referrer_id, edge_field) pairs stripped.
+        Pass a pre-computed inbound list to avoid recomputing it.
+        """
+        if inbound is None:
+            inbound = inbound_edges(self._docs, target_id)
+        if not inbound:
+            return []
+
+        by_referrer: dict[str, list[str]] = {}
+        for referrer_id, field in inbound:
+            by_referrer.setdefault(referrer_id, []).append(field)
+
+        for referrer_id, fields in by_referrer.items():
+            fm, body = self._load_doc_raw(referrer_id)
+            for field in fields:
+                remaining = [i for i in fm.get(field, []) if i != target_id]
+                if remaining:
+                    fm[field] = remaining
+                else:
+                    fm.pop(field, None)
+            self._write_doc(referrer_id, fm, body, defer_reload=True)
+
+        self._reload()
+        return inbound
 
     def add_history(self, ref: str, summary: str) -> None:
         """Append a history entry {at: <utc iso>, summary: <summary>}."""

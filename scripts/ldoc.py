@@ -1016,8 +1016,10 @@ def _normalize_raw_pointer(ref: str):
 
 
 def cmd_rm(kb: KB, args) -> int:
-    """Delete a doc from the store, with a dependents safety check, then reindex."""
+    """Delete a doc from the store; block when any inbound edge exists unless --force."""
     import subprocess
+
+    from livedocs.graph import inbound_edges
 
     try:
         doc_id = kb.resolve(args.ref)
@@ -1025,20 +1027,7 @@ def cmd_rm(kb: KB, args) -> int:
         _err(str(e))
         return 1
 
-    neighbors = kb.neighbors(doc_id, kind="dependents")
-    hard_dependents = neighbors.get("dependents", [])
-
-    if hard_dependents and not args.force:
-        lines = "\n".join(
-            f"  {d['id']}  {d.get('label', '')}  ({d.get('type', '')})"
-            for d in hard_dependents
-        )
-        _err(
-            f"Cannot delete {doc_id}: {len(hard_dependents)} doc(s) point at it "
-            f"via requires/belongs_to edges:\n{lines}\n\n"
-            "Remove those edges first, or use --force to delete anyway."
-        )
-        return 1
+    inbound = inbound_edges(kb._docs, doc_id)
 
     doc = kb.get(doc_id)
     label = doc.get("label", doc_id)
@@ -1049,10 +1038,38 @@ def cmd_rm(kb: KB, args) -> int:
         print(f"  id:    {doc_id}")
         print(f"  label: {label}")
         print(f"  title: {title}")
-        if hard_dependents:
-            print(f"\n  WARNING: {len(hard_dependents)} dependent(s) will have dangling edges (--force bypassed check)")
+        if inbound:
+            print(f"\n  Inbound edges ({len(inbound)}):")
+            for referrer_id, field in inbound:
+                ref_doc = kb._docs.get(referrer_id, {})
+                ref_label = ref_doc.get("label", referrer_id)
+                print(f"    {referrer_id} [{ref_label}]  ←  {field}")
+            if args.force:
+                print("\n  --force: would strip all inbound edges, then delete.")
+            else:
+                print("\n  BLOCKED: inbound edges present (use --force to strip and delete).")
+        else:
+            print("\n  No inbound edges — would delete cleanly.")
         print("\n(No doc deleted.)")
         return 0
+
+    if inbound and not args.force:
+        lines = "\n".join(
+            f"  {referrer_id}  {field}  ({kb._docs.get(referrer_id, {}).get('label', '')})"
+            for referrer_id, field in inbound
+        )
+        _err(
+            f"Cannot delete {doc_id}: {len(inbound)} inbound edge(s):\n{lines}\n\n"
+            "Use --force to strip all inbound edges and delete."
+        )
+        return 1
+
+    if args.force and inbound:
+        stripped = kb.strip_inbound_edges(doc_id, inbound=inbound)
+        print(f"Stripped {len(stripped)} inbound edge(s) from {len({r for r, _ in stripped})} doc(s):")
+        for referrer_id, field in stripped:
+            ref_label = kb._docs.get(referrer_id, {}).get("label", referrer_id)
+            print(f"  {referrer_id} [{ref_label}]  {field}")
 
     (kb.docs_dir / f"{doc_id}.md").unlink()
     print(f"Deleted {doc_id}  ({label})")
@@ -2225,13 +2242,13 @@ def build_parser() -> argparse.ArgumentParser:
     # --- rm ---
     p = sub.add_parser(
         "rm",
-        help="Delete a doc from the store and reindex. Blocked by dependents unless --force.",
+        help="Delete a doc from the store and reindex. Blocked by inbound edges unless --force.",
     )
     p.add_argument("ref", help="id | label | title")
     p.add_argument(
         "--force",
         action="store_true",
-        help="Delete even if other docs have requires/belongs_to edges pointing here.",
+        help="Strip all inbound edges (requires/belongs_to/relates/provenance/superseded_by) then delete.",
     )
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview what would be deleted without writing.")

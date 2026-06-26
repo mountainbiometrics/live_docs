@@ -110,7 +110,29 @@ Missing it → **ERROR: deprecated doc `<id>` has no `superseded_by` edge**.
 Rationale: deprecation without a successor edge is a dead end in the graph.
 Callers and dependents cannot discover what replaced this doc.
 
-### 8. Summary presence and length
+A doc with a non-empty `superseded_by` edge list but `status` ≠ `deprecated` is
+**staged-incomplete retirement** → **WARNING: `<id>` has `superseded_by` but
+status is not `deprecated`**.
+
+### 8. Body wikilink hygiene
+
+Authors write body cross-references as bare `[[id]]` wikilinks only.
+
+Malformed body wikilink syntax → **WARNING: `<id>` malformed body wikilink
+`<token>`** (e.g. `[[id|label]]` or `[[id]] (label)`).
+
+A `[[id]]` wikilink in the body whose id is not present in any edge field
+(`requires`, `belongs_to`, `relates`, `provenance`, `superseded_by`) →
+**WARNING: `<id>` body wikilink `<dep_id>` not present in any edge field**.
+Report only — validate does not auto-add edges.
+
+### 9. Unified dangling outbound edges
+
+Dangling outbound edge detection is shared with `ldoc edges` and covers all
+blocking edge types: `requires`, `belongs_to`, `relates`, `superseded_by`.
+Broken ref → **ERROR: broken `<field>` edge `<dep_id>` in `<id>`** (same as §4).
+
+### 10. Summary presence and length
 
 Every doc must carry a non-empty `summary` →
 **ERROR: `<id>` has no `summary`**.
@@ -119,7 +141,7 @@ The summary is a tight signpost. A summary running long (beyond roughly 60
 words) is flagged as a guideline violation →
 **WARNING: `<id>` summary is long (~<N> words); tighten to a signpost**.
 
-### 9. History and edge lists (no check for emptiness)
+### 11. History and edge lists (no check for emptiness)
 
 History (`history`) and all edge lists (`requires`, `belongs_to`, `relates`,
 `provenance`, `superseded_by`) are optional. Absent or empty means nothing is
@@ -145,6 +167,9 @@ ERRORS (must fix):
 WARNINGS (should review):
   [W] 20260615100004  unresolved `provenance` ref `20260615999998`
   [W] 20260615110005  summary is long (~84 words); tighten to a signpost
+  [W] 20260615110006  has `superseded_by` but status is not `deprecated`
+  [W] 20260615110007  body wikilink `20260615999999` not present in any edge field
+  [W] 20260615110008  malformed body wikilink `[[20260615100001|label]]`
 
 Summary: N errors, N warnings
 Exit code: 1 (errors present)
