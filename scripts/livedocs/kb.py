@@ -15,7 +15,9 @@ from typing import Any
 
 from .model import generate_id, display_label
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
-from .graph import reverse_edges, referenced_by, forward_edges, relates_edges, superseded_by_edges, inbound_edges
+from .graph import (reverse_edges, reverse_requires, reverse_belongs_to,
+                    referenced_by, forward_edges, relates_edges,
+                    superseded_by_edges, inbound_edges)
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +236,7 @@ class KB:
         Return full doc info including resolved edges.
 
         requires, belongs_to, relates, provenance, superseded_by are rendered
-        as [{id, label, display}] lists.  Reverse cascade edges (dependents)
+        as [{id, label, display}] lists.  Reverse edges (required_by, children)
         and reverse provenance (provenance_of) are also included.
         """
         doc_id = self.resolve(ref)
@@ -242,7 +244,8 @@ class KB:
         fm = {k: v for k, v in doc.items() if k != "body"}
 
         # Build reverse maps
-        rev = reverse_edges(self._docs)
+        req_by = reverse_requires(self._docs)
+        children = reverse_belongs_to(self._docs)
         ref_by = referenced_by(self._docs)
 
         return {
@@ -258,7 +261,8 @@ class KB:
             "provenance": self._edge_list(doc.get("provenance", [])),
             "superseded_by": self._edge_list(doc.get("superseded_by", [])),
             # Reverse edges
-            "dependents": self._edge_list(rev.get(doc_id, [])),
+            "required_by": self._edge_list(req_by.get(doc_id, [])),
+            "children": self._edge_list(children.get(doc_id, [])),
             "provenance_of": self._edge_list(ref_by.get(doc_id, [])),
             # Topological facet: union of `scope` anchors along the belongs_to
             # genealogy (own scope included). Read off topology, not stored.
@@ -587,13 +591,18 @@ class KB:
         Return neighbor edge lists for ref.
 
         kind: 'requires' | 'belongs_to' | 'relates' | 'provenance' |
-              'superseded_by' | 'dependents' | 'provenance_of' | 'all'
+              'superseded_by' | 'required_by' | 'children' |
+              'dependents' (alias: required_by + children union) |
+              'provenance_of' | 'all'
         Returns dict with requested edge lists as [{id, label, display}].
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
 
-        rev = reverse_edges(self._docs) if kind in ("dependents", "all") else {}
+        needs_req_by = kind in ("required_by", "dependents", "all")
+        needs_children = kind in ("children", "dependents", "all")
+        req_by = reverse_requires(self._docs) if needs_req_by else {}
+        children = reverse_belongs_to(self._docs) if needs_children else {}
         ref_by = referenced_by(self._docs) if kind in ("provenance_of", "all") else {}
 
         result = {}
@@ -607,8 +616,13 @@ class KB:
             result["provenance"] = self._edge_list(doc.get("provenance", []))
         if kind in ("superseded_by", "all"):
             result["superseded_by"] = self._edge_list(doc.get("superseded_by", []))
-        if kind in ("dependents", "all"):
-            result["dependents"] = self._edge_list(rev.get(doc_id, []))
+        if kind in ("required_by", "all"):
+            result["required_by"] = self._edge_list(req_by.get(doc_id, []))
+        if kind in ("children", "all"):
+            result["children"] = self._edge_list(children.get(doc_id, []))
+        if kind == "dependents":
+            combined = list(set(req_by.get(doc_id, []) + children.get(doc_id, [])))
+            result["dependents"] = self._edge_list(combined)
         if kind in ("provenance_of", "all"):
             result["provenance_of"] = self._edge_list(ref_by.get(doc_id, []))
 

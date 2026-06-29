@@ -50,6 +50,8 @@ def reverse_edges(docs: dict) -> dict:
     Build reverse edge map: {id: [ids that have a hard edge pointing HERE]}.
 
     Covers requires + belongs_to.  Derived from forward_edges; never stored.
+    Used by graph BFS (cascade needs the union); for display see
+    reverse_requires / reverse_belongs_to.
     """
     all_ids = set(docs.keys())
     rev: dict = {doc_id: [] for doc_id in all_ids}
@@ -58,6 +60,35 @@ def reverse_edges(docs: dict) -> dict:
             if target_id in rev:
                 rev[target_id].append(doc_id)
     return rev
+
+
+def _reverse_field(docs: dict, field: str) -> dict:
+    """Return {id: [ids whose `field` list contains this id]}."""
+    all_ids = set(docs.keys())
+    rev: dict = {doc_id: [] for doc_id in all_ids}
+    for doc_id, doc in docs.items():
+        for target_id in doc.get(field, []):
+            if target_id in rev:
+                rev[target_id].append(doc_id)
+    return rev
+
+
+def reverse_requires(docs: dict) -> dict:
+    """
+    Build reverse requires map: {id: [ids whose `requires` lists this id]}.
+
+    "required_by" — docs that depend on the target.
+    """
+    return _reverse_field(docs, "requires")
+
+
+def reverse_belongs_to(docs: dict) -> dict:
+    """
+    Build reverse belongs_to map: {id: [ids whose `belongs_to` lists this id]}.
+
+    "children" — docs that are structural members of the target (parent).
+    """
+    return _reverse_field(docs, "belongs_to")
 
 
 def dangling_edges(docs: dict) -> list:
@@ -128,13 +159,7 @@ def referenced_by(docs: dict) -> dict:
     NAVIGATION ARTIFACT — reverse provenance / "derived from" lookup.
     MUST NEVER be used as cascade input; use reverse_edges for that.
     """
-    all_ids = set(docs.keys())
-    rev: dict = {doc_id: [] for doc_id in all_ids}
-    for doc_id, doc in docs.items():
-        for ref_id in doc.get("provenance", []):
-            if ref_id in rev:
-                rev[ref_id].append(doc_id)
-    return rev
+    return _reverse_field(docs, "provenance")
 
 
 def dangling_references(docs: dict) -> list:

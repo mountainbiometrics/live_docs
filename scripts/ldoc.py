@@ -18,7 +18,7 @@ Subcommands (grouped):
     resolve <ref> [<ref2> ...]
     label <ref> [<ref2> ...]
     neighbors <ref> [<ref2> ...]
-        [--kind requires|belongs_to|relates|provenance|superseded_by|dependents|provenance_of|all]
+        [--kind requires|belongs_to|relates|provenance|superseded_by|required_by|children|dependents|provenance_of|all]
         [--json]
 
   ── Orient / search / list ──
@@ -37,7 +37,7 @@ Subcommands (grouped):
 
   ── Mutations ──
     new --type T --title T [--label L] [--summary S] [--level L] [--status S]
-        [--requires a,b] [--belongs-to a,b] [--relates a,b]
+        [--requires a,b] [--belongs-to|--parent a,b] [--relates a,b]
         [--provenance a,b] [--superseded-by a,b]
         [--tags-domain d] [--tags-scope s]
         [--kind K] [--source S] [--origin O] [--medium M] [--authored-at A]
@@ -45,9 +45,9 @@ Subcommands (grouped):
     set <ref> [--title] [--label] [--summary] [--level] [--status] [--type]
               [--scope] [--domain] [--body -|TEXT] [--dry-run]
     edit <ref>   (alias: set <ref> --body -)
-    link <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
+    link <ref> [--requires a,b] [--belongs-to|--parent a,b] [--relates a,b]
                [--provenance a,b] [--superseded-by a,b] [--dry-run]
-    unlink <ref> [--requires a,b] [--belongs-to a,b] [--relates a,b]
+    unlink <ref> [--requires a,b] [--belongs-to|--parent a,b] [--relates a,b]
                  [--provenance a,b] [--superseded-by a,b]
     history <ref> --add "summary"
     rm <ref> [--force] [--dry-run]
@@ -358,8 +358,11 @@ def cmd_show(kb: KB, args) -> int:
         print("SUPERSEDED BY:")
         print(_fmt_edge_list(result["superseded_by"], plain=plain))
         print()
-        print("DEPENDENTS:")
-        print(_fmt_edge_list(result["dependents"], plain=plain))
+        print("REQUIRED BY:")
+        print(_fmt_edge_list(result["required_by"], plain=plain))
+        print()
+        print("CHILDREN:")
+        print(_fmt_edge_list(result["children"], plain=plain))
         print()
         print("PROVENANCE OF:")
         print(_fmt_edge_list(result["provenance_of"], plain=plain))
@@ -917,7 +920,7 @@ def cmd_link(kb: KB, args) -> int:
     edges = _parse_edge_args(args)
 
     if not any(edges.values()):
-        _err("Specify at least one of: --requires, --belongs-to, --relates, "
+        _err("Specify at least one of: --requires, --belongs-to (--parent), --relates, "
              "--provenance, --superseded-by.")
         return 1
 
@@ -966,7 +969,7 @@ def cmd_unlink(kb: KB, args) -> int:
     edges = _parse_edge_args(args)
 
     if not any(edges.values()):
-        _err("Specify at least one of: --requires, --belongs-to, --relates, "
+        _err("Specify at least one of: --requires, --belongs-to (--parent), --relates, "
              "--provenance, --superseded-by.")
         return 1
 
@@ -1887,7 +1890,8 @@ def cmd_help(kb: KB, args) -> int:
   ldoc resolve "Batch Operations"
   ldoc label porcelain-roadmap batch-operations
   ldoc neighbors porcelain-roadmap --kind requires
-  ldoc neighbors porcelain-roadmap --kind dependents
+  ldoc neighbors porcelain-roadmap --kind required_by
+  ldoc neighbors porcelain-roadmap --kind children
   ldoc neighbors porcelain-roadmap batch-operations
   echo -e "porcelain-roadmap\\nbatch-operations" | ldoc show -
 
@@ -2074,7 +2078,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="id | label | title; or '-' to read from stdin.")
     p.add_argument("--kind", default="all",
                    choices=["requires", "belongs_to", "relates", "provenance",
-                            "superseded_by", "dependents", "provenance_of", "all"])
+                            "superseded_by", "required_by", "children",
+                            "dependents", "provenance_of", "all"])
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label edge format instead of typed wiki-links.")
@@ -2137,7 +2142,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--status", default="living", choices=VALID_STATUSES_SORTED)
     p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles. Cascade-hard. Validated before write.")
-    p.add_argument("--belongs-to", default="", dest="belongs_to",
+    p.add_argument("--belongs-to", "--parent", default="", dest="belongs_to",
                    help="Comma-separated ids/labels/titles. Cascade-hard (structural parent). "
                         "Validated before write.")
     p.add_argument("--relates", default="",
@@ -2200,7 +2205,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles. Cascade-hard. Validated before write.")
-    p.add_argument("--belongs-to", default="", dest="belongs_to",
+    p.add_argument("--belongs-to", "--parent", default="", dest="belongs_to",
                    help="Comma-separated ids/labels/titles. Cascade-hard (structural parent). "
                         "Validated before write.")
     p.add_argument("--relates", default="",
@@ -2210,7 +2215,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--superseded-by", default="", dest="superseded_by",
                    help="Comma-separated ids/labels/titles. Deprecation pointer.")
     p.add_argument("--replace", action="store_true",
-                   help="Replace existing belongs_to edge(s) instead of adding. Only affects --belongs-to.")
+                   help="Replace existing belongs_to edge(s) instead of adding. Only affects --belongs-to/--parent.")
     p.add_argument("--note", default="",
                    help="Add a history entry to each ref after linking.")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
@@ -2222,7 +2227,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="id | label | title; or '-' to read from stdin (one per line).")
     p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles.")
-    p.add_argument("--belongs-to", default="", dest="belongs_to",
+    p.add_argument("--belongs-to", "--parent", default="", dest="belongs_to",
                    help="Comma-separated ids/labels/titles.")
     p.add_argument("--relates", default="",
                    help="Comma-separated ids/labels/titles.")
