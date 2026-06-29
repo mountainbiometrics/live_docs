@@ -34,6 +34,8 @@ Note: empty edge fields and empty history are VALID (absent == empty).
 Human output always carries the label (and title), never a bare id.
 """
 
+from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
@@ -69,7 +71,7 @@ DAG_EDGE_FIELDS = ("belongs_to",)
 # Per-doc check
 # ---------------------------------------------------------------------------
 
-def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
+def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | None = None) -> tuple[list, list]:
     """
     Return (errors, warnings) for one parsed doc dict.
     Each item is a string describing the violation.
@@ -197,7 +199,10 @@ def check_doc(doc: dict, all_ids: set) -> tuple[list, list]:
 
     # 12. body wikilinks not mirrored in edge fields (report only)
     body = doc.get("body", "") or ""
-    for linked_id in sorted(prose_links_not_edged(doc)):
+    unedged = prose_links_not_edged(doc)
+    if children_of:
+        unedged -= children_of.get(doc["id"], set())
+    for linked_id in sorted(unedged):
         warnings.append(
             f"{prefix}  body links `[[{linked_id}]]` not in any edge field "
             f"(requires/belongs_to/relates/provenance/superseded_by)"
@@ -308,11 +313,20 @@ def main() -> int:
     print(f"Scanned: {len(docs)} docs")
     print()
 
+    # Build reverse belongs_to map: parent_id → set of child ids.
+    # Parents naturally reference children in prose without needing an explicit
+    # forward edge — the hierarchy is already expressed on the child's side.
+    children_of: dict[str, set[str]] = {}
+    for doc in doc_files_sorted:
+        for parent_id in doc.get("belongs_to", []) or []:
+            if parent_id:
+                children_of.setdefault(parent_id, set()).add(doc["id"])
+
     all_errors = []
     all_warnings = []
 
     for doc in doc_files_sorted:
-        errs, warns = check_doc(doc, all_ids)
+        errs, warns = check_doc(doc, all_ids, children_of=children_of)
         all_errors.extend(errs)
         all_warnings.extend(warns)
 
