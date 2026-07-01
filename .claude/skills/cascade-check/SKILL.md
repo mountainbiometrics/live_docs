@@ -161,11 +161,11 @@ tangential. Prefer `context-request` over a low-confidence `inconsequential`
 
 **Descendant-summary rule**: if a changed doc `belongs_to` a descendant-bearing
 parent (any `belongs_to` parent, regardless of its `type`), that parent's
-aggregated orientation guide is *derived from its members* and is now potentially
-stale (the guide may describe the member's old claim). When the member's change
+orientation overview is *derived from its members* and is now potentially
+stale (the overview may describe the member's old claim). When the member's change
 is substantive (title, body, type, status, or membership), emit `cascade` on the
 parent. The recommended fix is **not** a hand-patch: re-run **`garden-summarize`**
-(alias: `summarize-descendants`) on the parent to re-synthesize its overview. Record
+on the parent to re-synthesize its overview. Record
 this in the verdict's reason and apply it as the cascade action in Pass 2. (A
 purely provenance/relates change to the member does not stale the overview —
 prefer `inconsequential`.)

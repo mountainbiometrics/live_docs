@@ -3,7 +3,7 @@ name: identify-key-concepts
 user-invocable: false
 description: >
   Read an input — a request, a normalized reference, or a proposed doc revision
-  — and emit a typed list of the durable concepts (or claims) it asserts. Owns
+  — and emit a typed list of the durable concepts it asserts. Owns
   the single shared concept-extraction protocol: how to read an input and emit
   the Concept/Type/Asserts record shape. The type taxonomy it assigns from lives
   in _shared/doc-types.md. This is a phase sub-skill invoked by apply-to-docs,
@@ -26,16 +26,10 @@ phase, `map-concepts-to-docs`.)
 
 - **The text to scan** — the normalized restatement (apply-to-docs), the
   normalized reference (ingest-reference), or the proposed change (revise-doc).
-- **The extraction count / label** — how many concepts to expect and what to
-  call them. The calling flow sets this knob, e.g.:
-  - apply-to-docs: "extract 3–10 concepts."
-  - ingest-reference: "extract concepts, no upper limit; then apply the
-    splitting test."
-  - revise-doc: "extract 1–3 claims; label each record `Claim` not `Concept`."
-
-  Honor the count and label the calling flow gives you. If none is given,
-  default to extracting every distinct durable concept and labeling it
-  `Concept`.
+- **Whether to apply the splitting test** — an opt-in refinement the calling
+  flow may request (ingest-reference does; see Step 3). Nothing else is
+  parameterized: always extract **every distinct durable concept** the input
+  asserts — there is no target count — and label each record `Concept`.
 
 ---
 
@@ -60,8 +54,7 @@ few, re-read through each type lens again.
 
 ## Step 2 — Record each concept
 
-Write each concept found in the record shape below. Use the label you were given
-(`Concept` or `Claim`); the field shape is identical either way:
+Write each concept found in the record shape below, labeled `Concept`:
 
 ```
 Concept: "<short noun phrase>"
@@ -88,5 +81,5 @@ above is complete, and only when the calling flow asks for it.
 
 ## Output
 
-Emit the completed concept list, clearly labeled (e.g. `## Concept list` or
-`## Claims`), in the record shape from Step 2.
+Emit the completed concept list under a `## Concept list` heading, in the record
+shape from Step 2.

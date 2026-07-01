@@ -124,7 +124,7 @@ Run — but do not stop after — **`/identify-key-concepts`** on the session di
 (or, if Step 1 was skipped, on the description of what changed), then carry its
 concept list into Step 3. Pass reconcile-changes's knobs:
 
-> Extract concepts with **no upper limit** — a working session usually decided
+> Extract every distinct durable concept — a working session usually decided
 > several things at once. Label each `Concept`. **Bias strongly toward the
 > abstract, non-recoverable knowledge**: `principle`, `goal`, `use-case`,
 > `constraint`, and the **rationale/why** behind each `decision`. Do NOT stop at

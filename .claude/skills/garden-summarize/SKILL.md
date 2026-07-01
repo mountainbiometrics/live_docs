@@ -1,18 +1,25 @@
 ---
 name: garden-summarize
 user-invocable: false
+user-invocable: true
 description: >
   Gardening phase: given a descendant-bearing doc, write its body as an
   orientation guide and set a tight frontmatter summary. Synthesize, do not
   concatenate. Invoked by garden-hierarchy, cascade-check, and the garden
-  dispatcher — never an episode owner when nested.
+  dispatcher — never an episode owner when nested. May also be invoked
+  standalone to refresh a single signpost's overview (rare).
 ---
 
 # garden-summarize — Write a signpost's orientation guide
 
-**Contract:** nested phase only unless the user explicitly invoked the
-`summarize-descendants` alias as a standalone episode (rare). When nested: capture
-no START, run no `cascade-check`, emit no review — report changed ids only.
+**Contract:** a nested phase by default; can also be invoked standalone (rare).
+
+- **Standalone** (user invoked `garden-summarize` directly): capture START, run
+  the procedure, validate, emit one `ldoc review new`. Use history entry prefix
+  `garden-summarize:`.
+- **Nested** (called from `garden`, `garden-hierarchy`, or `cascade-check`):
+  capture no START, run no `cascade-check`, emit no review — report changed ids
+  only.
 
 Applies to **any descendant-bearing doc** (target of `belongs_to` edges), any
 `type`. Two outputs:

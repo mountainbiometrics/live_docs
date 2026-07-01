@@ -280,7 +280,7 @@ and the post-hoc review summary:
 | Record decisions already built in a working session | **reconcile-changes** |
 | Know what else went stale after a change | **cascade-check** |
 | Tidy navigation, orphans, grouping, tree structure | **garden** (or `/garden find homes for orphans`) |
-| Refresh a signpost orientation guide | **garden** or **summarize-descendants** (alias → garden-summarize) |
+| Refresh a signpost orientation guide | **garden** or **garden-summarize** |
 | Periodic cleanup, decomposition, drift repair | **garden** |
 | Structural integrity report (no fixes) | **validate** |
 | Rebuild `.index/` caches | **reindex** |

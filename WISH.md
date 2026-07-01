@@ -2,13 +2,6 @@
 
 Noting these here as potential followup tasks so that it's recorded without having to tackle them right away.
 
-## Priority
-
-- [ ] Fix "summarize descendants" skill from having a duplicate/legacy? (it's currently a wrapper around the garden variant for some reason)
-- [ ] Fix "summarize descendants" to just give the macro overview (summaries can be shown in the viewer without an LLM recap of the summaries...)
-- [ ] Remove the "extraction count" from "identifying key concepts"
-- [ ] Remove the "concept vs claim" thing in "identifying key concepts"
-
 ## Skill Improvements
 
 - [ ] A new skill for "orchestrators"?  Something that tells an agent that is delegating livedocs skills to subagents, how to do that efficiently (not micromanaging, not pre-determining scope, etc.)
@@ -29,6 +22,7 @@ Noting these here as potential followup tasks so that it's recorded without havi
 - [ ] Put edge additions (non-hierarchical) in "Minor Alterations" instead of "Revisions"
 - [ ] Refine/clean the cascade summaries (I don't actually know where those originated...) (could make mechanical, should use wikilink-style either way)
 - [ ] Really emphasize that the review process is the main mechanism for keeping the human in the loop, and it shouldn't ever be skipped (though with the rework it will be easier to mechanically enforce)
+- [ ] Reviews should show deleted docs...
 
 ## Viewer Improvements
 

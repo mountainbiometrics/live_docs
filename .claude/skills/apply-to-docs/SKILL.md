@@ -23,8 +23,7 @@ byte.** Two passes, cleanly separated:
 This skill is a **thin orchestrator**. The shared phases live in four sub-skills
 it invokes in order — `identify-key-concepts`, `map-concepts-to-docs`,
 `assess-blast-radius`, `synthesize-doc-changes` — keeping only apply-to-docs's
-own knobs (3–10 concepts), its request-archival and restate steps, and its
-pause-before-implementing gate.
+own request-archival and restate steps, and its pause-before-implementing gate.
 
 ---
 
@@ -112,10 +111,10 @@ to `synthesize-doc-changes` in Step 6; every new doc will carry
 ## Step 2 — Extract concepts (invoke `identify-key-concepts`)
 
 Run — but do not stop after — **`/identify-key-concepts`** on the normalized
-restatement from Step 1, then carry its concept list into Step 3. Pass
-apply-to-docs's knob:
+restatement from Step 1, then carry its concept list into Step 3:
 
-> Extract **3–10 key concepts**, labeled `Concept`. (No splitting test.)
+> Extract every distinct durable concept the request asserts, labeled `Concept`.
+> (No splitting test.)
 
 It returns a typed concept list (`Concept / Type / Asserts`) in context — the
 input to Step 3.

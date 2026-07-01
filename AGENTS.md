@@ -139,7 +139,7 @@ of changes, and one review. Phases are never user-invocable directly.
 | `garden-decompose` | atomicity | split overloaded docs |
 | `garden-collapse` | atomicity | merge duplicates / fold cruft |
 | `garden-hierarchy` | structure | orphans, grouping, scope anchors, re-scoping (replaces `curate-grouping`) |
-| `garden-summarize` | structure | signpost orientation guides (alias: `summarize-descendants`) |
+| `garden-summarize` | structure | signpost orientation guides |
 | `garden-domains` | structure | cross-cutting `domain` curation |
 | `garden-densify` | structure | build missing edges — materialize prose `[[id]]` wikilinks into real edges and add genuine missing dependencies (favoring cascade-HARD `requires`) so cascade can self-heal |
 | `garden-refine` | form | sampling QA: titles, summaries, schema drift, `keywords` |

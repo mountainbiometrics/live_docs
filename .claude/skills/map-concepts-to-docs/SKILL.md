@@ -2,7 +2,7 @@
 name: map-concepts-to-docs
 user-invocable: false
 description: >
-  Given an extracted concept (or claim) list, query the live_docs KB and map
+  Given an extracted concept list, query the live_docs KB and map
   each concept to existing docs, recording the relationship: compatible,
   partial-supersession, full-supersession, or conflict-unresolved. Owns the
   shared survey + dedup-and-conflict scan that apply-to-docs, ingest-reference,
@@ -24,7 +24,7 @@ whoever invoked it resumes their own work once the verdict map exists.
 
 ## Inputs
 
-- **The concept/claim list** from `identify-key-concepts` (each with its
+- **The concept list** from `identify-key-concepts` (each with its
   `Type` and `Asserts` sentence).
 - **The scan emphasis** — a knob the caller passes:
   - apply-to-docs / ingest-reference: full concept survey across the store.

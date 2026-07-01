@@ -24,7 +24,7 @@ dedup/conflict checking, a history entry, and an impact pass.
 
 This skill is a **thin orchestrator** with a **single-doc focus**. Its unique
 parts are that classification gate and its history discipline; the shared phases
-are composed from sub-skills — `identify-key-concepts` (as *claims*),
+are composed from sub-skills — `identify-key-concepts`,
 `map-concepts-to-docs` (as a dedup/conflict scan), and for substantive changes
 `assess-blast-radius` + `cascade-check` and `synthesize-doc-changes`.
 
@@ -58,7 +58,7 @@ see Step 7).
 
 ---
 
-## Step 1 — Locate, load, and extract the claims
+## Step 1 — Locate, load, and extract the concepts
 
 1. The caller supplies either the doc **id** (e.g. `20260615090003`) or a
    **title fragment**. If a title fragment is given, resolve it:
@@ -76,27 +76,27 @@ see Step 7).
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
-4. **Extract the claims the revision introduces** — run **`/identify-key-concepts`**
-   on the proposed change (don't stop after it; its claim list is the input to
-   Step 2). Pass revise-doc's knobs:
+4. **Extract the concepts the revision introduces** — run **`/identify-key-concepts`**
+   on the proposed change (don't stop after it; its concept list is the input to
+   Step 2). A revision usually introduces just one or a few concepts:
 
-   > Extract **1–3 claims**, labeled **`Claim`** (not `Concept`). For a small or
-   > purely corrective revision (typo, date, removing stale text), a single claim
-   > entry suffices; for a revision adding substantial new content or changing
-   > the doc's core claim, enumerate each distinct claim separately. No splitting
-   > test.
+   > Extract every distinct durable concept the revision introduces, labeled
+   > `Concept`. For a small or purely corrective revision (typo, date, removing
+   > stale text), a single concept entry suffices; for a revision adding
+   > substantial new content or changing the doc's core claim, enumerate each
+   > distinct concept separately. No splitting test.
 
-   It returns the typed claim list (`Claim / Type / Asserts`) — these are the
+   It returns the typed concept list (`Concept / Type / Asserts`) — these are the
    search keys for Step 2.
 
-   If the revision is **provenance-only** (no claim changes at all), skip this
-   extraction and proceed to Step 4 directly.
+   If the revision is **provenance-only** (introduces no new concepts at all),
+   skip this extraction and proceed to Step 4 directly.
 
 ---
 
 ## Step 2 — Dedup and conflict scan (invoke `map-concepts-to-docs`)
 
-Run **`/map-concepts-to-docs`** with the claim list from Step 1. Emphasis: **a
+Run **`/map-concepts-to-docs`** with the concept list from Step 1. Emphasis: **a
 dedup/conflict scan focused on the target doc's neighbors and same-type docs** —
 does the revision duplicate or contradict an existing claim? It returns a
 relationship verdict map. (Read-only.)

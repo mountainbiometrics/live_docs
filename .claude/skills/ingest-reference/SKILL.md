@@ -221,11 +221,11 @@ Run — but do not stop after — **`/identify-key-concepts`** on the normalized
 reference from Step 3, then carry its concept list into Step 5. Pass ingest's
 knobs:
 
-> Extract concepts with **no upper limit** (a dense document may yield dozens;
-> concepts are often presupposed rather than stated outright). Label each
-> `Concept`. **Then apply the splitting test** to each concept already found:
-> "This doc changes when ___." If that blank covers more than one concern, split
-> the concept in two.
+> Extract every distinct durable concept the material asserts (a dense document
+> may yield dozens; concepts are often presupposed rather than stated outright).
+> Label each `Concept`. **Then apply the splitting test** to each concept already
+> found: "This doc changes when ___." If that blank covers more than one concern,
+> split the concept in two.
 
 It returns the typed concept list (`Concept / Type / Asserts`) in context — the
 input to Step 5.
