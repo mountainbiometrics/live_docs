@@ -8,7 +8,14 @@ Noting these here as potential followup tasks so that it's recorded without havi
 - [ ] Fix "summarize descendants" to just give the macro overview (summaries can be shown in the viewer without an LLM recap of the summaries...)
 - [ ] Remove the "extraction count" from "identifying key concepts"
 - [ ] Remove the "concept vs claim" thing in "identifying key concepts"
+
+## Skill Improvements
+
 - [ ] A new skill for "orchestrators"?  Something that tells an agent that is delegating livedocs skills to subagents, how to do that efficiently (not micromanaging, not pre-determining scope, etc.)
+- [ ] Some "macro" orchestrator skills that work like claude's `code-review` skill where it fans out a specific set of subagents that scan for things from different perspectives.
+  - [ ] Like a review agent; looks at changes, checks cascade decisions, identifies cruft and stuff immediately instead of waiting for followup gardening passes, etc.
+  - [ ] A tree exploring agent that tries looking at the system as a whole (and finds discrepancies in it)
+  - [ ] A "Why" not "What" agent that focuses on live_docs' principles
 
 ## Review Improvements
 
