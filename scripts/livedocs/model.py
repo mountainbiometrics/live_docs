@@ -39,6 +39,7 @@ _DEFAULT_PATHS = {
     "docs": "docs",
     "raw": "raw",
     "reviews": "reviews",
+    "sessions": "sessions",
     "inbox": "inbox",
     "index": None,  # None → derived as <docs>/.index
 }
@@ -49,6 +50,7 @@ _ENV_VARS = {
     "docs": "LIVEDOCS_DOCS_DIR",
     "raw": "LIVEDOCS_RAW_DIR",
     "reviews": "LIVEDOCS_REVIEWS_DIR",
+    "sessions": "LIVEDOCS_SESSIONS_DIR",
     "inbox": "LIVEDOCS_INBOX_DIR",
 }
 
@@ -109,7 +111,7 @@ def _resolve() -> dict:
             raise LivedocsConfigError(f"could not read config {config_path}: {e}")
 
     resolved: dict = {"root": base}
-    for key in ("docs", "raw", "reviews", "inbox"):
+    for key in ("docs", "raw", "reviews", "sessions", "inbox"):
         env_val = os.environ.get(_ENV_VARS[key])
         if env_val:
             resolved[key] = _resolve_path(env_val, cwd)
@@ -134,6 +136,7 @@ _PATH_ATTRS: dict[str, str] = {
     "DOCS_DIR": "docs",
     "RAW_DIR": "raw",
     "REVIEWS_DIR": "reviews",
+    "SESSIONS_DIR": "sessions",
     "INBOX_DIR": "inbox",
     "INDEX_DIR": "index",
 }
@@ -172,6 +175,82 @@ VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
 
 # ---------------------------------------------------------------------------
+# Change-type taxonomy (change-type-taxonomy 20260701201617)
+# ---------------------------------------------------------------------------
+#
+# Every mutation carries a change_type set by WHICH command/field produced it,
+# not inferred later. A command may touch several categories; the WAL records
+# the full LIST. When rolled into a review, each doc is filed ONCE under a
+# single dominant type by the precedence below.
+
+VALID_CHANGE_TYPES = ("addition", "revision", "restructure", "organizational", "deletion")
+
+# Field/command → change_type slotting. `new` is addition; `rm` is deletion;
+# a scalar/edge field maps to its category. Keys are the field names the
+# mutating commands touch (plus the pseudo-commands 'new' / 'rm').
+FIELD_CHANGE_TYPE = {
+    # addition
+    "new": "addition",
+    # revision — content actually changed
+    "body": "revision",
+    "label": "revision",
+    "title": "revision",
+    "summary": "revision",
+    # restructure — a harder form of reorganization
+    "requires": "restructure",
+    "belongs_to": "restructure",
+    "status": "restructure",
+    "level": "restructure",
+    "type": "restructure",
+    "scope": "restructure",
+    "superseded_by": "restructure",
+    # organizational — soft edges and tags
+    "relates": "organizational",
+    "provenance": "organizational",
+    "domain": "organizational",
+    "keywords": "organizational",
+    # deletion
+    "rm": "deletion",
+}
+
+# Review-filing precedence: the dominant type when a doc's change list spans
+# several categories. deletion > revision > restructure > organizational.
+# (addition is filed first, separately — a created doc is never also "revised".)
+CHANGE_TYPE_PRECEDENCE = ["deletion", "revision", "restructure", "organizational", "addition"]
+
+
+def change_types_for_fields(fields) -> list[str]:
+    """Map an iterable of touched field/command names to the DISTINCT list of
+    change_types they belong to, in canonical taxonomy order.
+
+    Unknown fields are ignored. Returns [] when nothing maps.
+    """
+    seen: set[str] = set()
+    for f in fields or []:
+        ct = FIELD_CHANGE_TYPE.get(f)
+        if ct:
+            seen.add(ct)
+    return [ct for ct in VALID_CHANGE_TYPES if ct in seen]
+
+
+def dominant_change_type(change_types) -> str:
+    """Return the single dominant change_type for review-filing, by precedence
+    deletion > revision > restructure > organizational > addition.
+
+    Accepts a list (the WAL's change_type list) or a single string. Returns ''
+    when nothing recognizable is present (legacy entries carry no change_type).
+    """
+    if isinstance(change_types, str):
+        cts = {change_types}
+    else:
+        cts = set(change_types or [])
+    for ct in CHANGE_TYPE_PRECEDENCE:
+        if ct in cts:
+            return ct
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # Collision-safe ID generation (shared by ldoc new and ingest_raw.py)
 # ---------------------------------------------------------------------------
 
@@ -189,6 +268,33 @@ def generate_id(target_dir: Path) -> str:
     while (target_dir / f"{ts}.md").exists():
         ts += 1
     return str(ts)
+
+
+def generate_session_id() -> str:
+    """Return a sortable, collision-resistant session id: ``<YYYYMMDDHHMMSS>-<hex>``.
+
+    The 14-digit timestamp prefix keeps sessions naturally ordered and lets
+    review generation recover the session's start time (see session_start_iso);
+    the random suffix avoids collisions between sessions minted in the same
+    second, including concurrent agents. Unlike generate_id there is no
+    directory to disambiguate against — the suffix carries the entropy.
+    """
+    base = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return f"{base}-{os.urandom(2).hex()}"
+
+
+def session_start_iso(session_id: str) -> str:
+    """Recover the ISO 8601 UTC start time embedded in a session id's prefix.
+
+    Returns '' when the id carries no parseable 14-digit timestamp prefix.
+    Used to classify Additions (docs created during the session), since a
+    freshly-created doc has no history entry to stamp (history-is-changes).
+    """
+    m = re.match(r"(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})", session_id or "")
+    if not m:
+        return ""
+    y, mo, d, h, mi, s = m.groups()
+    return f"{y}-{mo}-{d}T{h}:{mi}:{s}Z"
 
 
 # ---------------------------------------------------------------------------

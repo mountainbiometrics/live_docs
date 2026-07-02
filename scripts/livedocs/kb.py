@@ -8,6 +8,7 @@ Stdlib only. No external dependencies.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,39 @@ def _doc_tag_list(doc: dict, key: str) -> list:
     """Return a doc's flat list tag field (`domain`, `keywords`) from frontmatter."""
     flat = doc.get(key)
     return flat if isinstance(flat, list) else []
+
+
+def _heal_created_field(fm: dict) -> bool:
+    """Convert a lingering `created` field into a leading `addition` history entry
+    and drop the field (creation-is-recorded-history). Idempotent: a no-op when
+    `created` is absent or a leading addition entry already exists.
+
+    Mutates `fm` in place. Returns True when it changed something.
+    """
+    created = fm.get("created")
+    if not created:
+        return False
+    fm.pop("created", None)
+
+    hist = fm.get("history")
+    if not isinstance(hist, list):
+        hist = []
+    # If an addition entry already leads, don't add a second one.
+    already = any(
+        ("addition" in (h.get("change_type") or []))
+        if isinstance(h.get("change_type"), list)
+        else (h.get("change_type") == "addition")
+        for h in hist
+    )
+    if not already:
+        addition = {
+            "at": created,
+            "summary": "Created doc",
+            "change_type": ["addition"],
+        }
+        hist = [addition] + hist
+    fm["history"] = hist
+    return True
 
 
 def normalize_tag_list(values: list[str] | None) -> list[str]:
@@ -689,7 +723,14 @@ class KB:
         return doc, body
 
     def _write_doc(self, doc_id: str, fm: dict, body: str, defer_reload: bool = False) -> None:
-        """Write a doc to disk using canonical dump_doc, then reload."""
+        """Write a doc to disk using canonical dump_doc, then reload.
+
+        Heal-on-write (creation-is-recorded-history): if the doc still carries a
+        `created` field, convert it to a leading `addition` history entry and drop
+        the field, so any doc persisted for ANY reason is migrated forward. Reads
+        never trigger this — only writes.
+        """
+        _heal_created_field(fm)
         path = self.docs_dir / f"{doc_id}.md"
         path.write_text(dump_doc(fm, body), encoding="utf-8")
         if not defer_reload:
@@ -726,7 +767,11 @@ class KB:
         superseded_by) accept ids, labels, or titles — resolved via resolve().
         """
         doc_id = generate_id(self.docs_dir)
-        created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # `imported` (reference docs) still records the import moment. The doc's
+        # creation TIME is no longer stored as `created` — it is the timestamp of
+        # the first history entry (an addition), written by the command layer via
+        # record_addition (creation-is-recorded-history 20260701224958).
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Resolve edge refs to ids
         edge_ids = {
@@ -754,7 +799,6 @@ class KB:
             "type": type,
             "status": status,
             "level": level,
-            "created": created,
         }
 
         # Summary: scalar, omitted when empty (matches serialize emission rule)
@@ -787,7 +831,7 @@ class KB:
                 fm["medium"] = medium
             if authored_at:
                 fm["authored_at"] = authored_at
-            fm["imported"] = created
+            fm["imported"] = now
 
         path = self.docs_dir / f"{doc_id}.md"
         path.write_text(dump_doc(fm, body), encoding="utf-8")
@@ -930,16 +974,42 @@ class KB:
         self._reload()
         return inbound
 
-    def add_history(self, ref: str, summary: str) -> None:
-        """Append a history entry {at: <utc iso>, summary: <summary>}."""
+    def add_history(
+        self,
+        ref: str,
+        summary: str,
+        session: str | None = None,
+        change_type: list[str] | str | None = None,
+    ) -> None:
+        """Append a history entry ``{at, summary[, change_type][, session]}``.
+
+        When ``session`` is None it defaults to the ``LDOC_SESSION`` environment
+        variable, so any mutation performed inside an open session
+        (``ldoc session start``) is tagged with that session id. The tag is
+        additive: entries written outside a session omit it entirely, leaving
+        pre-session history byte-for-byte unchanged (see session-stamped-history).
+
+        ``change_type`` is the taxonomy list (see change-type-taxonomy) recording
+        which categories this change touched; it is additive and omitted when
+        empty so pre-taxonomy history round-trips unchanged.
+        """
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
 
         at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        if session is None:
+            session = os.environ.get("LDOC_SESSION", "")
+        entry = {"at": at, "summary": summary}
+        if change_type:
+            if isinstance(change_type, str):
+                change_type = [change_type]
+            entry["change_type"] = list(change_type)
+        if session:
+            entry["session"] = session
         hist = fm.get("history", [])
         if not isinstance(hist, list):
             hist = []
-        hist.append({"at": at, "summary": summary})
+        hist.append(entry)
         fm["history"] = hist
 
         self._write_doc(doc_id, fm, body)

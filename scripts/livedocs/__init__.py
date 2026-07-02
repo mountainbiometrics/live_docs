@@ -17,12 +17,17 @@ from __future__ import annotations
 import importlib
 
 _EXPORT_MAP = [
-    ("model",     {"REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "INBOX_DIR", "INDEX_DIR",
+    ("model",     {"REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
+                   "INBOX_DIR", "INDEX_DIR",
                    "VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
-                   "generate_id", "title_to_label", "unique_label", "display_label",
+                   "generate_id", "generate_session_id", "session_start_iso",
+                   "change_types_for_fields", "dominant_change_type",
+                   "title_to_label", "unique_label", "display_label",
                    "ref_token", "render_ref_token", "WIKILINK_RE", "doc_prefix"}),
     ("serialize", {"CANONICAL_FIELD_ORDER", "REFERENCE_EXTRA_FIELDS", "EDGE_FIELDS",
                    "parse_doc", "dump_doc", "build_raw_frontmatter"}),
+    ("sessions",  {"SessionStore", "record_doc_change", "resolve_open_session",
+                   "ensure_session"}),
     ("graph",     {"forward_edges", "reverse_edges", "reverse_requires", "reverse_belongs_to",
                    "dangling_edges", "inbound_edges",
                    "reference_edges", "referenced_by", "dangling_references", "relates_edges",
@@ -30,7 +35,7 @@ _EXPORT_MAP = [
     ("lint",      {"body_doc_refs", "edged_ids", "prose_links_not_edged",
                    "malformed_body_wikilinks", "BODY_WIKILINK_RE"}),
     ("kb",        {"KB", "load_all"}),
-    ("reviews",   {"ReviewLedger", "parse_review", "dump_review"}),
+    ("reviews",   {"ReviewLedger", "parse_review", "dump_review", "strip_wal_archive"}),
     ("viewer",    {"build_viewer", "auto_rebuild_viewer", "auto_viewer_enabled"}),
 ]
 

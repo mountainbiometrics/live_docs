@@ -27,8 +27,12 @@ _TEMPLATE = _VIEWER_DIR / "template.html"
 _MARKED_JS = _VIEWER_DIR / "vendor" / "marked.min.js"
 
 
-def _load_dir(path: Path) -> list[dict]:
-    """Load all .md files in a directory into export records."""
+def _load_dir(path: Path, *, strip_wal: bool = False) -> list[dict]:
+    """Load all .md files in a directory into export records.
+
+    strip_wal=True removes the non-rendered WAL-archive block from review bodies
+    so the raw session log never surfaces in the viewer (on-disk-session-records).
+    """
     out: list[dict] = []
     if not path.is_dir():
         return out
@@ -36,6 +40,9 @@ def _load_dir(path: Path) -> list[dict]:
         parsed = parse_doc(md_path)
         body = parsed.pop("body", "")
         if isinstance(body, str):
+            if strip_wal:
+                from .reviews import strip_wal_archive
+                body = strip_wal_archive(body)
             body = body.strip()
         rec = dict(parsed)
         rec["id"] = str(rec.get("id", md_path.stem))
@@ -56,7 +63,7 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
         raise FileNotFoundError(f"vendored marked.js not found: {_MARKED_JS}")
 
     docs = _load_dir(DOCS_DIR)
-    reviews = _load_dir(REVIEWS_DIR)
+    reviews = _load_dir(REVIEWS_DIR, strip_wal=True)
 
     dest = out_path or (REPO_ROOT / "build" / "viewer.html")
     dest = dest.resolve()

@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import generate_id, ref_token, render_ref_token, WIKILINK_RE
+from .model import generate_id, ref_token, render_ref_token, session_start_iso, WIKILINK_RE
 
 
 def _normalize_ref(token: str) -> str:
@@ -104,6 +104,47 @@ def _extract_body_section(body: str, headings: tuple[str, ...]) -> str:
         collected.pop()
 
     return "\n".join(collected)
+
+
+# ---------------------------------------------------------------------------
+# WAL archive: a non-rendered block folded into the review at close
+# ---------------------------------------------------------------------------
+#
+# The raw session WAL is preserved losslessly inside the review file, wrapped in
+# HTML-comment delimiters so `ldoc review show` and the viewer skip it by
+# default (on-disk-session-records). Nothing is lost; the block is not part of
+# the human-facing summary.
+
+import json as _json
+
+_WAL_ARCHIVE_BEGIN = "<!-- WAL-ARCHIVE"
+_WAL_ARCHIVE_END = "WAL-ARCHIVE-END -->"
+
+
+def _archive_wal_block(wal: list[dict]) -> str:
+    """Render the raw WAL as a non-rendered, HTML-comment-delimited block."""
+    lines = [_WAL_ARCHIVE_BEGIN]
+    lines.append("Raw session change log (WAL) — source of truth, not rendered.")
+    for entry in wal:
+        lines.append(_json.dumps(entry, ensure_ascii=False))
+    lines.append(_WAL_ARCHIVE_END)
+    return "\n".join(lines)
+
+
+def strip_wal_archive(body: str) -> str:
+    """Return `body` with the trailing WAL-archive comment block removed.
+
+    Used by `review show` and the viewer so the archive never renders.
+    """
+    if _WAL_ARCHIVE_BEGIN not in body:
+        return body
+    start = body.find(_WAL_ARCHIVE_BEGIN)
+    end = body.find(_WAL_ARCHIVE_END)
+    if end != -1:
+        end += len(_WAL_ARCHIVE_END)
+        return (body[:start] + body[end:]).rstrip() + "\n"
+    # Unterminated — drop everything from the marker on.
+    return body[:start].rstrip() + "\n"
 
 
 def _format_addition_entry(link: str, doc: dict) -> list[str]:
@@ -295,9 +336,23 @@ class ReviewLedger:
         since: str = "",
         touched_refs: list[str] = None,
         body: str = "",
+        session: str = "",
+        summary_text: str = "",
+        wal: list[dict] | None = None,
     ) -> tuple[str, str]:
         """
         Create a new review summary record.
+
+        With `wal` (the open session's change log): build the review directly
+        from the WAL — the source of truth (session-change-log). Sections mirror
+        the change-type taxonomy (Additions / Revisions / Restructure /
+        Organizational / Deletions); each doc is filed ONCE under its dominant
+        change_type. The raw WAL is folded losslessly into a non-rendered block
+        at the tail. This is the primary path at `session close`.
+
+        With `session` (an id from `ldoc session start`): the legacy tag-scan
+        path — Revisions are docs whose history carries the tag; Additions are
+        docs created within the session's window. Retained as a fallback.
 
         With `since` (ISO 8601 UTC string): scan docs/ to classify Additions
         and Revisions since that timestamp, build the body automatically.
@@ -307,6 +362,9 @@ class ReviewLedger:
 
         With explicit `body`: use that body as-is (no scanning).
 
+        `summary_text`, when given, is prepended as a `## Summary` block — the
+        session's agent-recap.
+
         Returns (review_id, path_str).
         """
         docs = self._load_docs()
@@ -314,8 +372,16 @@ class ReviewLedger:
         review_id = generate_id(self.reviews_dir)
 
         touched: list[str] = []
+        wal_archive = ""
 
-        if since and not body:
+        if wal is not None and not body:
+            body = self._build_body_from_wal(wal, docs)
+            touched = self._collect_touched_from_wal(wal, docs)
+            wal_archive = _archive_wal_block(wal)
+        elif session and not body:
+            body = self._build_body_by_session(session, docs)
+            touched = self._collect_touched_by_session(session, docs)
+        elif since and not body:
             body = self._build_body_since(since, docs)
             touched = self._collect_touched_since(since, docs)
         elif touched_refs is not None and not body:
@@ -331,6 +397,12 @@ class ReviewLedger:
             touched = []
         # else: empty record
 
+        if summary_text:
+            body = f"## Summary\n\n{summary_text.strip()}\n\n{body}"
+
+        if wal_archive:
+            body = f"{body.rstrip()}\n\n{wal_archive}\n"
+
         fm = {
             "id": review_id,
             "created": created_now,
@@ -341,6 +413,117 @@ class ReviewLedger:
         path = self.reviews_dir / f"{review_id}.md"
         path.write_text(dump_review(fm, body), encoding="utf-8")
         return review_id, str(path)
+
+    # ------------------------------------------------------------------
+    # WAL-based body building (primary path at session close)
+    # ------------------------------------------------------------------
+
+    def _collect_touched_from_wal(self, wal: list[dict], docs: dict) -> list[str]:
+        """Return the distinct doc ids referenced by the WAL, in first-seen order.
+
+        Deletions ARE included even though the doc no longer exists in docs/ —
+        the WAL is the only record of them (session-change-log).
+        """
+        seen: list[str] = []
+        seen_set: set[str] = set()
+        for entry in wal:
+            ref = entry.get("ref", "")
+            if ref and ref not in seen_set:
+                seen_set.add(ref)
+                seen.append(ref)
+        return seen
+
+    def _build_body_from_wal(self, wal: list[dict], docs: dict) -> str:
+        """Build the five-section review body from the session WAL.
+
+        Each doc is filed ONCE under its dominant change_type by precedence
+        deletion > revision > restructure > organizational, with addition filed
+        separately (a created doc is not also 'revised'). The dominant type is
+        computed over the UNION of every WAL line's change_type list for that doc.
+        The best available author note per doc is used as the change blurb.
+        """
+        from .model import dominant_change_type
+
+        # Aggregate per doc: the union of change_types, best note, and (for
+        # deletions) the dead doc's label/type captured in the WAL.
+        agg: dict[str, dict] = {}
+        order: list[str] = []
+        for entry in wal:
+            ref = entry.get("ref", "")
+            if not ref:
+                continue
+            if ref not in agg:
+                agg[ref] = {"types": set(), "note": "", "author_note": False,
+                            "label": "", "type": ""}
+                order.append(ref)
+            rec = agg[ref]
+            for ct in (entry.get("change_type") or []):
+                rec["types"].add(ct)
+            # Prefer an author-supplied note; otherwise keep the first non-empty note.
+            note = (entry.get("note") or "").strip()
+            if note and (entry.get("author_note") or not rec["note"]):
+                if entry.get("author_note") or not rec["author_note"]:
+                    rec["note"] = note
+                    rec["author_note"] = bool(entry.get("author_note"))
+            if entry.get("op") == "rm":
+                rec["label"] = entry.get("label", "")
+                rec["type"] = entry.get("type", "")
+
+        # Bucket each doc under its single dominant type.
+        buckets: dict[str, list[str]] = {
+            "addition": [], "revision": [], "restructure": [],
+            "organizational": [], "deletion": [],
+        }
+        for ref in order:
+            dom = dominant_change_type(agg[ref]["types"])
+            if dom in buckets:
+                buckets[dom].append(ref)
+
+        lines: list[str] = []
+
+        # Additions
+        lines.append("## Additions")
+        if buckets["addition"]:
+            for ref in buckets["addition"]:
+                if ref in docs:
+                    lines.extend(_format_addition_entry(ref_token(ref), docs[ref]))
+                else:
+                    lines.append(f"- {ref_token(ref)}")
+        else:
+            lines.append("(none)")
+
+        # Revisions / Restructure / Organizational — one line + note each
+        for heading, key in (
+            ("Revisions", "revision"),
+            ("Restructure", "restructure"),
+            ("Organizational", "organizational"),
+        ):
+            lines.append("")
+            lines.append(f"## {heading}")
+            if buckets[key]:
+                for ref in buckets[key]:
+                    note = agg[ref]["note"]
+                    link = ref_token(ref)
+                    lines.append(f"- {link} — {note}" if note else f"- {link}")
+            else:
+                lines.append("(none)")
+
+        # Deletions — the doc is gone; render its captured label/type + note
+        lines.append("")
+        lines.append("## Deletions")
+        if buckets["deletion"]:
+            for ref in buckets["deletion"]:
+                rec = agg[ref]
+                label = rec.get("label") or ref
+                dtype = rec.get("type") or ""
+                desc = f"{dtype}: {label}" if dtype else label
+                note = rec["note"]
+                base = f"- {ref_token(ref)} ({desc})"
+                lines.append(f"{base} — {note}" if note else base)
+        else:
+            lines.append("(none)")
+
+        return "\n".join(lines) + "\n"
 
     def _collect_touched_since(self, since: str, docs: dict) -> list[str]:
         """
@@ -402,6 +585,76 @@ class ReviewLedger:
                     if h.get("at", "") >= since:
                         last_summary = h.get("summary", "")
                         break
+                if last_summary:
+                    lines.append(f"- {link} — {last_summary}")
+                else:
+                    lines.append(f"- {link}")
+        else:
+            lines.append("(none)")
+
+        lines.append("")
+        lines.append("## Minor Alterations")
+        lines.append("(none)")
+
+        return "\n".join(lines) + "\n"
+
+    def _collect_touched_by_session(self, session: str, docs: dict) -> list[str]:
+        """Return ids of docs created within the session's window OR carrying a
+        history entry tagged with this session id.
+
+        Revisions are matched by the exact session tag; Additions fall back to
+        the session's own start-time window because a freshly-created doc has no
+        history entry to stamp (history-is-changes).
+        """
+        start = session_start_iso(session)
+        touched = []
+        for doc_id, doc in sorted(docs.items()):
+            if start and doc.get("created", "") >= start:
+                touched.append(doc_id)
+                continue
+            for h in doc.get("history", []):
+                if h.get("session", "") == session:
+                    touched.append(doc_id)
+                    break
+        return touched
+
+    def _build_body_by_session(self, session: str, docs: dict) -> str:
+        """Build the three-section summary body by exact session tag.
+
+        Additions: doc created within the session window (created >= start).
+        Revisions: doc with a history entry tagged with this session id.
+        Minor Alterations: not auto-detected (placeholder).
+        """
+        start = session_start_iso(session)
+        additions: list[str] = []
+        revisions: list[tuple[str, str]] = []
+
+        for doc_id, doc in sorted(docs.items()):
+            if start and doc.get("created", "") >= start:
+                additions.append(doc_id)
+                continue
+            # Most recent history entry stamped with this session becomes the summary.
+            last_summary = ""
+            for h in reversed(doc.get("history", [])):
+                if h.get("session", "") == session:
+                    last_summary = h.get("summary", "")
+                    break
+            if last_summary or any(h.get("session", "") == session for h in doc.get("history", [])):
+                revisions.append((doc_id, last_summary))
+
+        lines = []
+        lines.append("## Additions")
+        if additions:
+            for doc_id in additions:
+                lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
+        else:
+            lines.append("(none)")
+
+        lines.append("")
+        lines.append("## Revisions")
+        if revisions:
+            for doc_id, last_summary in revisions:
+                link = ref_token(doc_id)
                 if last_summary:
                     lines.append(f"- {link} — {last_summary}")
                 else:
@@ -489,7 +742,10 @@ class ReviewLedger:
         Expand stored '[[<id>]]' refs into '[[<id>|<Type>: <Title>]]' using the
         docs' *current* labels. This is the read-time presentation step that
         keeps the on-disk ledger normalized while display stays human-readable.
+
+        The trailing WAL-archive block is stripped so it never renders.
         """
+        body = strip_wal_archive(body or "")
         if not body or "[[" not in body:
             return body
         docs = self._load_docs()

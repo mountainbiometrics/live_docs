@@ -80,8 +80,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
@@ -90,6 +92,7 @@ sys.path.insert(0, str(_scripts_dir))
 
 from livedocs import KB, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, generate_id, build_raw_frontmatter
+from livedocs.model import change_types_for_fields
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +128,22 @@ def _fmt_edge_list(edges: list[dict], plain: bool = False) -> str:
     return "\n".join(lines)
 
 
+def _churn_count(doc: dict) -> int:
+    """Hot-file churn signal: history length EXCLUDING addition entries.
+
+    Creation is now recorded as an addition history entry, but creation is not
+    churn — so the opening addition never inflates the hot-file signal
+    (hot-file-signal 20260615203928). Counts genuine post-creation change.
+    """
+    n = 0
+    for h in doc.get("history", []):
+        ct = h.get("change_type")
+        is_addition = ("addition" in ct) if isinstance(ct, list) else (ct == "addition")
+        if not is_addition:
+            n += 1
+    return n
+
+
 def _fields_row(kb: KB, doc_id: str, fields: list[str]) -> str:
     """Return a TSV row for doc_id, extracting named fields from the in-memory doc."""
     doc = kb._docs.get(doc_id, {})
@@ -135,7 +154,7 @@ def _fields_row(kb: KB, doc_id: str, fields: list[str]) -> str:
         elif f in ("title", "display"):
             val = doc.get("title", "") or doc.get("label", "")
         elif f == "history":
-            val = str(len(doc.get("history", [])))
+            val = str(_churn_count(doc))
         else:
             raw = doc.get(f, "")
             if isinstance(raw, list):
@@ -184,6 +203,48 @@ def _kb(fn, *a, **kw) -> bool:
     except ValueError as e:
         _err(str(e))
         return True
+
+
+def _record_change(
+    kb: KB,
+    ref: str,
+    note: str,
+    change_type: list[str],
+    auto_note: str = "",
+) -> bool:
+    """Record one doc-level change: append a per-doc history entry (with its
+    change_type) AND a WAL line to the open session (the double-write —
+    session-change-log). Auto-creates + announces a session when none is open.
+
+    `note` is the AUTHOR-supplied explanation (may be empty). `auto_note` is the
+    obvious-op fallback used only when `note` is empty; auto-notes never discharge
+    a revision at close. A revision-class change with no author note NAGS (warns,
+    does not block). Returns True on error (already printed).
+
+    This is the single choke-point every mutation routes through so history and
+    the session WAL never diverge.
+    """
+    from livedocs.sessions import record_doc_change
+    from livedocs.model import dominant_change_type
+    try:
+        record_doc_change(kb, ref, note or "", change_type, auto_note=auto_note)
+    except ValueError as e:
+        _err(str(e))
+        return True
+
+    # Nag (never block) when a revision-class change carries no author note.
+    if dominant_change_type(change_type) == "revision" and not (note or "").strip():
+        try:
+            label = kb._docs.get(kb.resolve(ref), {}).get("label", ref)
+        except ValueError:
+            label = ref
+        print(
+            f"WARNING: revised {label} without --note. Explain it before "
+            f"`ldoc session close`, or close will block on this doc "
+            f"(fill gaps with: ldoc history <ref> --add \"…\").",
+            file=sys.stderr,
+        )
+    return False
 
 
 def _resolve_refs(kb: KB, raw_refs: list[str]) -> list[str] | None:
@@ -262,7 +323,12 @@ def cmd_get(kb: KB, args) -> int:
         print(f"created: {fm.get('created', '')}")
         print(f"domain: {fm.get('domain', [])}  keywords: {fm.get('keywords', [])}  scope: {fm.get('scope', '') or '(none)'}")
         hist = fm.get("history", [])
-        print(f"history: {len(hist)} entries")
+        churn = _churn_count(fm)
+        # Total entries, plus the churn count (additions excluded — hot-file signal).
+        if churn != len(hist):
+            print(f"history: {len(hist)} entries ({churn} churn)")
+        else:
+            print(f"history: {len(hist)} entries")
 
     if args.json and len(refs) > 1:
         results = []
@@ -809,6 +875,16 @@ def cmd_new(kb: KB, args) -> int:
         _err(str(e))
         return 1
 
+    # Creation is recorded history: write the addition entry (session-stamped)
+    # + WAL line. Auto-creates + announces a session when none is open.
+    from livedocs.sessions import record_addition
+    note = getattr(args, "note", "") or "Created doc"
+    try:
+        record_addition(kb, doc_id, note=note)
+    except Exception as e:
+        _err(str(e))
+        return 1
+
     print(f"id:   {doc_id}")
     print(f"path: {kb.docs_dir / doc_id}.md")
     return 0
@@ -877,12 +953,19 @@ def cmd_set(kb: KB, args) -> int:
         print("\n(No doc written.)")
         return 0
 
+    # change_type from which fields ran (change-type-taxonomy). --body counts as
+    # 'body' (revision); each scalar field maps via its own name.
+    touched_fields = list(set_fields.keys())
+    if new_body is not None:
+        touched_fields.append("body")
+    change_type = change_types_for_fields(touched_fields)
+
     for ref in refs:
         if set_fields and _kb(kb.set, ref, **set_fields):
             return 1
         if new_body is not None and _kb(kb.set_body, ref, new_body):
             return 1
-        if note and _kb(kb.add_history, ref, note):
+        if _record_change(kb, ref, note, change_type):
             return 1
 
     print(f"Updated {', '.join(refs)}")
@@ -910,6 +993,44 @@ def _parse_edge_args(args) -> dict:
         "provenance": _split_csv(getattr(args, "provenance", "") or ""),
         "superseded_by": _split_csv(getattr(args, "superseded_by", "") or ""),
     }
+
+
+def _label_for(kb: KB, ref: str) -> str:
+    """Best-effort human label for a ref (falls back to the raw ref)."""
+    try:
+        doc_id = kb.resolve(ref)
+        return kb._docs.get(doc_id, {}).get("label", "") or doc_id
+    except ValueError:
+        return ref
+
+
+def _reparent_note(kb: KB, ref: str, new_belongs_to: list[str]) -> str:
+    """Auto-note for a belongs_to --replace: 'Reparented from X to Y'.
+
+    Reads the doc's CURRENT parent(s) before the mutation. Falls back to a plain
+    'Set parent to Y' when there was no prior parent.
+    """
+    try:
+        doc_id = kb.resolve(ref)
+    except ValueError:
+        return ""
+    old_ids = kb._docs.get(doc_id, {}).get("belongs_to", [])
+    old = ", ".join(kb._docs.get(i, {}).get("label", "") or i for i in old_ids)
+    new = ", ".join(_label_for(kb, r) for r in new_belongs_to)
+    if old:
+        return f"Reparented from {old} to {new}"
+    return f"Set parent to {new}"
+
+
+def _unlink_note(kb: KB, edges: dict) -> str:
+    """Auto-note for an unlink: 'Removed <edge> to <label>' for each edge set."""
+    parts = []
+    for field, refs in edges.items():
+        if not refs:
+            continue
+        labels = ", ".join(_label_for(kb, r) for r in refs)
+        parts.append(f"Removed {field} to {labels}")
+    return "; ".join(parts)
 
 
 def cmd_link(kb: KB, args) -> int:
@@ -950,11 +1071,20 @@ def cmd_link(kb: KB, args) -> int:
         print("\n(No doc written.)")
         return 0
 
+    # change_type from which edge fields ran (change-type-taxonomy).
+    touched_fields = [k for k, v in edges.items() if v]
+    change_type = change_types_for_fields(touched_fields)
+
     for ref in refs:
+        # Auto-note for a re-parent (belongs_to --replace): capture old→new
+        # BEFORE the link mutates belongs_to.
+        auto_note = ""
+        if replace and edges.get("belongs_to"):
+            auto_note = _reparent_note(kb, ref, edges["belongs_to"])
         if _kb(kb.link, ref, **{k: v or None for k, v in edges.items()},
                replace_belongs_to=replace):
             return 1
-        if note and _kb(kb.add_history, ref, note):
+        if _record_change(kb, ref, note, change_type, auto_note=auto_note):
             return 1
 
     print(f"Linked {', '.join(refs)}")
@@ -975,10 +1105,17 @@ def cmd_unlink(kb: KB, args) -> int:
 
     note = getattr(args, "note", "")
 
+    # change_type from which edge fields ran (change-type-taxonomy).
+    touched_fields = [k for k, v in edges.items() if v]
+    change_type = change_types_for_fields(touched_fields)
+
     for ref in refs:
+        # Auto-note for an unlink: "Removed <edge> to <label>" (per inline-notes).
+        # Compute BEFORE the unlink so labels still resolve.
+        auto_note = _unlink_note(kb, edges)
         if _kb(kb.unlink, ref, **{k: v or None for k, v in edges.items()}):
             return 1
-        if note and _kb(kb.add_history, ref, note):
+        if _record_change(kb, ref, note, change_type, auto_note=auto_note):
             return 1
 
     print(f"Unlinked {', '.join(refs)}")
@@ -994,8 +1131,19 @@ def cmd_history(kb: KB, args) -> int:
     if refs is None:
         return 1
 
+    # Demoted (inline-notes): `ldoc history` is no longer the everyday path —
+    # inline `--note` on the mutating command supplants it. It survives only as
+    # the post-hoc GAP-FILLER used when `session close` reports an unexplained
+    # revision. As such, its note is treated as an AUTHOR note carrying a
+    # `revision` change_type, so it discharges the close-gate for that doc.
+    print(
+        "NOTE: `ldoc history` is demoted — prefer inline --note on the mutating "
+        "command. This verb remains as the post-hoc gap-filler for `session close`.",
+        file=sys.stderr,
+    )
+
     for ref in refs:
-        if _kb(kb.add_history, ref, args.add):
+        if _record_change(kb, ref, args.add, ["revision"]):
             return 1
 
     print(f"History entry added to {', '.join(refs)}")
@@ -1067,6 +1215,7 @@ def cmd_rm(kb: KB, args) -> int:
         )
         return 1
 
+    stripped: list = []
     if args.force and inbound:
         stripped = kb.strip_inbound_edges(doc_id, inbound=inbound)
         print(f"Stripped {len(stripped)} inbound edge(s) from {len({r for r, _ in stripped})} doc(s):")
@@ -1074,7 +1223,26 @@ def cmd_rm(kb: KB, args) -> int:
             ref_label = kb._docs.get(referrer_id, {}).get("label", referrer_id)
             print(f"  {referrer_id} [{ref_label}]  {field}")
 
+    # Capture the dead doc's type before it's gone (for the WAL record).
+    doc_type = kb._docs.get(doc_id, {}).get("type", "")
+
     (kb.docs_dir / f"{doc_id}.md").unlink()
+
+    # A deletion leaves NO per-doc history — record it in the session WAL only,
+    # capturing label/type + the stripped inbound edges (session-change-log).
+    kb._reload()
+    from livedocs.sessions import record_deletion
+    note = getattr(args, "note", "")
+    try:
+        record_deletion(
+            kb, doc_id, label, doc_type,
+            stripped_edges=stripped, note=note,
+            auto_note=f"Deleted {label}",
+        )
+    except Exception as e:
+        _err(str(e))
+        return 1
+
     print(f"Deleted {doc_id}  ({label})")
 
     script = Path(__file__).resolve().parent / "reindex.py"
@@ -1748,6 +1916,7 @@ def cmd_review(kb: KB, args) -> int:
 
 def _review_new(ledger: ReviewLedger, args) -> int:
     since = args.since or ""
+    session = getattr(args, "session", "") or ""
     touched_refs = None
     body = ""
 
@@ -1759,20 +1928,20 @@ def _review_new(ledger: ReviewLedger, args) -> int:
     elif args.summary:
         body = args.summary
 
-    if not since and touched_refs is None and not body:
-        _err("Provide --since <ISO8601>, --touched <refs>, or --summary <text|->, or a combination.")
+    if not since and not session and touched_refs is None and not body:
+        _err("Provide --session <id>, --since <ISO8601>, --touched <refs>, or --summary <text|->, or a combination.")
         return 1
 
     try:
-        review_id, path = ledger.new(since=since, touched_refs=touched_refs, body=body)
+        review_id, path = ledger.new(since=since, touched_refs=touched_refs, body=body, session=session)
     except Exception as e:
         _err(str(e))
         return 1
 
-    # Non-gating guardrail: an explicit body with no --since/--touched produces a
-    # record whose `touched` is empty — the body wasn't auto-built from changed
-    # docs, so the ledger can't tie it to the graph. Warn, don't fail.
-    if body and not since and not touched_refs:
+    # Non-gating guardrail: an explicit body with no --session/--since/--touched
+    # produces a record whose `touched` is empty — the body wasn't auto-built
+    # from changed docs, so the ledger can't tie it to the graph. Warn, don't fail.
+    if body and not since and not session and not touched_refs:
         print(
             "WARNING: review created with an empty `touched` list — the body was "
             "taken as-is, not auto-built from changed docs. Consider --since <ISO8601> "
@@ -1854,6 +2023,280 @@ def _review_sign(ledger: ReviewLedger, args) -> int:
         return 1
 
     print(f"Signed {args.ref!r} as {as_who!r} at {at}")
+    return 0
+
+
+def _session_note_gaps(store, session_id: str) -> list[dict]:
+    """Return docs with a revision-class change in this session that lack an
+    author-supplied note (close-gate-requires-notes).
+
+    Auto-notes do NOT discharge a revision; one author note per doc suffices.
+    Additions / restructure / organizational / deletion never block close.
+    Returns [{ref, label}] for each gap doc.
+    """
+    from livedocs.model import dominant_change_type
+    rec = store.get(session_id)
+    if rec is None:
+        return []
+    # Per doc: did it ever have a revision-class change? did any author note land?
+    revised: set[str] = set()
+    author_noted: set[str] = set()
+    for entry in rec.get("wal", []):
+        ref = entry.get("ref", "")
+        if not ref:
+            continue
+        cts = entry.get("change_type") or []
+        if "revision" in cts:
+            revised.add(ref)
+        if entry.get("author_note") and (entry.get("note") or "").strip():
+            author_noted.add(ref)
+    gaps = [r for r in revised if r not in author_noted]
+    return [{"ref": r} for r in sorted(gaps)]
+
+
+def cmd_session(kb: KB, args) -> int:
+    """Dispatch `ldoc session <start|close|list|summary|resume|merge>` — the
+    editing-session lifecycle (editing-session, on-disk-session-records).
+
+    `start` mints an id and writes an open record; exporting it as LDOC_SESSION
+    makes every subsequent mutation double-write into that session's WAL. `close`
+    folds the WAL into exactly one review and deletes the live record.
+    """
+    from livedocs.sessions import SessionStore
+    from livedocs.model import generate_session_id
+    store = SessionStore()
+    verb = args.session_verb
+
+    if verb == "start":
+        # Accident guard (sessions-are-required): opening over a live session is
+        # almost always accidental and would mis-attribute every later change.
+        existing = (os.environ.get("LDOC_SESSION", "") or "").strip()
+        if existing:
+            _err(
+                f"a session is already open (LDOC_SESSION={existing}). Refusing to "
+                f"start a nested session — close it first (ldoc session close), or "
+                f"unset LDOC_SESSION. Use `ldoc session resume <id>` to re-export one."
+            )
+            return 1
+        sid = generate_session_id()
+        try:
+            store.open(sid)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+        # stdout carries ONLY the id (or an export line), so `$(ldoc session
+        # start)` and `eval $(ldoc session start --export)` both work cleanly.
+        if getattr(args, "export", False):
+            print(f"export LDOC_SESSION={sid}")
+        else:
+            print(sid)
+        print(
+            f"session started: {sid}\n"
+            f"  tag mutations:  export LDOC_SESSION={sid}\n"
+            f'  close it with:  ldoc session close --summary "…"',
+            file=sys.stderr,
+        )
+        return 0
+
+    if verb in ("close", "end"):
+        sid = (getattr(args, "session", "") or os.environ.get("LDOC_SESSION", "")).strip()
+        if not sid:
+            _err("No session id. Pass --session <id> or set LDOC_SESSION (see: ldoc session start).")
+            return 1
+
+        rec = store.get(sid)
+
+        # Close-gate: block until every revision-touched doc carries an author
+        # note (close-gate-requires-notes). --force overrides for emergencies.
+        if rec is not None and not getattr(args, "force", False):
+            gaps = _session_note_gaps(store, sid)
+            if gaps:
+                lines = "\n".join(
+                    f"  {g['ref']}  {kb._docs.get(g['ref'], {}).get('label', '')}"
+                    for g in gaps
+                )
+                _err(
+                    f"session close BLOCKED: {len(gaps)} revised doc(s) lack an "
+                    f"author note:\n{lines}\n\n"
+                    f'Fill each with: ldoc history <ref> --add "why it changed"\n'
+                    f"(or re-run with --force to close anyway)."
+                )
+                return 1
+
+        summary_text = ""
+        if getattr(args, "summary", "") == "-":
+            summary_text = sys.stdin.read()
+        elif getattr(args, "summary", ""):
+            summary_text = args.summary
+        # Fall back to the record's stored agent-recap summary if no override.
+        if not summary_text and rec is not None:
+            summary_text = rec.get("summary", "")
+
+        from livedocs import REVIEWS_DIR
+        ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
+        try:
+            if rec is not None:
+                # Primary path: build the review from the session's WAL.
+                review_id, path = ledger.new(
+                    wal=rec.get("wal", []), summary_text=summary_text
+                )
+            else:
+                # No on-disk record — fall back to the legacy tag-scan path.
+                review_id, path = ledger.new(session=sid, summary_text=summary_text)
+        except Exception as e:
+            _err(str(e))
+            return 1
+
+        # The session has rolled into a review — delete the live record.
+        if rec is not None:
+            store.delete(sid)
+
+        print(f"session closed: {sid}")
+        print(f"review id:      {review_id}")
+        print(f"review path:    {path}")
+        if os.environ.get("LDOC_SESSION", "").strip() == sid:
+            print("  (unset the pointer: unset LDOC_SESSION)", file=sys.stderr)
+        return 0
+
+    if verb == "list":
+        open_only = getattr(args, "open", False)
+        records = store.list_open()
+        if not records:
+            print("(no open sessions)")
+            return 0
+        now = datetime.now(timezone.utc)
+        for rec in records:
+            sid = rec["id"]
+            wal = rec.get("wal", [])
+            gaps = _session_note_gaps(store, sid)
+            n_changes = len(wal)
+            # Age from opened_at.
+            age = ""
+            try:
+                opened = datetime.strptime(rec.get("opened_at", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                mins = int((now - opened).total_seconds() // 60)
+                age = f"{mins}m" if mins < 120 else f"{mins // 60}h"
+            except (ValueError, TypeError):
+                age = "?"
+            cover = "note-gaps: none" if not gaps else f"note-gaps: {len(gaps)}"
+            summ = rec.get("summary", "")
+            summ_part = f'  "{summ}"' if summ else ""
+            print(f"{sid}  age={age}  changes={n_changes}  {cover}{summ_part}")
+        return 0
+
+    if verb == "summary":
+        sid = (getattr(args, "session", "") or os.environ.get("LDOC_SESSION", "")).strip()
+        if not sid:
+            _err("No session id. Pass a session id or set LDOC_SESSION.")
+            return 1
+        text = args.text
+        if text == "-":
+            text = sys.stdin.read().strip()
+        try:
+            store.set_summary(sid, text)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+        print(f"summary set for session {sid}")
+        return 0
+
+    if verb == "resume":
+        sid = args.session_id.strip()
+        if not store.exists(sid):
+            _err(f"no open session record: {sid}")
+            return 1
+        print(f"export LDOC_SESSION={sid}")
+        print(f"session resumed: {sid} — eval the line above to re-export it.",
+              file=sys.stderr)
+        return 0
+
+    if verb == "merge":
+        ids = args.session_ids
+        if len(ids) < 2:
+            _err("Provide at least two session ids to merge.")
+            return 1
+        try:
+            target, others = store.merge(ids)
+        except ValueError as e:
+            _err(str(e))
+            return 1
+        # Re-tag per-doc history entries of the folded sessions to the target so
+        # the doc trail agrees with the merged WAL.
+        retagged = _retag_history_sessions(kb, others, target)
+        print(f"merged {len(others)} session(s) into {target}")
+        print(f"  folded: {', '.join(others)}")
+        if retagged:
+            print(f"  re-tagged {retagged} history entr(y/ies) to {target}")
+        return 0
+
+    _err(f"Unknown session subcommand: {verb!r}")
+    return 1
+
+
+def _retag_history_sessions(kb: KB, old_ids: list[str], new_id: str) -> int:
+    """Re-tag every history entry stamped with any of `old_ids` to `new_id`.
+
+    Walks the docs on disk (session merge folds fragments into the earliest).
+    Returns the number of entries re-tagged.
+    """
+    from livedocs.serialize import parse_doc, dump_doc
+    old_set = set(old_ids)
+    count = 0
+    for doc_id in list(kb._docs.keys()):
+        path = kb.docs_dir / f"{doc_id}.md"
+        parsed = parse_doc(path)
+        body = parsed.pop("body", "")
+        changed = False
+        for h in parsed.get("history", []):
+            if h.get("session", "") in old_set:
+                h["session"] = new_id
+                changed = True
+                count += 1
+        if changed:
+            path.write_text(dump_doc(parsed, body), encoding="utf-8")
+    if count:
+        kb._reload()
+    return count
+
+
+def cmd_migrate(kb: KB, args) -> int:
+    """One-shot migration: convert every doc's `created` field into a leading
+    `addition` history entry, then drop the field (creation-is-recorded-history).
+
+    Idempotent — docs already migrated (no `created`) are skipped. With
+    --dry-run, reports what would change without writing.
+    """
+    from livedocs.kb import _heal_created_field
+    from livedocs.serialize import parse_doc, dump_doc
+
+    to_migrate = []
+    for doc_id, doc in sorted(kb._docs.items()):
+        if doc.get("created"):
+            to_migrate.append(doc_id)
+
+    if not to_migrate:
+        print("Nothing to migrate — no docs carry a `created` field.")
+        return 0
+
+    if args.dry_run:
+        print(f"## DRY RUN — would migrate {len(to_migrate)} doc(s):\n")
+        for doc_id in to_migrate:
+            doc = kb._docs[doc_id]
+            print(f"  {doc_id} [{doc.get('label','')}]  created={doc.get('created','')} "
+                  f"→ addition entry, field dropped")
+        print(f"\n(No docs written. Run without --dry-run to apply.)")
+        return 0
+
+    migrated = 0
+    for doc_id in to_migrate:
+        path = kb.docs_dir / f"{doc_id}.md"
+        parsed = parse_doc(path)
+        body = parsed.pop("body", "")
+        if _heal_created_field(parsed):
+            path.write_text(dump_doc(parsed, body), encoding="utf-8")
+            migrated += 1
+    kb._reload()
+    print(f"Migrated {migrated} doc(s): `created` → leading addition history entry.")
     return 0
 
 
@@ -2164,6 +2607,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--authored-at", dest="authored_at", default="",
                    help='reference docs: when the SOURCE was written, possibly fuzzy (e.g. "2024-03").')
     p.add_argument("--body", default="", help="Body text or '-' to read from stdin.")
+    p.add_argument("--note", default="",
+                   help="Creation note for the addition history entry (default: 'Created doc').")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview what would be created without writing.")
 
@@ -2255,6 +2700,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Strip all inbound edges (requires/belongs_to/relates/provenance/superseded_by) then delete.",
     )
+    p.add_argument("--note", default="",
+                   help="Deletion note for the WAL (default: 'Deleted <label>').")
     p.add_argument("--dry-run", dest="dry_run", action="store_true",
                    help="Preview what would be deleted without writing.")
 
@@ -2349,6 +2796,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_rc.add_argument("ref", help="id or unique substring of a parent raw item.")
 
+    # --- migrate ---
+    p = sub.add_parser(
+        "migrate",
+        help="One-shot: convert each doc's `created` field into a leading addition "
+             "history entry, then drop the field.",
+    )
+    p.add_argument("--dry-run", dest="dry_run", action="store_true",
+                   help="Report what would change without writing.")
+
     # --- validate ---
     sub.add_parser("validate", help="Run structural integrity checks.")
 
@@ -2377,8 +2833,10 @@ def build_parser() -> argparse.ArgumentParser:
     rev_sub.required = True
 
     p_rn = rev_sub.add_parser("new", help="Create a new review summary record.")
+    p_rn.add_argument("--session", default="",
+                      help="Session id (from `ldoc session start`); build from changes tagged with it.")
     p_rn.add_argument("--since", default="",
-                      help="ISO 8601 UTC timestamp; scan docs/ for changes since this time.")
+                      help="ISO 8601 UTC timestamp; scan docs/ for changes since this time (fallback to --session).")
     p_rn.add_argument("--touched", default="",
                       help="Comma-separated doc ids/refs to include explicitly.")
     p_rn.add_argument("--summary", default="",
@@ -2395,6 +2853,70 @@ def build_parser() -> argparse.ArgumentParser:
     p_rsg.add_argument("ref", help="Review record id (or unique prefix/substring).")
     p_rsg.add_argument("--as", dest="as_who", default=None,
                        help="Signature (git author format). Default: user.name + user.email from config.")
+
+    # --- session (editing-session lifecycle) ---
+    p_sess = sub.add_parser(
+        "session",
+        help="Open/close an editing session tracked by an explicit id + on-disk WAL.",
+    )
+    sess_sub = p_sess.add_subparsers(dest="session_verb", metavar="verb")
+    sess_sub.required = True
+
+    p_ss = sess_sub.add_parser(
+        "start", help="Mint a session id + open record; export as LDOC_SESSION to tag mutations."
+    )
+    p_ss.add_argument(
+        "--export", action="store_true",
+        help="Print 'export LDOC_SESSION=<id>' for: eval $(ldoc session start --export)",
+    )
+
+    def _add_close_args(p):
+        p.add_argument(
+            "--session", default="",
+            help="Session id to close. Default: the LDOC_SESSION environment variable.",
+        )
+        p.add_argument(
+            "--summary", default="",
+            help="Agent recap prepended to the review as a ## Summary block, or '-' for stdin. "
+                 "Defaults to the session record's stored summary.",
+        )
+        p.add_argument(
+            "--force", action="store_true",
+            help="Close even when revised docs lack author notes (overrides the close-gate).",
+        )
+
+    p_sc = sess_sub.add_parser(
+        "close",
+        help="Finalize the session: build its review from the WAL, then delete the live record.",
+    )
+    _add_close_args(p_sc)
+
+    # Hidden alias: `end` behaves exactly like `close`.
+    p_se = sess_sub.add_parser("end", help=argparse.SUPPRESS)
+    _add_close_args(p_se)
+
+    p_sl = sess_sub.add_parser(
+        "list", help="List open sessions with age and note-coverage."
+    )
+    p_sl.add_argument("--open", action="store_true", default=True,
+                      help="Show only open sessions (default; all records are open).")
+
+    p_sm = sess_sub.add_parser(
+        "summary", help="Set a session's agent-recap summary (the commit-message-like intent)."
+    )
+    p_sm.add_argument("session", nargs="?", default="",
+                      help="Session id (default: LDOC_SESSION).")
+    p_sm.add_argument("text", help="Summary text, or '-' to read from stdin.")
+
+    p_sr = sess_sub.add_parser(
+        "resume", help="Print the export line to re-open an existing session id."
+    )
+    p_sr.add_argument("session_id", help="Session id to resume.")
+
+    p_smg = sess_sub.add_parser(
+        "merge", help="Fold open sessions into the earliest: re-tag history + concat WALs."
+    )
+    p_smg.add_argument("session_ids", nargs="+", help="Two or more open session ids to merge.")
 
     # --- config (user preferences; no store required) ---
     # Minimal stub so `ldoc --help` lists the subcommand. Actual parsing is
@@ -2417,7 +2939,7 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 # Subcommands that mutate tiers exported into viewer.html (docs/, reviews/).
-_VIEWER_MUTATING = frozenset({"new", "set", "edit", "link", "unlink", "history", "rm"})
+_VIEWER_MUTATING = frozenset({"new", "set", "edit", "link", "unlink", "history", "rm", "migrate"})
 _REVIEW_MUTATING = frozenset({"new", "sign"})
 
 
@@ -2435,6 +2957,9 @@ def _should_auto_rebuild_viewer(args, rc: int) -> bool:
         return not getattr(args, "dry_run", False)
     if cmd == "review":
         return getattr(args, "review_verb", None) in _REVIEW_MUTATING
+    if cmd == "session":
+        # close/end mint a review — rebuild so it shows in the viewer.
+        return getattr(args, "session_verb", None) in ("close", "end")
     return False
 
 
@@ -2476,11 +3001,13 @@ COMMANDS = {
     "inbox": cmd_inbox,
     "promote": cmd_promote,
     "raw": cmd_raw,
+    "migrate": cmd_migrate,
     "validate": cmd_validate,
     "reindex": cmd_reindex,
     "viewer": cmd_viewer,
     "edges": cmd_edges,
     "review": cmd_review,
+    "session": cmd_session,
     "config": cmd_config,
     "help": cmd_help,
 }

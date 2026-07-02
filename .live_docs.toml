@@ -1,7 +1,8 @@
 # live_docs store config. Discovered by walking up from the working directory.
 # Paths resolve relative to THIS file's directory (absolute and ~ also allowed),
 # so the docs need not live in this repo — point these anywhere.
-inbox   = "kb/00-inbox"
-raw     = "kb/01-raw"
-docs    = "kb/02-docs"
-reviews = "kb/reviews"
+inbox    = "kb/00-inbox"
+raw      = "kb/01-raw"
+docs     = "kb/02-docs"
+reviews  = "kb/reviews"
+sessions = "kb/sessions"

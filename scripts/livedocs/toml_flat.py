@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-STORE_KEYS = ("inbox", "raw", "docs", "reviews", "index")
+STORE_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "index")
 
 # Resolve the TOML backend once at import time; avoid repeated failed imports.
 try:

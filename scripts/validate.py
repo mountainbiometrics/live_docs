@@ -58,7 +58,7 @@ from livedocs.lint import prose_links_not_edged, malformed_body_wikilinks
 # Edge fields (belongs_to, requires, relates, provenance, superseded_by) are
 # optional and may be absent — absence == empty list, which is valid.
 REQUIRED_BASELINE_FIELDS = {
-    "id", "title", "label", "type", "status", "level", "created",
+    "id", "title", "label", "type", "status", "level",
 }
 
 # Edge fields the model treats as DAGs (no cycles permitted). belongs_to is the

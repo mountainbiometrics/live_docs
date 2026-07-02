@@ -87,6 +87,16 @@ def _parse_inline_list(s: str) -> list:
     return []
 
 
+def _scalar_or_inline_list(raw: str):
+    """Parse a mapping-value fragment: an inline list `[a, b]` → list, else a
+    stripped scalar string. Used for history-entry values (change_type is a
+    list; at/summary/session are scalars)."""
+    s = raw.strip()
+    if s.startswith("[") and s.endswith("]"):
+        return _parse_inline_list(s)
+    return _strip_quotes(s)
+
+
 def _parse_frontmatter_text(fm_text: str) -> dict:
     """
     Parse the text between the two '---' delimiters.
@@ -161,10 +171,10 @@ def _parse_frontmatter_text(fm_text: str) -> dict:
                 i += 1
                 # Is this a mapping entry (history item)?  e.g. "at: ..."
                 if re.match(r'^[A-Za-z_][\w-]*:\s', item_text) or item_text.endswith(':'):
-                    entry: dict[str, str] = {}
+                    entry: dict[str, Any] = {}
                     em = re.match(r'^([A-Za-z_][\w-]*):\s*(.*)', item_text)
                     if em:
-                        entry[em.group(1)] = _strip_quotes(em.group(2))
+                        entry[em.group(1)] = _scalar_or_inline_list(em.group(2))
                     # Collect continuation lines (indented by more than the "- " line)
                     base_indent = len(seq_m.group(1)) + 2  # indent of the "- " plus 2
                     while i < n:
@@ -177,7 +187,7 @@ def _parse_frontmatter_text(fm_text: str) -> dict:
                             break
                         cm = re.match(r'^\s+([A-Za-z_][\w-]*):\s*(.*)', cont)
                         if cm:
-                            entry[cm.group(1)] = _strip_quotes(cm.group(2))
+                            entry[cm.group(1)] = _scalar_or_inline_list(cm.group(2))
                         i += 1
                     seq.append(entry)
                 else:
@@ -362,6 +372,21 @@ def _emit_field(key: str, value: Any) -> list[str]:
             summary = entry.get("summary", "")
             lines.append(f"  - at: {_yaml_str(at)}")
             lines.append(f"    summary: {_yaml_str(summary)}")
+            # Additive change_type tag (change-type-taxonomy): a list of the
+            # taxonomy categories this change touched, emitted only when present
+            # so pre-taxonomy entries round-trip byte-for-byte. Stored as an
+            # inline list; the parser reads it generically.
+            change_type = entry.get("change_type", "")
+            if change_type:
+                if isinstance(change_type, str):
+                    change_type = [change_type]
+                lines.append(f"    change_type: {_yaml_list(list(change_type))}")
+            # Additive session tag (session-stamped-history): emitted only when
+            # the entry was written inside an open session, so pre-session
+            # entries round-trip byte-for-byte. The parser reads it generically.
+            session = entry.get("session", "")
+            if session:
+                lines.append(f"    session: {_yaml_str(session)}")
         return lines
 
     # Edge fields: wikilink-wrapped inline list for Obsidian graph.
