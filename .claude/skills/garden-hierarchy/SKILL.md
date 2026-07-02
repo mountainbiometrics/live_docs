@@ -56,7 +56,6 @@ Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is 
 ```bash
 ldoc new --type component --label "<2–5 word Title-Case handle>" [--title "<theme>"] --belongs-to <parent> --body "…"
 ldoc link <member-id> --belongs-to <SIGNPOST_ID>
-ldoc history <member-id> --add "garden-hierarchy: grouped under <SIGNPOST_ID>"
 ```
 
 Recategorize: `ldoc unlink` old + `ldoc link` new. Split: create narrower
@@ -77,8 +76,7 @@ Scope is a topology-derived facet: set on an "anchor" doc, it applies to that do
 
 Propose slug from doc role; apply:
 ```bash
-ldoc set <id> --scope <anchor-name>
-ldoc history <id> --add "garden-hierarchy: set scope anchor <anchor-name>"
+ldoc set <id> --scope <anchor-name> --note "garden-hierarchy: set scope anchor <anchor-name>"
 ```
 
 Leave root alone.

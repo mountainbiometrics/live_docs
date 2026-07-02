@@ -57,13 +57,14 @@ Same "orchestrator owns the episode" contract as `ingest-reference` and
 `cascade-check`:
 
 - **Standalone** (a human invokes shard-clipping directly to shard a raw):
-  shard-clipping captures the single `START` timestamp (Step 0) and emits **one**
-  review summary covering the child-raw creation (Step 6). The downstream gate-2
-  ingests are SEPARATE episodes with their own summaries — shard-clipping does
+  shard-clipping owns the episode — it opens the session (Step 0) and closes it
+  into **one** review covering the child-raw creation (Step 6). The downstream
+  gate-2 ingests are SEPARATE episodes with their own reviews — shard-clipping does
   NOT wrap them in one giant review.
 - **Nested** (invoked by `ingest-reference`, the normal case): shard-clipping is a
-  nested invocation — skip Step 0, do NOT run `ldoc review new`, and let the outer
-  `ingest-reference` episode own the timestamp and summary.
+  nested invocation that **inherits the ambient session** — it must NOT open a
+  session (skip Step 0) and must NOT `session close`; only the outer
+  `ingest-reference` owner opens the session and closes it into the review.
 - shard-clipping does **not** ingest the children and does **not** own their
   reviews. Each child is ingested later, as its **own** independent gate-2 episode
   (driven by the pending-raw loop), owning its own single review — exactly like a
@@ -86,15 +87,15 @@ N reviews — not this skill's concern.
 
 ---
 
-## Step 0 — Capture the episode start time (standalone only)
+## Step 0 — Open the editing session (standalone only)
 
 ```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
+export LDOC_SESSION=$(ldoc session start)
 ```
 
-Record the literal timestamp (e.g. `2026-06-19T23:48:00Z`); paste this exact
-value into `review new --since` at the end. **Skip this step entirely for nested
-invocations** — the outer skill owns the timestamp and the summary.
+Read and apply `.claude/skills/_shared/session-lifecycle.md`. **Skip this step
+entirely for nested invocations** — the nested shard inherits the outer skill's
+ambient session, which owns opening and closing it.
 
 ---
 
@@ -301,26 +302,27 @@ Children created (shard only) — left PENDING for the backlog loop:
 own gate-2 episode when the pending-raw iterator reaches it.)
 ```
 
-**Review summary — standalone, AND only if children were created.** A
+**Close the session — standalone, AND only if children were created.** A
 `pass-through` run creates no child raws and mutates nothing; by the garden
-"change passes only" precedent it emits NO summary (it merely hands the existing
-raw to gate 2). A `shard` run created child raws, so it emits one summary covering
-that creation:
+"change passes only" precedent it mints NO review (it merely hands the existing
+raw to gate 2). A `shard` run created child raws, so closing the session mints one
+review covering that creation:
 
 ```bash
-ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value recorded in Step 0
+ldoc session close --summary "<one-line agent recap of the episode>"
 ```
 
-After it runs, confirm `touched` is non-empty (the new child raws). Report the id:
+The review is built from the session's change log; confirm `touched` reflects the
+new child raws. Report the id:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)
 ```
 
-**Skip the summary entirely for nested invocations** — the outer `ingest-reference`
-episode owns it. Review is post-hoc and non-gating: it records the sharding act
-for later signoff and never blocks it. The gate-2 ingests carry their own separate
-summaries.
+**Skip the close entirely for nested invocations** — the nested shard inherited
+the outer `ingest-reference` session, which owns closing it. Review is post-hoc
+and non-gating: it records the sharding act for later signoff and never blocks it.
+The gate-2 ingests carry their own separate reviews.
 
 ---
 

@@ -14,11 +14,13 @@ description: >
 
 **Contract:** a nested phase by default; can also be invoked standalone (rare).
 
-- **Standalone** (user invoked `garden-summarize` directly): capture START, run
-  the procedure, validate, emit one `ldoc review new`. Use history entry prefix
-  `garden-summarize:`.
-- **Nested** (called from `garden`, `garden-hierarchy`, or `cascade-check`):
-  capture no START, run no `cascade-check`, emit no review — report changed ids
+- **Standalone** (user invoked `garden-summarize` directly): it owns the episode.
+  Open a session (`ldoc session start`, exported), run the procedure, validate,
+  then close it (`ldoc session close`) — closing mints the single review. Use the
+  `garden-summarize:` note prefix.
+- **Nested** (called from `garden`, `garden-hierarchy`, or `cascade-check`): it
+  inherits the ambient session — no `session start`, no `session close`, run no
+  `cascade-check`, emit no review. The caller owns the session; report changed ids
   only.
 
 Applies to **any descendant-bearing doc** (target of `belongs_to` edges), any
@@ -43,9 +45,8 @@ Applies to **any descendant-bearing doc** (target of `belongs_to` edges), any
    Reference members via `[[<member-id>]]` wiki-links.
 4. Apply:
    ```bash
-   ldoc set <parent-id> --body -
+   ldoc set <parent-id> --body - --note "garden-summarize: synthesized overview over <N> members"
    ldoc set <parent-id> --summary "<tight signpost>"
-   ldoc history <parent-id> --add "garden-summarize: synthesized overview over <N> members"
    ```
 
 Cascade-sensitive: re-run whenever a member changes substantively (see

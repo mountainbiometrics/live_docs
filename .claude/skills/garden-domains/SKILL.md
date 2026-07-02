@@ -72,8 +72,7 @@ ldoc find --domain "A" --json
 # For each such doc <id>:
 ldoc show <id>          # read the full current domain list
 # Swap A → B within the list, then re-set the whole list:
-ldoc set <id> --domain "B,<other-domains-unchanged>"
-ldoc history <id> --add "garden-domains: consolidated domain A→B"
+ldoc set <id> --domain "B,<other-domains-unchanged>" --note "garden-domains: consolidated domain A→B"
 ```
 
 `ldoc set --domain` has **replace semantics**: it replaces the doc's entire
@@ -97,8 +96,7 @@ If those conditions are not all met, leave the doc untagged. Under-proposing is
 correct. Never coin a new domain to satisfy a single untagged doc.
 
 ```bash
-ldoc set <id> --domain "<existing-domain>,<other-domains-if-any>"
-ldoc history <id> --add "garden-domains: assigned to domain <name>"
+ldoc set <id> --domain "<existing-domain>,<other-domains-if-any>" --note "garden-domains: assigned to domain <name>"
 ```
 
 ### 4. Validate claimed memberships
@@ -112,8 +110,7 @@ concern, not just adjacent to it or historically tagged. Remove inaccurate
 memberships:
 
 ```bash
-ldoc set <id> --domain "<corrected-list-without-erroneous-domain>"
-ldoc history <id> --add "garden-domains: removed inaccurate domain <name>"
+ldoc set <id> --domain "<corrected-list-without-erroneous-domain>" --note "garden-domains: removed inaccurate domain <name>"
 ```
 
 ### 5. Normalize convention drift

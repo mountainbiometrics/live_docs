@@ -58,13 +58,13 @@ same turn**, and its result feeds the step after it — running a sub-skill is
 never where you stop. A raw whose concepts were extracted but no docs written is
 not "partly ingested"; it is *not ingested*.
 
-- ingest-reference captures the single `START` timestamp (Step 0) and emits the
-  **one** review summary for the whole episode (Step 8).
+- ingest-reference owns the episode — it opens the session (Step 0) and closes it
+  into the **one** review for the whole episode (Step 8).
 - The sub-skills — `/shard-clipping` (2.5), `/identify-key-concepts` (4),
   `/map-concepts-to-docs` (5a), `/synthesize-doc-changes` (5b), `/cascade-check`
-  (6) — each do their one job and leave the result in context; none captures its
-  own `START`, runs `ldoc review new`, or emits a review. Episode bookkeeping is
-  this skill's alone.
+  (6) — each do their one job and leave the result in context; none opens or
+  closes a session (no `session start`/`session close`) — episode ownership,
+  opening the session and closing it into one review, belongs to this skill alone.
 - **Exception — the shard branch.** If `shard-clipping` splits the raw, this
   episode created only the child raws (via the nested shard-clipping) and
   decomposes nothing itself; it then **ends**, leaving the children pending. It
@@ -75,15 +75,14 @@ not "partly ingested"; it is *not ingested*.
 
 ---
 
-## Step 0 — Capture the episode start time
+## Step 0 — Open the editing session
 
 ```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
+export LDOC_SESSION=$(ldoc session start)
 ```
 
-Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
-
-This timestamp generates the single review summary at the end of the episode.
+Read and apply `.claude/skills/_shared/session-lifecycle.md`. This session mints
+the single review summary when it is closed at the end of the episode.
 
 ---
 
@@ -369,16 +368,15 @@ Linked to existing docs (provenance only):
   <id>  "<existing doc title>" — added <NORM_ID> to provenance
 ```
 
-Then emit the single review summary for the entire ingest episode. ingest-
-reference owns it (the nested sub-skills never emit one):
+Then close the session, minting the single review for the entire ingest episode.
+ingest-reference owns it (the nested sub-skills never open or close one):
 
 ```bash
-ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc session close --summary "<one-line agent recap of the episode>"
 ```
 
-After it runs, confirm `touched` is non-empty and reflects the episode's changes.
-
-Report the returned review id:
+The review is built from the session's change log; confirm `touched` reflects the
+episode's changes. Report the returned review id:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)

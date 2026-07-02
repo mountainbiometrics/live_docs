@@ -44,7 +44,8 @@ Then complement with graph checks:
    files.
 5. **Deprecated without superseded_by** — add `--superseded-by` or revert status.
 
-Record `ldoc history <id> --add "garden-integrity: …"` on each touched doc.
+Pass `--note "garden-integrity: …"` on each mutating command so the note is atomic
+with the fix.
 
 ---
 

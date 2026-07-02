@@ -86,9 +86,8 @@ For each doc with verdict `full-supersession` or `cascade-full`:
    Add a `## Correction` section to the deprecated doc's body explaining why it
    is now wrong and which doc supersedes it, then:
    ```bash
-   ldoc set <old-id> --status deprecated
+   ldoc set <old-id> --status deprecated --note "synthesize-doc-changes: deprecated — superseded by <REPLACEMENT_ID>: <one-line reason>"
    ldoc link <old-id> --superseded-by <REPLACEMENT_ID>
-   ldoc history <old-id> --add "synthesize-doc-changes: deprecated — superseded by <REPLACEMENT_ID>: <one-line reason>"
    ```
 
 ---
@@ -104,10 +103,10 @@ For each doc with verdict `partial-supersession`, `cascade-extend`, or a planned
    ```
 2. Rewrite the affected portion to its correct current state. If the prior text
    would now be misleading, rewrite it — do not add qualifiers or exception
-   clauses that leave contradictory statements coexisting.
-3. Record the history entry:
+   clauses that leave contradictory statements coexisting. Pass the author note
+   inline on the write so it is atomic with the revision:
    ```bash
-   ldoc history <id> --add "synthesize-doc-changes: revised — <one sentence: what changed and why>"
+   ldoc set <id> --body - --note "synthesize-doc-changes: revised — <one sentence: what changed and why>"
    ```
 
 ---

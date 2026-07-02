@@ -84,8 +84,11 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--keywords][--body -\|TEXT]` | Update fields/body |
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
 | `ldoc unlink <ref> [same edge flags]` | Remove edges; accepts literal 14-digit dead ids as edge targets |
-| `ldoc history <ref> --add "what changed"` | Append a history entry (changes only — never creation) |
+| `<mutate> ... --note "why"` | Explain a change inline — **preferred over `ldoc history`**. Auto-filled for obvious ops (new/re-parent/unlink/rm); required for a revision (body/label/title/summary), enforced at `session close` |
+| `ldoc history <ref> --add "what changed"` | **Deprecated** post-hoc gap-filler for `--note` — use only to satisfy a close-gate after the fact (creation is now recorded in history) |
 | `ldoc rm <ref> [--force] [--dry-run]` | Delete a doc; blocked when any inbound edge exists unless `--force` (strips all inbound edges then deletes); reindexes automatically |
+
+> **Every mutation runs inside an editing session** (`ldoc session start` → work → `ldoc session close`), which stamps each change and mints the review. Read `.claude/skills/_shared/session-lifecycle.md` for the recipe.
 
 **Inbox pipeline & maintenance**
 
@@ -96,7 +99,8 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc validate` | Structural integrity check; warns on staged-incomplete retirement, prose-not-edged body wikilinks, malformed wikilink syntax |
 | `ldoc reindex` | Rebuild `<docs>/.index/` derived caches |
 | `ldoc viewer [--out PATH]` | Build the read-only HTML viewer |
-| `ldoc review new\|list\|show\|sign ...` | Post-hoc review ledger |
+| `ldoc session start\|close\|list\|summary\|resume\|merge ...` | Editing-session lifecycle; every mutation runs in a session, `close` mints one review (see `_shared/session-lifecycle.md`) |
+| `ldoc review new\|list\|show\|sign ...` | Post-hoc review ledger (a review is minted at `session close`) |
 
 ---
 

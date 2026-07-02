@@ -34,21 +34,22 @@ names (`/identify-key-concepts`, `/map-concepts-to-docs`, …) runs **inline, in
 this same turn**, and its result feeds the step after it — running a sub-skill is
 never where you stop.
 
-- apply-to-docs captures the single `START` timestamp and emits the **one**
-  review summary for the whole episode (Step 9).
+- apply-to-docs owns the episode — it opens the session and closes it into the
+  **one** review for the whole episode (Step 9).
 - The sub-skills each do their one job and leave the result in context; none
-  captures its own `START`, runs `ldoc review new`, or emits a review. Episode
-  bookkeeping is this skill's alone.
+  opens or closes a session (no `session start`/`session close`) — episode
+  ownership, opening the session and closing it into one review, belongs to this
+  skill alone.
 
 ---
 
-## Step 0 — Capture the episode start time
+## Step 0 — Open the editing session
 
 ```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
+export LDOC_SESSION=$(ldoc session start)
 ```
 
-Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
+Read and apply `.claude/skills/_shared/session-lifecycle.md`.
 
 ---
 
@@ -230,22 +231,19 @@ Validation: <N docs scanned — clean | N errors, N warnings>
 
 ---
 
-## Step 9 — Generate the review summary (FINAL step)
+## Step 9 — Close the session (FINAL step)
 
-apply-to-docs owns the single review summary for the episode (the nested
-sub-skills never emit one):
+apply-to-docs owns the episode: close the session, which mints the single review
+over everything the episode touched (the nested sub-skills never open or close
+one):
 
 ```bash
-ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc session close --summary "<one-line agent recap of the episode>"
 ```
 
-After it runs, confirm `touched` is non-empty and reflects the episode's changes.
-
-This auto-classifies Additions/Revisions and populates `touched` from what actually
-changed in the window. Do **not** hand-author the body or pass an explicit
-`--summary`/`--body`: a review with `touched: []` or prose-only is malformed.
-
-Report the review id to the user:
+The review is built from the session's change log — it auto-classifies
+Additions/Revisions and populates `touched` from what actually changed. Report the
+review id to the user:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)

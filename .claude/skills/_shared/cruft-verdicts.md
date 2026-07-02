@@ -76,15 +76,16 @@ the doc keeps the *why* the code must align to, never a snapshot of the *what*.
 No new CLI flags — every action uses `ldoc set` / `rm` / `link` / `unlink`:
 
 - **EXCAVATE / EXCAVATE(rename) / ADD-WHY** — rewrite the body via
-  `ldoc set <id> --body -` (and `--summary` to match); append
-  `ldoc history <id> --add "garden-cruft: excavated — stripped <dead what>, kept the why"`.
-- **RECLASSIFY** — `ldoc set <id> --type <type>` + a history entry.
+  `ldoc set <id> --body - --note "garden-cruft: excavated — stripped <dead what>, kept the why"`
+  (and `--summary` to match).
+- **RECLASSIFY** — `ldoc set <id> --type <type> --note "garden-cruft: reclassified type"`.
 - **REMOVE** — `ldoc rm <id>`; rewire any inbound edges first.
 - **MERGE→id / EXCAVATE→MERGE→id** — port into the target via
-  `ldoc set <target> --body -`, then deprecate (Correction + `superseded_by` +
-  history) or `ldoc rm` the loser; rewire inbound edges to the target.
+  `ldoc set <target> --body - --note "garden-cruft: merged in <loser-id>"`, then
+  deprecate (Correction + `superseded_by`) or `ldoc rm` the loser; rewire inbound
+  edges to the target.
 - **RE-PARENT→signpost** — `ldoc unlink <id> --belongs-to <old>` then
-  `ldoc link <id> --belongs-to <new>` + history.
+  `ldoc link <id> --belongs-to <new>`.
 
 ## Calibration learnings (apply as guidance)
 

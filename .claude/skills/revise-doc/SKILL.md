@@ -36,25 +36,24 @@ You run this skill end to end. Each sub-skill it names (`identify-key-concepts`,
 `map-concepts-to-docs`, …) runs **inline, in this same turn**, and its result
 feeds the step after it — running a sub-skill is never where you stop.
 
-- revise-doc captures the single `START` timestamp (Step 0) and emits the **one**
-  review summary for the episode (Step 7), for substantive changes only. The
-  sub-skills it runs do no episode bookkeeping of their own.
+- revise-doc owns the episode — it opens the session (Step 0) and closes it into
+  the **one** review for the episode (Step 7), for substantive changes only. The
+  sub-skills it runs neither open nor close a session.
 - If revise-doc is itself run as a step of a higher-level skill (e.g.
-  `ingest-reference`), it does NOT emit a review summary — the outermost skill
-  owns it (see Step 7).
+  `ingest-reference`), it does NOT open or close a session — the outermost skill
+  owns the session and its review (see Step 7).
 
 ---
 
-## Step 0 — Capture the episode start time
+## Step 0 — Open the editing session
 
 ```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
+export LDOC_SESSION=$(ldoc session start)
 ```
 
-Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
-
-Used at the end to generate a single review summary (substantive changes only —
-see Step 7).
+Read and apply `.claude/skills/_shared/session-lifecycle.md`. Closing this session
+at the end mints the single review summary (substantive changes only — see
+Step 7).
 
 ---
 
@@ -164,9 +163,9 @@ edge.
 - **Adding a genuinely new provenance or relates link later**: if you are linking
   to a newly ingested source, a newly relevant reference, or a newly recognized
   peer cluster, this IS a change.
-  - Record a history entry:
+  - Attach the reason inline on the linking command in Step 3:
     ```bash
-    ldoc history <id> --add "added provenance/relates: <label>"
+    ldoc link <id> --relates <peer-id> --note "added provenance/relates: <label>"
     ```
   - Do NOT run cascade-check (provenance and relates are never cascade edges).
 
@@ -178,11 +177,17 @@ edge.
 **Definition**: any change to `title`, body content, `type`, `level`, `status`,
 `requires`, `belongs_to`, or `tags`.
 
-**Action — history entry first:**
+**Action — note the reason inline on the edit:**
+
+Attach the author note to the mutating command from Step 3, e.g.:
 
 ```bash
-ldoc history <id> --add "<concise description of what changed and why>"
+ldoc set <id> --title "New title" --note "<concise description of what changed and why>"
 ```
+
+For a body-text change (edited in place with no `ldoc set`), pass the note on the
+`ldoc edit` invocation instead. One note per doc suffices, and `session close`
+blocks on any revision-touched doc missing one.
 
 **Action — assess impact, then cascade:**
 
@@ -240,31 +245,30 @@ Validation: <N docs scanned — clean | N errors, N warnings>
 
 ---
 
-## Step 7 — Generate the review summary (substantive changes only; FINAL step)
+## Step 7 — Close the session (substantive changes only; FINAL step)
 
 **Only for substantive changes** (title, body, type, level, status, requires,
-belongs_to, or tags were altered). Provenance-only changes that add no history
-entry need no review summary — skip this step entirely for those.
+belongs_to, or tags were altered). A provenance-only change that added no author
+note needs no review — skip this step entirely for those.
 
 **Standalone invocation only**: if revise-doc was called nested by a higher-level
-skill (e.g. `ingest-reference`), do NOT emit a summary here — the top-level
-skill owns the single summary for the episode. Emit one only when revise-doc is
-the outermost skill for this editing session.
+skill (e.g. `ingest-reference`), do NOT close the session here — the top-level
+skill owns the session and its single review. Close it only when revise-doc is the
+outermost skill for this editing session.
 
 ```bash
-ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc session close --summary "<one-line agent recap of the episode>"
 ```
 
-After it runs, confirm `touched` is non-empty and reflects the episode's changes.
-
-Report the returned review id to the user:
+Closing mints the review from the session's change log; confirm `touched` reflects
+the episode's changes. Report the returned review id to the user:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)
 ```
 
-Review is **post-hoc and non-gating** (see `review-is-post-hoc`): generating the
-summary never blocks the change; it records the episode for later signoff.
+Review is **post-hoc and non-gating** (see `review-is-post-hoc`): closing the
+session never blocks the change; it records the episode for later signoff.
 
 ---
 

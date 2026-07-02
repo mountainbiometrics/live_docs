@@ -11,7 +11,8 @@ description: >
 # garden-refine — Surface quality and findability (form phase)
 
 **Contract:** nested phase only. Capture no START, run no `cascade-check`, emit
-no review. All writes non-destructive to meaning; history entry on each touch.
+no review. All writes non-destructive to meaning; pass `--note "garden-refine: …"`
+on each mutating command so the provenance note is atomic with the edit.
 
 Agentic pipelines produce intermittent, non-deterministic inconsistency — a structural property of multi-agent doc pipelines, not an occasional bug —
 **sample**, don't full-scan every doc unless triage flags many issues.

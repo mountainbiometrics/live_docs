@@ -973,15 +973,18 @@ def cmd_set(kb: KB, args) -> int:
 
 
 def cmd_edit(kb: KB, args) -> int:
-    """Alias: read new body from stdin and replace doc body."""
-    body = sys.stdin.read()
-    try:
-        kb.set_body(args.ref, body)
-    except ValueError as e:
-        _err(str(e))
-        return 1
-    print(f"Body updated for {args.ref}")
-    return 0
+    """Alias for `set <ref> --body -`: replace a doc's body from stdin.
+
+    Delegates to cmd_set so the body edit gets the same `--note`, change_type,
+    and session/WAL logging as any other revision — a bare set_body would bypass
+    all of them (a body edit is a revision and gates `session close`).
+    """
+    set_args = argparse.Namespace(
+        refs=[args.ref], body="-", note=getattr(args, "note", ""),
+        title=None, summary=None, label=None, level=None, status=None,
+        type=None, scope=None, domain=None, keywords=None, dry_run=False,
+    )
+    return cmd_set(kb, set_args)
 
 
 def _parse_edge_args(args) -> dict:
@@ -2643,6 +2646,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("edit",
                        help="Replace a doc's body from stdin (alias for: set <ref> --body -).")
     p.add_argument("ref", help="id | label | title")
+    p.add_argument("--note", default="",
+                   help="Author note explaining the revision (a body edit is a revision; "
+                        "required at session close).")
 
     # --- link ---
     p = sub.add_parser("link", help="Add edge(s) to a doc.")

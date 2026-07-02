@@ -27,8 +27,10 @@ cascade-check always runs as a step of a larger change-making process — invoke
 by `ingest-reference`, `revise-doc`, `apply-to-docs`, `garden`, or any agent that
 just changed a doc — never on its own, because assessing a cascade is pointless
 unless you then propagate it. It walks the graph and applies the propagation, but
-does **no episode bookkeeping**: no `START`, no `ldoc review new`. Whoever
-invoked it owns the single review summary for the episode.
+does **no episode bookkeeping**: it does not open or close a session
+(`ldoc session start`/`session close`). It inherits the ambient session and just
+propagates — passing `--note` on any revision. Whoever invoked it owns the
+session and its single review summary.
 
 ---
 
@@ -212,21 +214,20 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
    which doc supersedes it, then add the `--superseded-by` edge. Only after
    both are in place is the deprecation complete.
 
-3. Record the cascade history entry:
+3. Attach the cascade note **inline** on the propagating write (it is a revision):
    ```bash
-   ldoc history <n> --add "cascade-check: updated because <source-id> changed — <one sentence why>"
+   ldoc set <n> --body - --note "cascade-check: updated because <source-id> changed — <one sentence why>"
    ```
 
 ---
 
-## Step 6 — Update the originating doc's history
+## Step 6 — The cascade outcome is captured in the session review
 
-After the write pass completes, record a history entry on EACH originally-changed
-doc summarizing the cascade session outcome:
-
-```bash
-ldoc history <changed-id> --add "cascade-check ran: <N> neighbors evaluated — <list each id: verdict>"
-```
+No separate per-doc bookkeeping is needed. Every propagated write carried its
+`--note` inline (Step 5), and the session's review — minted when the owner runs
+`ldoc session close` — rolls up the whole cascade (which neighbors were evaluated
+and their verdicts) from the change log. cascade-check inherits the ambient
+session and writes nothing extra here.
 
 ---
 
@@ -281,10 +282,9 @@ its "Cascade Behavior" section is updated to say cascade should also examine
 **Pass 2 — Batch write:**
 6. No `incompatible` cases. Proceed.
 7. Apply cascade update to 20260615100010: load it, write the correct current
-   state (the cascade-target list now includes `goal`), append history entry.
-8. Record originating doc history: `ldoc history 20260615090003 --add
-   "cascade-check ran: 1 neighbor evaluated — 20260615100010: cascade"`.
-9. Surface table. Total cascaded: 1 — no wide-cascade warning.
+   state (the cascade-target list now includes `goal`) with an inline
+   `--note "cascade-check: updated because 20260615090003 changed — …"`.
+8. Surface table. Total cascaded: 1 — no wide-cascade warning.
 
 **Same scenario but 20260615100010 has `status: deprecated`**: is_living check
 fails → verdict is `incompatible` (not `cascade`). Surface to user: "downstream

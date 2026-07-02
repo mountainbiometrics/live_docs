@@ -70,22 +70,21 @@ You run this skill end to end. Each sub-skill it names (`identify-key-concepts`,
 `map-concepts-to-docs`, …) runs **inline, in this same turn**, and its result
 feeds the step after it — running a sub-skill is never where you stop.
 
-- reconcile-changes captures the single `START` timestamp (Step 0) and emits the
-  **one** review summary for the whole episode (Step 8).
-- The sub-skills it runs do no episode bookkeeping of their own (no `START`, no
-  `ldoc review new`).
+- reconcile-changes owns the episode — it opens the session (Step 0) and closes
+  it into the **one** review for the whole episode (Step 8).
+- The sub-skills it runs do no episode bookkeeping of their own — none opens or
+  closes a session (no `session start`/`session close`).
 
 ---
 
-## Step 0 — Capture the episode start time
+## Step 0 — Open the editing session
 
 ```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
+export LDOC_SESSION=$(ldoc session start)
 ```
 
-Record the literal timestamp it prints (e.g. `2026-06-19T23:48:00Z`); you'll paste this exact value into `review new --since` at the end of the episode.
-
-This timestamp generates the single review summary at the end of the episode.
+Read and apply `.claude/skills/_shared/session-lifecycle.md`. Closing this session
+at the end of the episode mints the single review summary.
 
 ---
 
@@ -243,16 +242,15 @@ Cascade summary: <N neighbors evaluated — list each id: verdict>
 Validation: <N docs scanned — clean | N errors, N warnings>
 ```
 
-Then emit the single review summary for the whole episode. reconcile-changes owns
-it (the nested sub-skills never emit one):
+Then close the session, minting the single review for the whole episode.
+reconcile-changes owns it (the nested sub-skills never open or close one):
 
 ```bash
-ldoc review new --since "2026-06-19T23:48:00Z"   # ← the literal value you recorded at the start
+ldoc session close --summary "<one-line agent recap of the episode>"
 ```
 
-After it runs, confirm `touched` is non-empty and reflects the episode's changes.
-
-Report the returned review id:
+The review is built from the session's change log; confirm `touched` reflects the
+episode's changes. Report the returned review id:
 
 ```
 Review summary created: <id>   (kb/reviews/<id>.md)

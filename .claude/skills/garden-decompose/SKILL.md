@@ -52,13 +52,11 @@ it is a split candidate.
    ```bash
    ldoc set <original-id> --status deprecated
    ldoc link <original-id> --superseded-by <A-id>,<B-id>
-   ldoc history <original-id> --add "garden-decompose: split into <A-id> and <B-id>"
    ```
    Rewire inbound edges (comma-separate multiple targets on edge flags):
    ```bash
    ldoc unlink <pointing-doc> --requires <original-id>
    ldoc link   <pointing-doc> --requires <A-id>
-   ldoc history <pointing-doc> --add "garden-decompose: rewired requires after split"
    ```
 6. **Edge reclassification:** after splits, move edges to `belongs_to` /
    `relates` / `requires` as appropriate (see garden dispatcher / edge vocabulary).

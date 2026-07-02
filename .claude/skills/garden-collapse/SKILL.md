@@ -41,10 +41,9 @@ Singular ownership — a claim should have exactly one responsible doc; a claim 
 
 Pick survivor; port unique content; deprecate others:
 ```bash
-ldoc set <survivor-id> --body -   # merged body
+ldoc set <survivor-id> --body - --note "garden-collapse: merged in <loser-id>"   # merged body
 ldoc set <loser-id> --status deprecated
 ldoc link <loser-id> --superseded-by <survivor-id>
-ldoc history <loser-id> --add "garden-collapse: merged into <survivor-id>"
 ```
 Add `## Correction` on deprecated docs. Rewire inbound edges to survivor.
 
@@ -67,11 +66,10 @@ the whole claim) and Fold (which assumes one trivially thin child). Signal: you
 cannot point to a single owner without also pointing at its siblings.
 
 ```bash
-ldoc set <owner-id> --body -          # consolidated body
+ldoc set <owner-id> --body - --note "garden-collapse: consolidated ownership from <partial-ids>"   # consolidated body
 ldoc link <partial-id> --relates <owner-id>
 ldoc set <redundant-id> --status deprecated
 ldoc link <redundant-id> --superseded-by <owner-id>
-ldoc history <owner-id> --add "garden-collapse: consolidated ownership from <partial-ids>"
 ```
 
 ---

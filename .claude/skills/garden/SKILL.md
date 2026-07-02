@@ -26,10 +26,10 @@ the user to run them directly.
 ## Episode start (always first)
 
 ```bash
-date -u +%Y-%m-%dT%H:%M:%SZ
+export LDOC_SESSION=$(ldoc session start)
 ```
 
-Record the literal timestamp for `ldoc review new --since` at episode close.
+Read and apply `.claude/skills/_shared/session-lifecycle.md`.
 
 ---
 
@@ -128,7 +128,10 @@ these into `SIGNPOSTS_TO_SUMMARIZE` for the pre-cascade summarize pass.
 
 **Union** all changed ids across phases into `EPISODE_CHANGED`.
 
-Phases must **not** capture START, run cascade, or emit review.
+Phases must **not** open or close a session (no `session start`/`session close`)
+and must **not** run cascade; episode ownership — opening the session and closing
+it into one review, plus the single cascade over the union of changes — belongs
+to this dispatcher.
 
 ---
 
@@ -149,9 +152,9 @@ Otherwise:
    ```bash
    ldoc validate
    ```
-4. **One review:**
+4. **One review** — close the session:
    ```bash
-   ldoc review new --since "<START>"
+   ldoc session close --summary "<one-line agent recap of the episode>"
    ```
 5. Report review id. Note if `hierarchy.md` needs `ldoc reindex`.
 
