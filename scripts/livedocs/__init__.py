@@ -17,7 +17,7 @@ from __future__ import annotations
 import importlib
 
 _EXPORT_MAP = [
-    ("model",     {"REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
+    ("model",     {"STORE_ROOT", "CONSUMER_ROOT", "REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
                    "INBOX_DIR", "INDEX_DIR",
                    "VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
                    "generate_id", "generate_session_id", "session_start_iso",

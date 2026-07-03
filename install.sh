@@ -7,19 +7,16 @@
 #   2. the `livedocs` skills plugin — registered + installed in Claude Code
 #      (user scope, so it's available in every project)
 #
-# The store itself is NOT installed here. `ldoc` and the skills locate it by
-# walking up from the current directory for a `.live_docs.toml` marker, so a
-# consumer repo just needs that one file (see --init-store below).
+# The store itself is NOT installed or configured here — that is a separate
+# concern (like `git` vs `git init`). `ldoc` and the skills locate a store by
+# walking up from the current directory for a `.live_docs.toml` marker; to
+# attach a repo to a store, add that one-line marker yourself (see `ldoc store`).
 #
 # Usage:
 #   ./install.sh                     # install the CLI + the plugin (global)
 #   ./install.sh --no-plugin         # CLI only
 #   ./install.sh --no-cli            # plugin only
 #   ./install.sh --bin-dir ~/bin     # symlink ldoc somewhere other than ~/.local/bin
-#   ./install.sh --init-store DIR    # ALSO write a .live_docs.toml in the CURRENT
-#                                    #   directory whose kb/ paths point at DIR
-#                                    #   (use this in a consumer repo to point it
-#                                    #    at a shared store, e.g. .../mtn/sinai)
 #   ./install.sh -h | --help
 #
 set -euo pipefail
@@ -32,7 +29,6 @@ PLUGIN_NAME="livedocs"
 BIN_DIR="${HOME}/.local/bin"
 DO_CLI=1
 DO_PLUGIN=1
-INIT_STORE=""
 
 # ── colours (no-op if not a tty) ───────────────────────────────────────────
 if [ -t 1 ]; then BOLD=$(tput bold); DIM=$(tput dim); RST=$(tput sgr0); else BOLD=""; DIM=""; RST=""; fi
@@ -48,7 +44,6 @@ while [ $# -gt 0 ]; do
     --no-cli)      DO_CLI=0 ;;
     --no-plugin)   DO_PLUGIN=0 ;;
     --bin-dir)     BIN_DIR="${2:?--bin-dir needs a path}"; shift ;;
-    --init-store)  INIT_STORE="${2:?--init-store needs a directory}"; shift ;;
     -h|--help)     awk 'NR>1{ if ($0 !~ /^#/) exit; sub(/^# ?/,""); print }' "$0"; exit 0 ;;
     *)             die "unknown option: $1 (try --help)" ;;
   esac
@@ -124,36 +119,12 @@ bootstrap_user_config() {
   fi
 }
 
-# ── 4. (optional) consumer .live_docs.toml ────────────────────────────────
-init_store() {
-  step "Writing .live_docs.toml in $(pwd)"
-  local store
-  store="$(cd "$INIT_STORE" 2>/dev/null && pwd)" || die "--init-store: no such directory: $INIT_STORE"
-  local toml="./.live_docs.toml"
-  if [ -e "$toml" ]; then
-    warn "$toml already exists — not overwriting. Remove it and re-run to regenerate."
-    return
-  fi
-  cat > "$toml" <<EOF
-# live_docs store config — points this repo at a shared store.
-# Discovered by walking up from the working directory; paths resolve relative
-# to THIS file's directory unless absolute (as below).
-inbox   = "$store/kb/00-inbox"
-raw     = "$store/kb/01-raw"
-docs    = "$store/kb/02-docs"
-reviews = "$store/kb/reviews"
-EOF
-  ok "wrote $toml -> store at $store"
-  ok "verify with:  ldoc count"
-}
-
 # ── run ────────────────────────────────────────────────────────────────────
 [ "$DO_CLI" = 1 ]    && install_cli
 [ "$DO_CLI" = 1 ]    && bootstrap_user_config
 [ "$DO_PLUGIN" = 1 ] && install_plugin
-[ -n "$INIT_STORE" ] && init_store
 
 step "Done."
 say "  ${DIM}CLI:${RST}    ldoc help"
 say "  ${DIM}skills:${RST} /${PLUGIN_NAME}:garden, /${PLUGIN_NAME}:ingest-reference, … (restart Claude Code first)"
-say "  ${DIM}store:${RST}  drop a .live_docs.toml in a repo (or run --init-store) to point it at one"
+say "  ${DIM}store:${RST}  attach a repo to a store with a one-line .live_docs.toml (store = \"<name>\"); register stores with 'ldoc store register'"

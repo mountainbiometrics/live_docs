@@ -14,7 +14,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ._paths import CONFIG_FILENAME, HOME_CONFIG
-from .toml_flat import read_store_keys
+from .toml_flat import (
+    BASE_DEFAULT_SUBDIRS,
+    BOX_KEYS,
+    ConfigChainError,
+    resolve_store_config,
+    set_store_registry_entry,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -33,8 +39,8 @@ from .toml_flat import read_store_keys
 # live in a different repo entirely — a shared "mono-doc" store for several
 # related code repos.
 
-# Built-in defaults, used for any key a located config omits. Relative to the
-# config file's own directory (the store root).
+# Built-in defaults when neither `base` nor an explicit box key is set. Relative
+# to the discovered config file's directory.
 _DEFAULT_PATHS = {
     "docs": "docs",
     "raw": "raw",
@@ -84,6 +90,25 @@ def _resolve_path(value: str, base: Path) -> Path:
     return p if p.is_absolute() else (base / p)
 
 
+def _self_register_store(name: str, root: Path) -> None:
+    """Idempotently record name -> root in the per-user registry.
+
+    Never overwrites a conflicting binding and never raises: registration is a
+    courtesy side-effect, so on a conflict it warns and moves on rather than
+    blocking the command the user actually ran.
+    """
+    try:
+        status, old = set_store_registry_entry(HOME_CONFIG, name, root, force=False)
+    except OSError:
+        return
+    if status == "conflict":
+        sys.stderr.write(
+            f"ldoc: store name '{name}' is already registered to {old}, not {root}.\n"
+            f"      Auto-registration skipped. If this checkout is the right one, run: "
+            f"ldoc store register --force\n"
+        )
+
+
 def _resolve() -> dict:
     """Run discovery and resolve every store directory. Raises on no config."""
     config_path, searched = _find_config()
@@ -101,29 +126,57 @@ def _resolve() -> dict:
                 f"Create a '{CONFIG_FILENAME}' at your store root, or set a "
                 f"LIVEDOCS_* override."
             )
-        base = cwd
-        config: dict = {}
+        store_root = cwd
+        consumer_root = None
+        config: dict[str, str] = {}
+        sources: dict[str, Path] = {}
+        consumer_locals: dict[str, str] = {}
     else:
-        base = config_path.parent
+        local_marker = config_path.parent
         try:
-            config = read_store_keys(config_path)
-        except (OSError, ValueError) as e:
-            raise LivedocsConfigError(f"could not read config {config_path}: {e}")
+            store = resolve_store_config(config_path)
+        except ConfigChainError as e:
+            raise LivedocsConfigError(str(e)) from e
+        config = store.config
+        sources = store.sources
+        store_root = store.store_root
+        consumer_root = store.consumer_root
+        consumer_locals = store.consumer_locals
 
-    resolved: dict = {"root": base}
-    for key in ("docs", "raw", "reviews", "sessions", "inbox"):
+        # When we are standing inside the store itself (the discovered marker is
+        # that store, not a consumer pointer) and it declares a name, record
+        # name -> root so consumers can resolve it. Idempotent; fail-loud on a
+        # conflicting binding without blocking this command.
+        if store.store_name and consumer_root == store_root:
+            _self_register_store(store.store_name, store_root)
+
+    base_path: Path | None = None
+    if config.get("base"):
+        base_source = sources.get("base", store_root)
+        base_path = _resolve_path(config["base"], base_source)
+
+    resolved: dict = {
+        "store_root": store_root,
+        "consumer_root": consumer_root,
+        "consumer_locals": consumer_locals,
+    }
+    for key in BOX_KEYS:
         env_val = os.environ.get(_ENV_VARS[key])
         if env_val:
             resolved[key] = _resolve_path(env_val, cwd)
-        elif config.get(key):
-            resolved[key] = _resolve_path(str(config[key]), base)
+        elif key in config:
+            source = sources.get(key, store_root)
+            resolved[key] = _resolve_path(config[key], source)
+        elif base_path is not None:
+            resolved[key] = base_path / BASE_DEFAULT_SUBDIRS[key]
         else:
-            resolved[key] = base / _DEFAULT_PATHS[key]
+            resolved[key] = store_root / _DEFAULT_PATHS[key]
 
     # Index cache derives under docs by default; an explicit `index` key
     # (config only — no env var) overrides it.
     if config.get("index"):
-        resolved["index"] = _resolve_path(str(config["index"]), base)
+        index_source = sources.get("index", store_root)
+        resolved["index"] = _resolve_path(config["index"], index_source)
     else:
         resolved["index"] = resolved["docs"] / ".index"
     return resolved
@@ -132,7 +185,9 @@ def _resolve() -> dict:
 _resolved_paths: dict | None = None
 
 _PATH_ATTRS: dict[str, str] = {
-    "REPO_ROOT": "root",
+    "STORE_ROOT": "store_root",
+    "CONSUMER_ROOT": "consumer_root",
+    "REPO_ROOT": "store_root",  # backward-compatible alias
     "DOCS_DIR": "docs",
     "RAW_DIR": "raw",
     "REVIEWS_DIR": "reviews",

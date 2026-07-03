@@ -15,7 +15,7 @@ import json
 import os
 from pathlib import Path
 
-from .model import DOCS_DIR, REVIEWS_DIR, REPO_ROOT
+from .model import DOCS_DIR, REVIEWS_DIR, STORE_ROOT
 from .serialize import parse_doc
 
 AUTO_VIEWER_ENV = "LIVEDOCS_AUTO_VIEWER"
@@ -47,6 +47,14 @@ def _load_dir(path: Path, *, strip_wal: bool = False) -> list[dict]:
         rec = dict(parsed)
         rec["id"] = str(rec.get("id", md_path.stem))
         rec["body"] = body
+        # The `created` frontmatter field was removed for docs (creation is now
+        # the leading `addition` history entry). Re-derive it so the viewer's
+        # created badge and Catalog sort keep working. Reviews keep their own
+        # `created` field and are untouched.
+        if not rec.get("created"):
+            hist = rec.get("history") or []
+            if hist and "addition" in (hist[0].get("change_type") or []):
+                rec["created"] = hist[0].get("at", "")
         out.append(rec)
     return out
 
@@ -65,7 +73,7 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
     docs = _load_dir(DOCS_DIR)
     reviews = _load_dir(REVIEWS_DIR, strip_wal=True)
 
-    dest = out_path or (REPO_ROOT / "build" / "viewer.html")
+    dest = out_path or (STORE_ROOT / "build" / "viewer.html")
     dest = dest.resolve()
     dest.parent.mkdir(parents=True, exist_ok=True)
 

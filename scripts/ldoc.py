@@ -2319,6 +2319,11 @@ def cmd_config(_kb, args) -> int:
     return run_config_cli(sys.argv[2:])
 
 
+def cmd_store(_kb, args) -> int:
+    from livedocs.store_registry import run_store_cli
+    return run_store_cli(sys.argv[2:])
+
+
 def cmd_help(kb: KB, args) -> int:
     """Print grouped overview with copy-pasteable examples."""
     print(__doc__)
@@ -2934,6 +2939,14 @@ def build_parser() -> argparse.ArgumentParser:
         add_help=False,
     )
 
+    # --- store (named-store registry; no store required) ---
+    # Routed directly in main() before store discovery; stub keeps it in --help.
+    sub.add_parser(
+        "store",
+        help="Register/list/forget named stores (~/.config/live_docs/config.toml).",
+        add_help=False,
+    )
+
     # --- help ---
     sub.add_parser("help", help="Show overview with grouped verbs and copy-pasteable examples.")
 
@@ -3015,6 +3028,7 @@ COMMANDS = {
     "review": cmd_review,
     "session": cmd_session,
     "config": cmd_config,
+    "store": cmd_store,
     "help": cmd_help,
 }
 
@@ -3031,6 +3045,13 @@ def main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] == "config":
         from livedocs.user_config import run_config_cli
         return run_config_cli(sys.argv[2:])
+
+    # `ldoc store` manages the per-user named-store registry — store-free, and
+    # routed before store discovery so it works even when the CWD resolves to no
+    # store (or to a not-yet-registered one).
+    if len(sys.argv) >= 2 and sys.argv[1] == "store":
+        from livedocs.store_registry import run_store_cli
+        return run_store_cli(sys.argv[2:])
 
     parser = build_parser()
     args = parser.parse_args()

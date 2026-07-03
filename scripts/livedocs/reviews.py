@@ -147,6 +147,19 @@ def strip_wal_archive(body: str) -> str:
     return body[:start].rstrip() + "\n"
 
 
+def _doc_created_at(doc: dict) -> str:
+    """A doc's creation time — the timestamp of its leading `addition` history entry.
+
+    The `created` frontmatter field was removed (creation-is-recorded-history):
+    creation is now the first history entry, which is an addition. Falls back to
+    a legacy `created` field for any doc that predates the migration.
+    """
+    hist = doc.get("history") or []
+    if hist and "addition" in (hist[0].get("change_type") or []):
+        return hist[0].get("at", "")
+    return doc.get("created", "")
+
+
 def _format_addition_entry(link: str, doc: dict) -> list[str]:
     """Render one Additions list item with a nested per-doc blurb.
 
@@ -532,7 +545,7 @@ class ReviewLedger:
         """
         touched = []
         for doc_id, doc in sorted(docs.items()):
-            created = doc.get("created", "")
+            created = _doc_created_at(doc)
             if created >= since:
                 touched.append(doc_id)
                 continue
@@ -554,7 +567,7 @@ class ReviewLedger:
         revisions: list[str] = []
 
         for doc_id, doc in sorted(docs.items()):
-            created = doc.get("created", "")
+            created = _doc_created_at(doc)
             if created >= since:
                 additions.append(doc_id)
                 continue
