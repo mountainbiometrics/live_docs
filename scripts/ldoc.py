@@ -882,6 +882,14 @@ def cmd_new(kb: KB, args) -> int:
     try:
         record_addition(kb, doc_id, note=note)
     except Exception as e:
+        # Roll back the just-written doc: a failed history/WAL write must not
+        # leave an orphan doc on disk with no addition entry (invisible to
+        # reviews, misclassified everywhere). The new doc has no inbound edges.
+        try:
+            (kb.docs_dir / f"{doc_id}.md").unlink()
+            kb._reload()
+        except OSError:
+            pass
         _err(str(e))
         return 1
 
@@ -2101,7 +2109,7 @@ def cmd_session(kb: KB, args) -> int:
         )
         return 0
 
-    if verb in ("close", "end"):
+    if verb == "close":
         sid = (getattr(args, "session", "") or os.environ.get("LDOC_SESSION", "")).strip()
         if not sid:
             _err("No session id. Pass --session <id> or set LDOC_SESSION (see: ldoc session start).")
@@ -2902,10 +2910,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_close_args(p_sc)
 
-    # Hidden alias: `end` behaves exactly like `close`.
-    p_se = sess_sub.add_parser("end", help=argparse.SUPPRESS)
-    _add_close_args(p_se)
-
     p_sl = sess_sub.add_parser(
         "list", help="List open sessions with age and note-coverage."
     )
@@ -2978,7 +2982,7 @@ def _should_auto_rebuild_viewer(args, rc: int) -> bool:
         return getattr(args, "review_verb", None) in _REVIEW_MUTATING
     if cmd == "session":
         # close/end mint a review — rebuild so it shows in the viewer.
-        return getattr(args, "session_verb", None) in ("close", "end")
+        return getattr(args, "session_verb", None) == "close"
     return False
 
 

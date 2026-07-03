@@ -450,9 +450,9 @@ class ReviewLedger:
         """Build the five-section review body from the session WAL.
 
         Each doc is filed ONCE under its dominant change_type by precedence
-        deletion > revision > restructure > organizational, with addition filed
-        separately (a created doc is not also 'revised'). The dominant type is
-        computed over the UNION of every WAL line's change_type list for that doc.
+        deletion > addition > revision > restructure > organizational, computed
+        over the UNION of every WAL line's change_type list for that doc — so a
+        doc never appears in two sections. Empty sections are omitted entirely.
         The best available author note per doc is used as the change blurb.
         """
         from .model import dominant_change_type
@@ -492,51 +492,42 @@ class ReviewLedger:
             if dom in buckets:
                 buckets[dom].append(ref)
 
-        lines: list[str] = []
-
-        # Additions
-        lines.append("## Additions")
-        if buckets["addition"]:
-            for ref in buckets["addition"]:
-                if ref in docs:
-                    lines.extend(_format_addition_entry(ref_token(ref), docs[ref]))
-                else:
-                    lines.append(f"- {ref_token(ref)}")
-        else:
-            lines.append("(none)")
-
-        # Revisions / Restructure / Organizational — one line + note each
+        # Emit only non-empty sections, in canonical order. Each doc appears in
+        # exactly one section (its dominant type), so there are no duplicates.
+        blocks: list[str] = []
         for heading, key in (
+            ("Additions", "addition"),
             ("Revisions", "revision"),
             ("Restructure", "restructure"),
             ("Organizational", "organizational"),
+            ("Deletions", "deletion"),
         ):
-            lines.append("")
-            lines.append(f"## {heading}")
-            if buckets[key]:
-                for ref in buckets[key]:
+            refs = buckets[key]
+            if not refs:
+                continue
+            block = [f"## {heading}"]
+            for ref in refs:
+                if key == "addition":
+                    if ref in docs:
+                        block.extend(_format_addition_entry(ref_token(ref), docs[ref]))
+                    else:
+                        block.append(f"- {ref_token(ref)}")
+                elif key == "deletion":
+                    rec = agg[ref]
+                    label = rec.get("label") or ref
+                    dtype = rec.get("type") or ""
+                    desc = f"{dtype}: {label}" if dtype else label
+                    note = rec["note"]
+                    base = f"- {ref_token(ref)} ({desc})"
+                    block.append(f"{base} — {note}" if note else base)
+                else:
                     note = agg[ref]["note"]
                     link = ref_token(ref)
-                    lines.append(f"- {link} — {note}" if note else f"- {link}")
-            else:
-                lines.append("(none)")
+                    block.append(f"- {link} — {note}" if note else f"- {link}")
+            blocks.append("\n".join(block))
 
-        # Deletions — the doc is gone; render its captured label/type + note
-        lines.append("")
-        lines.append("## Deletions")
-        if buckets["deletion"]:
-            for ref in buckets["deletion"]:
-                rec = agg[ref]
-                label = rec.get("label") or ref
-                dtype = rec.get("type") or ""
-                desc = f"{dtype}: {label}" if dtype else label
-                note = rec["note"]
-                base = f"- {ref_token(ref)} ({desc})"
-                lines.append(f"{base} — {note}" if note else base)
-        else:
-            lines.append("(none)")
-
-        return "\n".join(lines) + "\n"
+        body = "\n\n".join(blocks) if blocks else "(no changes recorded)"
+        return body + "\n"
 
     def _collect_touched_since(self, since: str, docs: dict) -> list[str]:
         """
@@ -576,40 +567,29 @@ class ReviewLedger:
                     revisions.append(doc_id)
                     break
 
-        lines = []
-        lines.append("## Additions")
+        # Emit only non-empty sections (coarse fallback: additions vs revisions).
+        blocks: list[str] = []
         if additions:
+            block = ["## Additions"]
             for doc_id in additions:
-                lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
-        else:
-            lines.append("(none)")
-
-        lines.append("")
-        lines.append("## Revisions")
+                block.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
+            blocks.append("\n".join(block))
         if revisions:
+            block = ["## Revisions"]
             for doc_id in revisions:
                 doc = docs[doc_id]
                 link = ref_token(doc_id)
-                # Use the most recent history entry as summary
-                hist = doc.get("history", [])
+                # Use the most recent history entry at >= since as the summary.
                 last_summary = ""
-                # Find the most recent history entry at >= since
-                for h in reversed(hist):
+                for h in reversed(doc.get("history", [])):
                     if h.get("at", "") >= since:
                         last_summary = h.get("summary", "")
                         break
-                if last_summary:
-                    lines.append(f"- {link} — {last_summary}")
-                else:
-                    lines.append(f"- {link}")
-        else:
-            lines.append("(none)")
+                block.append(f"- {link} — {last_summary}" if last_summary else f"- {link}")
+            blocks.append("\n".join(block))
 
-        lines.append("")
-        lines.append("## Minor Alterations")
-        lines.append("(none)")
-
-        return "\n".join(lines) + "\n"
+        body = "\n\n".join(blocks) if blocks else "(no changes recorded)"
+        return body + "\n"
 
     def _collect_touched_by_session(self, session: str, docs: dict) -> list[str]:
         """Return ids of docs created within the session's window OR carrying a

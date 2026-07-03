@@ -947,8 +947,10 @@ function renderHome() {
   // aren't themselves a signpost. These are the docs curation hasn't placed yet.
   const orphans = belongsRoots.filter(d => !isSignpost(d.id));
   const deprecated = DOCS.filter(d => d.status === "deprecated");
-  const hot = DOCS.filter(d => Array.isArray(d.history) && d.history.length > 0)
-    .sort((a, b) => (b.history.length) - (a.history.length)).slice(0, 8);
+  const churnOf = d => (Array.isArray(d.history) ? d.history : []).filter(h =>
+    !(Array.isArray(h.change_type) ? h.change_type.includes("addition") : h.change_type === "addition")).length;
+  const hot = DOCS.map(d => ({ d, churn: churnOf(d) })).filter(x => x.churn > 0)
+    .sort((a, b) => b.churn - a.churn).slice(0, 8);
 
   const statBox = (n, l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
 
@@ -985,8 +987,8 @@ function renderHome() {
   html += `</ul></div>`;
 
   // hot docs
-  html += `<div class="card"><h3>Hot docs (most history entries)</h3><ul class="tight">`;
-  hot.forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} <span class="pill">${d.history.length} changes</span></li>`);
+  html += `<div class="card"><h3>Hot docs (most changes)</h3><ul class="tight">`;
+  hot.forEach(x => html += `<li>${linkHtml(x.d.id, null, {icon:1})} <span class="pill">${x.churn} changes</span></li>`);
   html += `</ul></div>`;
 
   // orphans — belongs_to roots that bear no descendants (unplaced by curation)

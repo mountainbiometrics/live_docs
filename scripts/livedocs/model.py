@@ -269,9 +269,10 @@ FIELD_CHANGE_TYPE = {
 }
 
 # Review-filing precedence: the dominant type when a doc's change list spans
-# several categories. deletion > revision > restructure > organizational.
-# (addition is filed first, separately — a created doc is never also "revised".)
-CHANGE_TYPE_PRECEDENCE = ["deletion", "revision", "restructure", "organizational", "addition"]
+# several categories. deletion > addition > revision > restructure > organizational.
+# A doc created in the session is filed as an Addition even if it was also edited
+# while being created; deletion still trumps (created-then-deleted is a Deletion).
+CHANGE_TYPE_PRECEDENCE = ["deletion", "addition", "revision", "restructure", "organizational"]
 
 
 def change_types_for_fields(fields) -> list[str]:
@@ -290,7 +291,7 @@ def change_types_for_fields(fields) -> list[str]:
 
 def dominant_change_type(change_types) -> str:
     """Return the single dominant change_type for review-filing, by precedence
-    deletion > revision > restructure > organizational > addition.
+    deletion > addition > revision > restructure > organizational.
 
     Accepts a list (the WAL's change_type list) or a single string. Returns ''
     when nothing recognizable is present (legacy entries carry no change_type).
