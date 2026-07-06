@@ -4,7 +4,7 @@
 #
 # Two independent pieces, both installed by default:
 #   1. the `ldoc` CLI  — symlinked onto your PATH (works in any terminal)
-#   2. the `livedocs` skills plugin — registered + installed in Claude Code
+#   2. the `live_docs` skills plugin — registered + installed in Claude Code
 #      (user scope, so it's available in every project)
 #
 # The store itself is NOT installed or configured here — that is a separate
@@ -24,7 +24,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LDOC_SRC="$REPO_ROOT/scripts/ldoc.py"
 MARKETPLACE_NAME="live-docs"
-PLUGIN_NAME="livedocs"
+PLUGIN_NAME="live_docs"
 
 BIN_DIR="${HOME}/.local/bin"
 DO_CLI=1
@@ -74,9 +74,9 @@ install_cli() {
   esac
 }
 
-# ── 2. livedocs skills plugin ──────────────────────────────────────────────
+# ── 2. live_docs skills plugin ──────────────────────────────────────────────
 install_plugin() {
-  step "Installing the livedocs skills plugin (Claude Code)"
+  step "Installing the live_docs skills plugin (Claude Code)"
   command -v claude >/dev/null 2>&1 || { warn "the 'claude' CLI is not on PATH — skipping plugin install."; return; }
 
   claude plugin validate "$REPO_ROOT" >/dev/null 2>&1 \
