@@ -1,6 +1,6 @@
 # AGENTS.md — Operating manual for AI agents in this repo
 
-This document is the operating manual for any AI agent working in the sinai/live_docs repo. Read it before touching anything in `kb/`.
+This document is the operating manual for any AI agent working in the live_docs repo. Read it before touching anything in `kb/`.
 
 For background on the system's design, see [README.md](README.md). For the
 portable, store-agnostic quick-reference — the full `ldoc` command surface,

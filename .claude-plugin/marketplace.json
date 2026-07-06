@@ -1,13 +1,13 @@
 {
-  "name": "mtn-livedocs",
-  "description": "MTN's live_docs marketplace — the livedocs plugin (skills for an atomic-docs knowledge base driven by the ldoc CLI).",
+  "name": "live-docs",
+  "description": "The live_docs marketplace — the livedocs plugin (skills for an atomic-docs knowledge base driven by the ldoc CLI).",
   "owner": {
     "name": "Samuel Wecker",
     "email": "samuel@themtn.ai"
   },
   "plugins": [
     {
-      "name": "livedocs",
+      "name": "live_docs",
       "source": "./",
       "description": "Living-documentation KB skills (garden, ingest-reference, revise-doc, validate, reindex, cascade-check, curate-grouping, and supporting sub-skills)."
     }

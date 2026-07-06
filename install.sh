@@ -23,7 +23,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LDOC_SRC="$REPO_ROOT/scripts/ldoc.py"
-MARKETPLACE_NAME="mtn-livedocs"
+MARKETPLACE_NAME="live-docs"
 PLUGIN_NAME="livedocs"
 
 BIN_DIR="${HOME}/.local/bin"

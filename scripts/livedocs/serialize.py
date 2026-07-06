@@ -324,7 +324,7 @@ def _yaml_str(value: str) -> str:
 
 
 def _yaml_list(items: list) -> str:
-    """Render a list inline, e.g. [live_docs, sinai]."""
+    """Render a list inline, e.g. [live_docs, backend]."""
     if not items:
         return "[]"
     inner = ", ".join(str(i) for i in items)

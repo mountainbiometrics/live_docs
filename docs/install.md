@@ -1,0 +1,103 @@
+# Installing and attaching live_docs
+
+live_docs has three independent parts. The **CLI** and the **skills** are installed once, per machine / per user. A **store** is attached per repo with a one-line marker file — attaching a repo to a store is a separate concern from installing the tool (think `git` vs. `git init`).
+
+| Part | What it is | Scope |
+|------|-----------|-------|
+| `ldoc` CLI | `scripts/ldoc.py`, symlinked onto your PATH | one machine-wide install; works in any terminal |
+| `livedocs` skills | the Claude Code plugin in `.claude-plugin/` (exposes `.claude/skills/`) | one user-scope install; available in every project |
+| the **store** | the `kb/` graph, located by a `.live_docs.toml` marker | per consumer repo — just the marker file |
+
+---
+
+## Quick start
+
+From inside this repo:
+
+```bash
+./install.sh                 # ldoc CLI on PATH + livedocs plugin (user scope)
+```
+
+That symlinks `ldoc` into `~/.local/bin` and runs `claude plugin marketplace add` + `claude plugin install livedocs@live-docs`. It's idempotent — safe to re-run. Restart any running Claude Code session afterward to pick up the skills.
+
+Useful flags: `--no-plugin` / `--no-cli` to install just one part, `--bin-dir DIR` to link `ldoc` elsewhere. Run `./install.sh --help` for the full list. (Installing the tool never touches a store.)
+
+After installing, the skills are namespaced under the plugin: `/livedocs:garden`, `/livedocs:ingest-reference`, `/livedocs:validate`, and so on.
+
+---
+
+## Manual / partial setup
+
+If you'd rather not run the script, the two install steps are:
+
+```bash
+# CLI — any PATH dir works; ldoc.py is stdlib-only
+ln -s /path/to/live_docs/scripts/ldoc.py ~/.local/bin/ldoc
+
+# skills plugin
+claude plugin marketplace add /path/to/live_docs
+claude plugin install livedocs@live-docs        # --scope user is the default
+```
+
+Working *inside this repo*, `ldoc` is also provided via [`mise`](https://mise.jdx.dev/) (`mise trust` once per machine) without any global install.
+
+---
+
+## Attaching a repo to a store
+
+The CLI and skills are store-agnostic: they operate on whichever store the current directory's `.live_docs.toml` points at. Attaching a repo to a store is just a one-line marker at the repo's root:
+
+```bash
+# 1. register the store once — self-registers on any ldoc command run inside it,
+#    or do it explicitly (reads the name the store declares in its config):
+cd /path/to/store && ldoc store register
+
+# 2. point a consumer repo at it by name (create the one-line marker):
+cd /path/to/consumer-repo
+[ -e .live_docs.toml ] || echo 'store = "<name>"' > .live_docs.toml   # won't clobber an existing one
+ldoc count                                  # confirm it resolves
+```
+
+The marker can also point by path — `store = "/path/to/store"` — when you don't need the cross-machine portability of a name. See [Named stores](#named-stores) below.
+
+`ldoc` discovers a store by walking up from the working directory looking for a `.live_docs.toml`, falling back to `~/.config/live_docs/config.toml`. Paths inside the config resolve relative to the file that defined them (absolute and `~` honored), so the docs need not live in the same repo as the code that reads them — a single store can serve several related repos.
+
+---
+
+## Named stores
+
+For sharing one store across machines, commit a **name** rather than a path. A store declares its own `name`:
+
+```toml
+# the shared store's .live_docs.toml
+name = "acme-docs"
+base = "kb"
+```
+
+and a consumer references it by that name:
+
+```toml
+# a code repo's .live_docs.toml
+store = "acme-docs"
+```
+
+The name is committable (the same everywhere); each machine maps it to a local checkout in `~/.config/live_docs/config.toml` as `[store.<name>] root = "…"`. `ldoc` **self-registers** a named store the first time you run it inside that store — idempotent, and it never silently repoints a name (a conflicting registration fails loud). An unregistered or moved name also fails loud, with the command to fix it. Manage the registry directly with:
+
+```bash
+ldoc store register [path]        # register the store you're in (or the one at <path>)
+ldoc store register --alias NAME  # register under a local name (collision escape hatch / preference)
+ldoc store register --force       # re-point an existing name to this location
+ldoc store list
+ldoc store forget <name>
+```
+
+---
+
+## `.live_docs.toml` reference
+
+The config is discovered by walking up from the working directory. Keys:
+
+- **`base`** — set the KB parent directory once; omitted box keys default to the numbered layout under it (`00-inbox`, `01-raw`, `02-docs`, `reviews`). Explicit per-box keys still override.
+- **`store`** — point this repo at an external store, by **registered name** or by path. A consumer repo is **not** itself a store — it carries only a marker that points elsewhere, so `store` is a *pointer, not inheritance*. All store path keys on a delegating marker are ignored; layout comes wholly from the target, so changing the shared store config once updates every consumer.
+
+`STORE_ROOT` is where the KB lives (the shared store root when delegating); `CONSUMER_ROOT` is where the discovered local marker lives (the code repo). They coincide when a repo owns its store. Generated artifacts such as `build/viewer.html` land under `STORE_ROOT`, never the consumer. Per-key `LIVEDOCS_*_DIR` environment variables override the file for a single invocation.
