@@ -455,32 +455,12 @@ class ReviewLedger:
         doc never appears in two sections. Empty sections are omitted entirely.
         The best available author note per doc is used as the change blurb.
         """
-        from .model import dominant_change_type
+        # Collapse the WAL into one record per doc (dominant type + best note +
+        # captured label/type for deletions) — the same projection the per-doc
+        # history uses, so review sections and doc history never diverge.
+        from .sessions import collapse_wal_per_doc
 
-        # Aggregate per doc: the union of change_types, best note, and (for
-        # deletions) the dead doc's label/type captured in the WAL.
-        agg: dict[str, dict] = {}
-        order: list[str] = []
-        for entry in wal:
-            ref = entry.get("ref", "")
-            if not ref:
-                continue
-            if ref not in agg:
-                agg[ref] = {"types": set(), "note": "", "author_note": False,
-                            "label": "", "type": ""}
-                order.append(ref)
-            rec = agg[ref]
-            for ct in (entry.get("change_type") or []):
-                rec["types"].add(ct)
-            # Prefer an author-supplied note; otherwise keep the first non-empty note.
-            note = (entry.get("note") or "").strip()
-            if note and (entry.get("author_note") or not rec["note"]):
-                if entry.get("author_note") or not rec["author_note"]:
-                    rec["note"] = note
-                    rec["author_note"] = bool(entry.get("author_note"))
-            if entry.get("op") == "rm":
-                rec["label"] = entry.get("label", "")
-                rec["type"] = entry.get("type", "")
+        agg, order = collapse_wal_per_doc(wal)
 
         # Bucket each doc under its single dominant type.
         buckets: dict[str, list[str]] = {
@@ -488,7 +468,7 @@ class ReviewLedger:
             "organizational": [], "deletion": [],
         }
         for ref in order:
-            dom = dominant_change_type(agg[ref]["types"])
+            dom = agg[ref].get("dominant", "")
             if dom in buckets:
                 buckets[dom].append(ref)
 

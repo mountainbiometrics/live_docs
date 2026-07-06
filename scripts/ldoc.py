@@ -2143,6 +2143,18 @@ def cmd_session(kb: KB, args) -> int:
         if not summary_text and rec is not None:
             summary_text = rec.get("summary", "")
 
+        # Materialize the collapsed per-doc history from the WAL (history-from-wal):
+        # one entry per touched doc, written now — not per mutation during the
+        # session. Done before minting the review so a failure leaves the session
+        # record intact (re-runnable).
+        if rec is not None:
+            try:
+                from livedocs.sessions import materialize_history
+                materialize_history(kb, rec.get("wal", []), sid)
+            except Exception as e:
+                _err(f"failed to write session history: {e}")
+                return 1
+
         from livedocs import REVIEWS_DIR
         ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
         try:

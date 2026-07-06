@@ -980,6 +980,7 @@ class KB:
         summary: str,
         session: str | None = None,
         change_type: list[str] | str | None = None,
+        at: str | None = None,
     ) -> None:
         """Append a history entry ``{at, summary[, change_type][, session]}``.
 
@@ -996,7 +997,7 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
 
-        at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        at = at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         if session is None:
             session = os.environ.get("LDOC_SESSION", "")
         entry = {"at": at, "summary": summary}

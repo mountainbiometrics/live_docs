@@ -9,10 +9,12 @@ An OPEN editing session is a record on disk in a configurable sessions/ box
     - summary     the settable agent-recap (one-line intent of the whole session)
     - WAL         the write-ahead change log: one line per mutation
 
-Every store mutation DOUBLE-WRITES (session-change-log 20260701225016): a per-doc
-history entry AND a WAL line to the open session. The WAL is the source of truth
-for the review built at close — and the ONLY place deletions are recorded, since
-a deletion removes the doc and so leaves no per-doc history.
+During an open session every store mutation writes ONE WAL line to the session
+record — the WAL is the single in-flight log (session-change-log 20260701225016).
+The per-doc `history:` is NOT written per mutation; at `session close` the WAL is
+collapsed into ONE history entry per touched doc (dominant change_type + best
+note + last touch) and the review is built from the same WAL (history-from-wal).
+Deletions live in the WAL/review only, since a deleted doc has no history.
 
 The session's ID POINTER stays ambient in the environment (LDOC_SESSION); this
 module owns only the persisted record, keyed by id (on-disk-session-records
@@ -307,9 +309,10 @@ def record_doc_change(
 ) -> None:
     """The single choke-point for a NON-DELETION doc change.
 
-    Double-writes (session-change-log): appends a per-doc history entry (with
-    change_type) AND a WAL line to the open session. Auto-creates + announces a
-    session when none is open (sessions-are-required).
+    Appends ONE WAL line to the open session (session-change-log). The per-doc
+    history entry is not written here — it is materialized at close from the WAL
+    (history-from-wal). Auto-creates + announces a session when none is open
+    (sessions-are-required).
 
     `note` is the author-supplied note (may be empty). `auto_note` is a
     pre-computed obvious-op fallback used only when `note` is empty. The WAL
@@ -326,10 +329,7 @@ def record_doc_change(
     author_supplied = bool(note.strip())
     effective_note = note.strip() or auto_note.strip()
 
-    # Per-doc history entry (session-stamped, change-typed).
-    kb.add_history(doc_id, effective_note, session=session_id, change_type=change_type)
-
-    # WAL line.
+    # WAL line (the sole in-flight record; history is materialized at close).
     entry = {
         "at": _now_iso(),
         "op": "change",
@@ -387,16 +387,15 @@ def record_addition(
     """Record a doc CREATION: an addition history entry (session-stamped) AND a
     WAL line. Auto-creates a session when none is open. Returns the session id.
 
-    Creation is recorded history (creation-is-recorded-history): the doc's first
-    history entry is an addition. The addition is excluded from the churn signal
-    downstream.
+    Creation is recorded history (creation-is-recorded-history): the doc's leading
+    history entry is an addition — materialized from this WAL line at close
+    (history-from-wal), not written now. Addition is excluded from the churn
+    signal downstream.
     """
     store = SessionStore()
     session_id, was_auto = ensure_session(store)
     if was_auto:
         _print_auto_session_notice(session_id)
-
-    kb.add_history(doc_id, note, session=session_id, change_type=["addition"])
 
     entry = {
         "at": _now_iso(),
@@ -408,3 +407,73 @@ def record_addition(
     }
     store.append_wal(session_id, entry)
     return session_id
+
+
+# ---------------------------------------------------------------------------
+# Collapse the WAL — the shared projection for both the review and the doc history
+# ---------------------------------------------------------------------------
+
+def collapse_wal_per_doc(wal: list[dict]) -> tuple[dict, list]:
+    """Collapse a WAL into ONE record per doc, in first-appearance order.
+
+    Each record: ``{types (set), dominant, note, author_note, at (last touch),
+    deleted (bool), label, type}``. The dominant change_type and best author note
+    are the single projection the review sections AND the per-doc history entry
+    both use — so a session contributes exactly one history entry per doc, filed
+    in exactly one review section. Prefer an author-supplied note; otherwise the
+    first non-empty note.
+    """
+    from .model import dominant_change_type
+
+    agg: dict[str, dict] = {}
+    order: list[str] = []
+    for entry in wal:
+        ref = entry.get("ref", "")
+        if not ref:
+            continue
+        if ref not in agg:
+            agg[ref] = {"types": set(), "note": "", "author_note": False,
+                        "at": "", "deleted": False, "label": "", "type": ""}
+            order.append(ref)
+        rec = agg[ref]
+        for ct in (entry.get("change_type") or []):
+            rec["types"].add(ct)
+        at = entry.get("at", "")
+        if at and at >= rec["at"]:
+            rec["at"] = at
+        note = (entry.get("note") or "").strip()
+        if note and (entry.get("author_note") or not rec["note"]):
+            if entry.get("author_note") or not rec["author_note"]:
+                rec["note"] = note
+                rec["author_note"] = bool(entry.get("author_note"))
+        if entry.get("op") == "rm":
+            rec["deleted"] = True
+            rec["label"] = entry.get("label", "")
+            rec["type"] = entry.get("type", "")
+    for ref in order:
+        agg[ref]["dominant"] = dominant_change_type(agg[ref]["types"])
+    return agg, order
+
+
+def materialize_history(kb, wal: list[dict], session_id: str) -> int:
+    """Write the session's collapsed per-doc history from the WAL (history-from-wal).
+
+    One entry per touched doc — dominant change_type + best note + last-touch
+    timestamp — appended at close. Deletions are skipped: the doc is gone and the
+    deletion lives in the review only. Returns the count of entries written.
+    """
+    agg, order = collapse_wal_per_doc(wal)
+    written = 0
+    for ref in order:
+        rec = agg[ref]
+        if rec["deleted"] or not rec["dominant"]:
+            continue
+        kb.add_history(
+            ref,
+            rec["note"],
+            session=session_id,
+            change_type=[rec["dominant"]],
+            at=rec["at"] or None,
+        )
+        written += 1
+    return written
