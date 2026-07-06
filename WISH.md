@@ -13,16 +13,24 @@ Noting these here as potential followup tasks so that it's recorded without havi
 ## Review Improvements
 
 - [ ] Make an `ldoc` command/helper that "stages" a "review" (generates a `git add ...` command that stages a review and all the docs that it touched, so that if there are multiple reviews, they can be pushed through `git` in contextual batches)
-- [ ] Rework "review" tracking process:
-  - [ ] Instead of tooling around "timestamp", have a "session_id".
-  - [ ] LLMs (instead of checking the current time) initiate a new "session" (and get a unique id, and put it in their env vars)
-  - [ ] All `ldoc` commands can take `--note` params (and track the session_id from the env vars) and "log" their changes alongside that optional note (same note that will automatically be on the "history" log)
-- [ ] LLMs can finalize their session with a summary.
-- [ ] Make review files more mechanically structured (require using ldoc instead of allowing hand-writing)
-- [ ] Put edge additions (non-hierarchical) in "Minor Alterations" instead of "Revisions"
+- [x] Rework "review" tracking process:
+  - [x] Instead of tooling around "timestamp", have a "session_id".
+  - [x] LLMs (instead of checking the current time) initiate a new "session" (and get a unique id, and put it in their env vars)
+  - [x] All `ldoc` commands can take `--note` params (and track the session_id from the env vars) and "log" their changes alongside that optional note (same note that will automatically be on the "history" log)
+- [x] LLMs can finalize their session with a summary.
+- [x] Make review files more mechanically structured (require using ldoc instead of allowing hand-writing)
+- [x] Put edge additions (non-hierarchical) in "Minor Alterations" instead of "Revisions"
 - [ ] Refine/clean the cascade summaries (I don't actually know where those originated...) (could make mechanical, should use wikilink-style either way)
 - [ ] Really emphasize that the review process is the main mechanism for keeping the human in the loop, and it shouldn't ever be skipped (though with the rework it will be easier to mechanically enforce)
-- [ ] Reviews should show deleted docs...
+- [x] Reviews should show deleted docs...
+
+## CLI Improvements
+
+- [ ] Add an auto/self-updater that checks for and/or gets the latest version
+- [ ] "installing" should maybe copy the binary instead of linking? or something, so that it's "versioned" and not picking up local changes unintentionally?
+- [ ] Audit/refine flags for consistent conventions
+- [ ] Audit/refine verb list (want to make sure it stays concise)
+  - [ ] Add more "aliases" (like `list` should be another alias for `ls`)
 
 ## Viewer Improvements
 
