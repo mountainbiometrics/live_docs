@@ -1,10 +1,10 @@
 # live_docs
 
-**A living knowledge graph for a codebase — the *why* and *what* that code can't re-derive, kept true as the system changes.**
+**A living knowledge graph for a codebase — the decisions, rationale, and intent the code can't tell you, kept true as it changes.**
 
-live_docs holds the durable knowledge about a project — its principles, goals, decisions, constraints, and requirements — as a graph of small, single-responsibility Markdown docs. Every doc is typed, every dependency between docs is explicit, and when one doc changes the system walks the graph to find what else is now stale. It is **infrastructure for coding agents**: a substrate they read to understand a codebase, and maintain so it stays honest.
+live_docs holds the durable knowledge about a project — its principles, goals, decisions, constraints, and requirements — as a graph of small, single-responsibility Markdown docs. Every doc is typed, every dependency between docs is explicit, and when one doc changes the system walks the graph and regenerates whatever else is now stale. It is **infrastructure for coding agents**: they read it to understand a codebase, and maintain it so it stays honest.
 
-The current implementation is a stdlib-only CLI (`ldoc`) plus a set of agent skills. But **the CLI is scaffolding — the point is the system**: the model of atomic typed docs, a dependency graph, and cascade-on-change. Reimplement that model on a different substrate and the ideas still hold.
+The current implementation is a stdlib-only CLI (`ldoc`) plus a set of agent skills. But **the CLI is scaffolding — the point is the system**: the model of atomic typed docs, a dependency graph, and cascade-on-change. Reimplement that model elsewhere and the ideas still hold.
 
 ---
 
@@ -12,7 +12,19 @@ The current implementation is a stdlib-only CLI (`ldoc`) plus a set of agent ski
 
 Documentation is stale within hours of being written and actively misleading within weeks. So teams stop trusting it, stop reading it, and eventually stop writing it — and the reasoning behind a system (why it's shaped this way, what was decided and rejected, what's aspirational vs. real) lives only in people's heads and old chat logs. Coding agents inherit the same blind spot: they write better code when they understand a repo, but there's no durable, trustworthy place for that understanding to live.
 
-**Drift is the enemy.** live_docs is a bet that you beat drift not with discipline (which fades) or with regeneration (which throws away intent), but with *structure* — atomicity to keep each fact isolated, an explicit dependency graph so a change's blast radius is computable, and an automated cascade that flags every downstream doc a change touches.
+**Drift is the enemy**, and live_docs beats it deliberately: not by regenerating docs from the code (that recovers the *what* and loses the *why*), and not by leaning on human discipline (which fades) — but by keeping the knowledge itself **living**. Atomic, single-responsibility docs; an explicit dependency graph that makes any change's blast radius computable; and a cascade that, when something moves, *surgically regenerates* the affected docs from the graph — the specific stale nodes rewritten to current truth, never flagged-and-forgotten and never left as snapshots to rot.
+
+---
+
+## Five commitments
+
+What makes live_docs itself, in five stances:
+
+- **Docs lead; code aligns.** The docs are the source of truth for *intent*; code reconciles to them, not the reverse. That's what makes a doc/code mismatch a *signal* — drift, or a decision the code hasn't caught up to — rather than an impossibility.
+- **The why, not the what.** Capture only what code can't re-derive: the decisions, rationale, constraints, and goals. The *what* is always recoverable from the source; the *why* is not, and it outlives any implementation.
+- **Accuracy, not access.** The valuable, hard job is keeping the knowledge accurate as reality changes — a write-time discipline — not fetching it. So live_docs is deliberately unopinionated about your agent harness: RAG, MCP, and prompt-assembly are downstream layers that bolt onto a store that's already true.
+- **Living, not snapshotted.** When something changes, cascade *regenerates* the affected docs surgically from the graph — the stale nodes rewritten to current truth. Atomicity is what makes that safe and local.
+- **Revisable, not just enforced.** Every decision records its *why* and its dependencies, so it can be safely changed when reality moves — not merely checked against. The rulebook evolves instead of ossifying.
 
 ---
 
@@ -39,7 +51,7 @@ requires: ["[[20260615182358]]"]
 - A `belongs_to` **hierarchy** — the navigational tree. Any doc that others belong to is, structurally, a signpost. `ldoc map` prints these entry points, ranked, as the closest thing to a front page.
 - A `requires` / `relates` **dependency web** — existential and see-also links that model how the system actually hangs together.
 
-**Cascade fights drift.** When a doc changes, `cascade-check` walks both graphs — upstream dependencies and downstream dependents — and issues a verdict per neighbor: *inconsequential* (stop), *cascade* (propagate the change), *incompatible* (a conflict a human must resolve), or *needs-clarification*. Most edits are inconsequential; the ones that aren't get surfaced instead of silently rotting.
+**Cascade keeps it living.** When a doc changes, `cascade-check` walks both graphs — upstream dependencies and downstream dependents — and issues a verdict per neighbor: *inconsequential* (stop), *cascade* (regenerate the dependent from the graph), *incompatible* (a conflict a human must resolve), or *needs-clarification*. Most edits are inconsequential; the ones that aren't get their stale docs regenerated to current truth, not just flagged.
 
 **Capture is cheap; ingestion is deliberate.** Raw material (notes, RFCs, chat summaries, research) drops into an inbox instantly, then passes through gates: `inbox → raw → atomic docs`. The final gate — decomposing a blob into single-responsibility docs — is where the value is, and it's never skipped.
 
