@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>live_docs viewer</title>
+<title>live_docs</title>
+<link rel="icon" id="favicon-link" href="data:,">
 <style>
   :root {
     --bg: #f7f6f3;
@@ -148,6 +149,7 @@
 
   /* reader */
   .reader { display: grid; grid-template-columns: 290px 1fr; min-height: calc(100vh - 49px); }
+  .reader.has-graph { grid-template-columns: 290px 1fr min(380px, 34vw); }
   .tree-panel {
     display: flex; flex-direction: column;
     border-right: 1px solid var(--line); background: var(--panel);
@@ -193,9 +195,22 @@
   .tree .leaf { cursor: pointer; color: var(--ink); font-weight: 400; }
   .tree .leaf:hover { background: var(--accent-soft); }
   .tree .leaf.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  .content { padding: 22px 28px; max-width: 820px; overflow-x: hidden; }
+  .content { padding: 22px 28px; max-width: 820px; overflow-x: hidden; min-width: 0; }
+  .graph-panel {
+    display: flex; flex-direction: column;
+    border-left: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 49px; max-height: calc(100vh - 49px);
+    min-width: 0; overflow: hidden;
+  }
+  .graph-panel[hidden] { display: none !important; }
+  .graph-panel .graph-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .graph-panel .ngraph { margin: 0; border: none; border-radius: 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .graph-panel .gwrap { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 8px; }
+  .graph-panel svg.graph { flex: 1; min-height: 200px; height: auto; max-height: none; }
   .content h1.doctitle { font-size: 22px; margin: 0 0 2px; }
   .meta-line { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .docid { font-family: var(--mono); font-size: 11.5px; color: var(--faint); font-weight: 400; }
+  .meta-line .docid, #tooltip .docid { font-size: 11px; }
   .doc-summary { color: var(--muted); font-style: italic; border-left: 3px solid var(--line); padding-left: 12px; margin: 0 0 18px; }
   .md { line-height: 1.6; }
   .md h2 { font-size: 17px; margin: 22px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
@@ -213,12 +228,9 @@
   .transclude { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 12px; margin: 8px 0; background: #fafaf8; }
   .transclude .th { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
 
-  /* neighborhood graph */
+  /* neighborhood graph — always visible */
   .ngraph { margin-top: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-  .ngraph > summary { cursor: pointer; font-size: 15px; font-weight: 600; padding: 12px 16px; list-style: none; }
-  .ngraph > summary::-webkit-details-marker { display: none; }
-  .ngraph > summary::before { content: "▸ "; color: var(--faint); }
-  .ngraph[open] > summary::before { content: "▾ "; }
+  .ngraph .gtitle { font-size: 15px; font-weight: 600; padding: 12px 16px 0; margin: 0; }
   .ngraph .gwrap { padding: 0 12px 12px; }
   .gcontrols { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 0 4px 8px; font-size: 12px; }
   .gtoggle { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; padding: 2px 8px; border: 1px solid var(--line); border-radius: 12px; user-select: none; }
@@ -341,6 +353,33 @@
   #tooltip .tt-label { font-weight: 700; margin-bottom: 3px; }
   #tooltip .tt-meta { color: #b9c2d0; font-size: 11px; margin-bottom: 5px; }
   #tooltip .tt-sum { color: #ddd; }
+
+  /* preview drawer — overlays the page; does not shift layout */
+  #preview-drawer {
+    position: fixed; right: 0; top: 49px; bottom: 0; z-index: 60;
+    width: min(420px, 44vw); background: var(--panel);
+    border-left: 1px solid var(--line); box-shadow: -6px 0 24px rgba(0,0,0,.12);
+    transform: translateX(100%); transition: transform .2s ease;
+    display: flex; flex-direction: column; pointer-events: none;
+  }
+  #preview-drawer.open { transform: translateX(0); pointer-events: auto; }
+  #preview-drawer .sp-head {
+    display: flex; align-items: flex-start; gap: 8px; flex: none;
+    padding: 12px 14px; border-bottom: 1px solid var(--line); background: #fafaf8;
+  }
+  #preview-drawer .sp-head .sp-title { flex: 1; font-size: 14px; font-weight: 600; line-height: 1.35; }
+  #preview-drawer .sp-head .sp-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  #preview-drawer .sp-close {
+    background: var(--accent-soft); color: var(--accent); border: none;
+    border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; flex: none;
+  }
+  #preview-drawer .sp-body { flex: 1; overflow-y: auto; padding: 12px 14px 18px; font-size: 13.5px; min-height: 0; }
+  #preview-drawer .sp-hint { font-size: 11.5px; color: var(--faint); margin-bottom: 10px; }
+  @media (max-width: 900px) {
+    .reader.has-graph { grid-template-columns: 240px 1fr; }
+    .graph-panel { display: none !important; }
+    #preview-drawer { width: min(100vw, 420px); }
+  }
 </style>
 </head>
 <body>
@@ -365,11 +404,22 @@
   <section id="page-reviews" class="page"></section>
 </main>
 <div id="tooltip"></div>
+<aside id="preview-drawer" aria-label="Link preview">
+  <div class="sp-head">
+    <div>
+      <div class="sp-title" id="sp-title"></div>
+      <div class="sp-meta" id="sp-meta"></div>
+    </div>
+    <button type="button" class="sp-close" id="sp-close" title="Close preview">✕</button>
+  </div>
+  <div class="sp-body" id="sp-preview"></div>
+</aside>
 
 <script>
 /* ---- inlined data (the export contract: frontmatter + body) ---- */
 const DOCS = /*__DOCS_JSON__*/;
 const REVIEWS = /*__REVIEWS_JSON__*/;
+const VIEWER_CONFIG = /*__VIEWER_CONFIG__*/;
 </script>
 <script>
 /* ---- vendored markdown renderer (marked, MIT) ---- */
@@ -382,6 +432,40 @@ marked.setOptions({ gfm: true, breaks: false });
 /* ===== build in-memory maps ===== */
 const byId = new Map();
 DOCS.forEach(d => byId.set(String(d.id), d));
+
+/* Reference/archived docs are kept in byId for link resolution but hidden from
+   most navigational surfaces (tree, graph, catalog default). */
+function isArchived(d) {
+  if (!d) return true;
+  return d.status === "reference" || d.type === "reference";
+}
+function isGraphEligible(id) {
+  const d = byId.get(String(id));
+  return d && !isArchived(d);
+}
+
+function applyViewerConfig() {
+  const cfg = VIEWER_CONFIG || {};
+  const title = cfg.title || "live_docs";
+  const subtitle = cfg.subtitle || "viewer · read-only";
+  document.title = title;
+  if (cfg.favicon) {
+    const link = document.getElementById("favicon-link");
+    if (link) link.href = cfg.favicon;
+  }
+  const brand = document.querySelector("header.topnav .brand");
+  if (brand) {
+    brand.innerHTML = subtitle
+      ? `${escapeHtml(title)} <small>${escapeHtml(subtitle)}</small>`
+      : escapeHtml(title);
+  }
+}
+
+function idBadge(id, opts) {
+  opts = opts || {};
+  const title = opts.title ? ` title="doc id"` : "";
+  return `<code class="docid"${title}>${escapeHtml(String(id))}</code>`;
+}
 
 // normalize an edge value: either "[[id]]" or bare id or "id.md" -> bare id
 function edgeId(v) {
@@ -638,17 +722,17 @@ function edgeBadge(id) {
   return `<span class="edgecount" title="${n} connection${n===1?"":"s"} — open to navigate">⇄ ${n}</span>`;
 }
 
-/* ===== edge-type model (shared by the neighborhood graph) =====
-   Each forward edge field plus the two computed reverse edges. `dir` lets the
-   graph draw a reverse edge with the correct orientation/label. Default force
-   tuning per type: hierarchy tight, relates/provenance loose. */
-const EDGE_TYPES = [
-  { key: "belongs_to",     label: "belongs to",   color: "#5b6e8c", dir: "fwd", dist: 70,  strength: 0.9 },
-  { key: "requires",       label: "requires",     color: "#b07a2a", dir: "fwd", dist: 95,  strength: 0.7 },
-  { key: "relates",        label: "relates",      color: "#6a9a5b", dir: "fwd", dist: 140, strength: 0.35 },
-  { key: "provenance",     label: "provenance",   color: "#9a7bb0", dir: "fwd", dist: 130, strength: 0.4 },
-  { key: "superseded_by",  label: "superseded by",color: "#b03a3a", dir: "fwd", dist: 90,  strength: 0.7 },
+/* ===== edge-type model (shared by the neighborhood graph) ===== */
+const GRAPH_EDGE_TYPES = [
+  { key: "belongs_to",    label: "belongs to",   color: "#5b6e8c", dist: 70,  strength: 0.9 },
+  { key: "children",      label: "members",      color: "#6a82a8", dist: 70,  strength: 0.85 },
+  { key: "requires",      label: "requires",     color: "#b07a2a", dist: 95,  strength: 0.7 },
+  { key: "required_by",   label: "required by",  color: "#c9923f", dist: 95,  strength: 0.7 },
+  { key: "relates",       label: "relates",      color: "#6a9a5b", dist: 140, strength: 0.35 },
+  { key: "superseded_by", label: "superseded by",color: "#b03a3a", dist: 90,  strength: 0.7 },
 ];
+// provenance is intentionally excluded from the neighborhood graph.
+const EDGE_TYPES = GRAPH_EDGE_TYPES;
 
 /* ===== THE RESOLVER — one pass, used by every surface =====
    Renders raw markdown to HTML, with wiki-links and md-links resolved to labels.
@@ -772,6 +856,25 @@ function typeIcon(type, opts) {
     + `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.svg}</svg></span>`;
 }
 
+function applyViewerThemeOverrides() {
+  const cfg = VIEWER_CONFIG || {};
+  const dc = cfg.domain_colors || {};
+  Object.entries(dc).forEach(([name, val]) => {
+    if (typeof val === "string") {
+      _domainColorCache.set(name, { bg: val + "22", fg: val, border: val + "55" });
+    } else if (val && typeof val === "object") {
+      _domainColorCache.set(name, val);
+    }
+  });
+  const ti = cfg.type_icons || {};
+  Object.entries(ti).forEach(([t, val]) => {
+    if (!TYPE_ICONS[t]) TYPE_ICONS[t] = { ...TYPE_ICON_FALLBACK, svg: TYPE_ICON_FALLBACK.svg };
+    if (val.color) TYPE_ICONS[t].color = val.color;
+    if (val.label) TYPE_ICONS[t].label = val.label;
+    if (val.svg) TYPE_ICONS[t].svg = val.svg;
+  });
+}
+
 // Pre-process markdown: replace link syntaxes with placeholder tokens, render md,
 // then swap tokens for resolved anchors/transclusions. This keeps marked from
 // mangling our custom links and lets transclusions become block elements.
@@ -805,7 +908,7 @@ function renderMarkdown(src, depth) {
   html = html.replace(/TOKEN(\d+)TOKEN/g, (_, n) => {
     const t = tokens[+n];
     if (!t) return "";
-    if (t.kind === "link") return linkHtml(t.id, t.text || null);
+    if (t.kind === "link") return linkHtml(t.id, t.text || null, { icon: 1 });
     if (t.kind === "trans") {
       const d = byId.get(String(t.id));
       if (!d) return `<span class="dl broken">${t.id}</span>`;
@@ -830,7 +933,7 @@ function showTip(el) {
   const facets = facetDisplay(d.id);
   // type icon before the label; the type name still reads in the meta line
   tooltip.innerHTML =
-    `<div class="tt-label">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)}</div>` +
+    `<div class="tt-label">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)} ${idBadge(id)}</div>` +
     `<div class="tt-meta">${escapeHtml(enumDisplay("type", d.type))} ${status} ${facets} ${count}</div>` +
     `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
   tooltip.style.display = "block";
@@ -877,27 +980,74 @@ document.addEventListener("dblclick", e => {
   location.hash = "#/" + a.getAttribute("data-ref");
 });
 
-function toggleExpand(a) {
-  hideTip();
-  const id = a.getAttribute("data-ref");
+const previewDrawer = document.getElementById("preview-drawer");
+const spTitle = document.getElementById("sp-title");
+const spMeta = document.getElementById("sp-meta");
+const spPreview = document.getElementById("sp-preview");
+let expandId = null;
+let graphFocusId = null;
+
+document.getElementById("sp-close").addEventListener("click", closeSidePreview);
+
+function closeSidePreview() {
+  expandId = null;
+  previewDrawer.classList.remove("open");
+  spPreview.innerHTML = "";
+}
+
+function hideReaderGraph() {
+  graphFocusId = null;
+  if (readerShell) readerShell.classList.remove("has-graph");
+  const panel = document.getElementById("reader-graph-panel");
+  const host = document.getElementById("reader-graph");
+  if (panel) panel.hidden = true;
+  if (host) host.innerHTML = "";
+}
+
+function expandContentHtml(id) {
   const d = byId.get(String(id));
-  if (!d) return;
-  // toggle: if next sibling is our expand block, remove it
-  const nxt = a.nextElementSibling;
-  if (nxt && nxt.classList && nxt.classList.contains("expand") && nxt.getAttribute("data-for") === id) {
-    nxt.remove(); return;
-  }
-  const box = document.createElement("span");
-  box.className = "expand"; box.setAttribute("data-for", id);
-  box.style.display = "block";
-  // member list for SIGNPOSTS (descendant-bearing docs) comes from belongs_to edges
+  if (!d) return "";
   const sign = isSignpost(id);
   const memberPart = sign ? memberListHtml(id) : "";
-  box.innerHTML = `<div class="eh">${typeIcon(d.type)}${escapeHtml(d.label || id)} · ${escapeHtml(enumDisplay("type", d.type))} ${facetDisplay(id)} ${edgeBadge(id)} — single-click again to collapse, double-click to open in Reader</div>`
+  return `<div class="sp-hint">Single-click the link again to close · double-click to open in Reader</div>`
+    + (d.summary ? `<div class="doc-summary">${escapeHtml(d.summary)}</div>` : "")
     + `<div class="md">${renderMarkdown(d.body, 1)}</div>`
     + memberPart
     + connectionsHtml(d, { skipChildren: sign });
-  a.insertAdjacentElement("afterend", box);
+}
+
+function openSidepanel(id) {
+  const d = byId.get(String(id));
+  if (!d) return;
+  expandId = String(id);
+  spTitle.innerHTML = `${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)} ${idBadge(id)}`;
+  spMeta.innerHTML = [enumDisplay("type", d.type),
+    d.status ? `<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>` : "",
+    facetDisplay(id)].filter(Boolean).join(" · ");
+  spPreview.innerHTML = expandContentHtml(id);
+  previewDrawer.classList.add("open");
+}
+
+function showReaderGraph(id) {
+  const d = byId.get(String(id));
+  const panel = document.getElementById("reader-graph-panel");
+  const host = document.getElementById("reader-graph");
+  if (!d || !panel || !host || !readerShell) { hideReaderGraph(); return; }
+  graphFocusId = String(id);
+  readerShell.classList.add("has-graph");
+  panel.hidden = false;
+  host.innerHTML = graphPanelHtml();
+  mountGraph(host, graphFocusId);
+}
+
+function toggleExpand(a) {
+  hideTip();
+  const id = a.getAttribute("data-ref");
+  if (expandId === id && previewDrawer.classList.contains("open")) {
+    closeSidePreview();
+    return;
+  }
+  openSidepanel(id);
 }
 
 /* ===== nav / routing ===== */
@@ -924,11 +1074,15 @@ function route() {
     activate("reader");
     renderReader(id && byId.has(id) ? id : null);
   } else {
+    hideReaderGraph();
     const p = h.slice(1);
     activate(pages.includes(p) ? p : "home");
   }
 }
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => {
+  closeSidePreview();
+  route();
+});
 
 /* ===== HOME / DASHBOARD ===== */
 function renderHome() {
@@ -941,15 +1095,15 @@ function renderHome() {
   // Entry points are STRUCTURAL now (the `index` type is retired): a signpost is
   // a doc that bears descendants via belongs_to. Rank by transitive descendant
   // count so the biggest subtrees float to the top; the root component leads.
-  const signposts = DOCS.filter(d => isSignpost(d.id))
+  const signposts = DOCS.filter(d => isSignpost(d.id) && !isArchived(d))
     .sort((a, b) => descCount(b.id) - descCount(a.id) || String(labelOf(a.id)).localeCompare(String(labelOf(b.id))));
   // orphans = belongs_to roots that lead nowhere (no descendants, no parent) and
   // aren't themselves a signpost. These are the docs curation hasn't placed yet.
-  const orphans = belongsRoots.filter(d => !isSignpost(d.id));
+  const orphans = belongsRoots.filter(d => !isSignpost(d.id) && !isArchived(d));
   const deprecated = DOCS.filter(d => d.status === "deprecated");
   const churnOf = d => (Array.isArray(d.history) ? d.history : []).filter(h =>
     !(Array.isArray(h.change_type) ? h.change_type.includes("addition") : h.change_type === "addition")).length;
-  const hot = DOCS.map(d => ({ d, churn: churnOf(d) })).filter(x => x.churn > 0)
+  const hot = DOCS.filter(d => !isArchived(d)).map(d => ({ d, churn: churnOf(d) })).filter(x => x.churn > 0)
     .sort((a, b) => b.churn - a.churn).slice(0, 8);
 
   const statBox = (n, l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
@@ -981,7 +1135,7 @@ function renderHome() {
     + `<div class="sub" style="margin:0 0 6px">Descendant-bearing docs, ranked by subtree size.</div><ul class="tight">`;
   signposts.forEach(d => {
     const sub = escapeHtml(d.summary || "");
-    html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
+    html += `<li>${linkHtml(d.id, null, {icon:1})} ${idBadge(d.id)} ${facetDisplay(d.id)} <span class="edgecount" title="descendants in subtree">⤵ ${descCount(d.id)}</span>`
       + (sub ? `<div class="sub" style="margin:2px 0 0">${sub}</div>` : "") + `</li>`;
   });
   html += `</ul></div>`;
@@ -1016,14 +1170,14 @@ function buildTree() {
   // type is retired. A member that is itself a signpost nests as a sub-folder;
   // members with no descendants are leaves. Tree roots = signposts with no
   // resolving belongs_to parent. Siblings sort type → label; depth is visual.
-  const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0)
+  const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0 && !isArchived(d))
     .sort(compareDocsByTypeThenLabel);
 
   function renderNode(idx, seen, depth) {
     seen = seen || new Set();
     if (seen.has(idx.id)) return ""; // guard cycles
     seen = new Set(seen); seen.add(idx.id);
-    const memberIds = (children.get(idx.id) || []);
+    const memberIds = (children.get(idx.id) || []).filter(mid => !isArchived(byId.get(mid)));
     const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean)
       .sort(compareDocsByTypeThenLabel);
     const leaves = memberIds.filter(m => !isSignpost(m))
@@ -1048,7 +1202,7 @@ function buildTree() {
 
   // Ungrouped catch-all: docs that belong to nothing AND bear no descendants
   // (a signpost with no parent is already a root above, so exclude those).
-  const ungrouped = belongsRoots.filter(d => !isSignpost(d.id))
+  const ungrouped = belongsRoots.filter(d => !isSignpost(d.id) && !isArchived(d))
     .sort(compareDocsByTypeThenLabel);
   if (ungrouped.length) {
     h += `<div class="tree-node"><details open><summary>Ungrouped <span class="tree-count">${ungrouped.length}</span></summary><div class="tree-children">`;
@@ -1130,7 +1284,9 @@ function ensureReaderShell() {
     + `<button type="button" class="tree-act" data-tree-act="expand">Expand all</button>`
     + `<button type="button" class="tree-act" data-tree-act="collapse">Collapse all</button>`
     + `</div><div class="tree">${readerTreeHtml}</div></div>`
-    + `<div class="content" id="reader-content"></div></div>`;
+    + `<div class="content" id="reader-content"></div>`
+    + `<aside class="graph-panel" id="reader-graph-panel" hidden>`
+    + `<div class="graph-body" id="reader-graph"></div></aside></div>`;
   readerShell = el.querySelector(".reader");
   const treeEl = readerShell.querySelector(".tree");
   wireTreeToolbar(readerShell.querySelector(".tree-toolbar"), treeEl);
@@ -1145,6 +1301,7 @@ function renderReader(focusId) {
   if (!focusId) {
     treeEl.querySelectorAll(".leaf.active, summary.active").forEach(n => n.classList.remove("active"));
     content.innerHTML = `<h1 class="doctitle">Reader</h1><div class="sub">Pick a doc from the tree on the left, or double-click any link anywhere to focus it here.</div>`;
+    hideReaderGraph();
     return;
   }
   setTreeFocus(treeEl, focusId);
@@ -1157,7 +1314,7 @@ function metaLine(d) {
   if (d.status) bits.push(`<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>`);
   if (d.level) bits.push("level: " + enumDisplay("level", d.level));
   if (d.created) bits.push("created " + String(d.created).slice(0, 10));
-  bits.push(`<code>${d.id}</code>`);
+  bits.push(idBadge(d.id, { title: 1 }));
   let line = bits.join(" · ");
   const fp = facetDisplay(d.id, { title: 1 });
   if (fp) line += ` · <span class="scope-wrap">${fp}</span>`;
@@ -1166,8 +1323,9 @@ function metaLine(d) {
 
 function relGroup(title, ids) {
   if (!ids || !ids.length) return "";
-  const sorted = ids.slice().sort(compareIdsByTypeThenLabel);
-  return `<div class="relgroup"><div class="rt">${escapeHtml(title)} (${ids.length})</div><ul>` +
+  const sorted = ids.filter(id => byId.has(String(id))).slice().sort(compareIdsByTypeThenLabel);
+  if (!sorted.length) return "";
+  return `<div class="relgroup"><div class="rt">${escapeHtml(title)} (${sorted.length})</div><ul>` +
     sorted.map(id => `<li>${linkHtml(id, null, {icon:1})} ${edgeBadge(id)}</li>`).join("") + `</ul></div>`;
 }
 
@@ -1176,7 +1334,7 @@ function relGroup(title, ids) {
 // a hand-written "## Map". Each member is a resolved label-link (hover tooltip),
 // its one-line summary, a type pill, and an edge-count affordance.
 function memberListHtml(indexId) {
-  const members = children.get(String(indexId)) || [];
+  const members = (children.get(String(indexId)) || []).filter(mid => !isArchived(byId.get(mid)));
   if (!members.length) {
     return `<div class="members"><h2>Members</h2><div class="sub">No docs belong to this index yet.</div></div>`;
   }
@@ -1257,7 +1415,7 @@ function renderFocusDoc(content, id) {
     // a signpost still has its own edges (it belongs_to a parent, may require/relate)
     html += connectionsHtml(d, { skipChildren: true });
     content.innerHTML = html;
-    const members = (children.get(d.id) || []).slice().sort(compareIdsByTypeThenLabel);
+    const members = (children.get(d.id) || []).filter(mid => !isArchived(byId.get(mid))).slice().sort(compareIdsByTypeThenLabel);
     document.getElementById("composeBtn").addEventListener("click", function () {
       const target = document.getElementById("composed");
       if (target.innerHTML) { target.innerHTML = ""; this.textContent = "Expand — inline all member docs"; return; }
@@ -1273,105 +1431,172 @@ function renderFocusDoc(content, id) {
       target.innerHTML = m || `<div class="sub">No member docs.</div>`;
       this.textContent = "Collapse members";
     });
-    // history + graph live below the connections panel
-    content.insertAdjacentHTML("beforeend", historyTimeline(d) + graphPanelHtml());
-    mountGraph(content, d.id);
+    // history only — graph lives in the side panel
+    content.insertAdjacentHTML("beforeend", historyTimeline(d));
+    showReaderGraph(d.id);
     return;
   }
 
   // leaf doc: body + connections panel (outgoing + incoming backlinks)
   html += `<div class="md">${renderMarkdown(d.body)}</div>`;
   html += connectionsHtml(d);
-  html += graphPanelHtml();
   html += historyTimeline(d);
   content.innerHTML = html;
-  mountGraph(content, d.id);
+  showReaderGraph(d.id);
 }
 
 /* ===== NEIGHBORHOOD GRAPH =====
-   A deliberately lean, dependency-free 2-hop neighborhood view. Hand-rolled
-   Verlet-ish force loop -> inline SVG. Nodes = focus + 1-hop + (capped) 2-hop
-   across all edge types incl. computed reverse edges. Edges colored by type,
-   per-type show/hide, per-type force tuning. Click node = refocus Reader+graph. */
+   Edge-aware expansion: 1-hop = direct neighbors (no provenance, no archived).
+   Optional 2-hop follows edge-type rules — ancestors climb, descendants descend,
+   requires shows immediate scope (belongs_to parent), relates hops nowhere. */
 
-const NODE_CAP = 40;            // hard cap on total nodes; 1-hop is always kept
-// per-type toggle + live-tuned forces (persist within a session)
+const NODE_CAP = 40;
 const graphPrefs = {};
-EDGE_TYPES.forEach(t => graphPrefs[t.key] = { on: true, dist: t.dist, strength: t.strength });
-// hop depth shared across the session — DEFAULT 1-hop (focus + direct neighbors).
-// The user can opt into 2-hop via the control in the panel.
-const graphView = { depth: 1 };
+GRAPH_EDGE_TYPES.forEach(t => graphPrefs[t.key] = { on: true, dist: t.dist, strength: t.strength });
+const graphView = { depth: 2 };
 
-// all undirected edges touching a node, as {other, type, dir}. We expand across
-// BOTH forward fields and their reverses so the neighborhood is symmetric.
-function incidentEdges(id) {
-  const out = [];
-  const d = byId.get(String(id));
-  if (!d) return out;
-  EDGE_TYPES.forEach(t => {
-    edgeList(d, t.key).forEach(o => { if (byId.has(o)) out.push({ other: o, type: t.key, from: id, to: o }); });
-  });
-  // reverse: who points at me via each forward field
-  DOCS.forEach(s => {
-    if (String(s.id) === String(id)) return;
-    EDGE_TYPES.forEach(t => {
-      if (edgeList(s, t.key).includes(String(id))) out.push({ other: s.id, type: t.key, from: s.id, to: id });
+function belongsToAncestors(id, generations) {
+  const out = new Set();
+  let frontier = [String(id)];
+  const seen = new Set(frontier);
+  for (let g = 0; g < generations; g++) {
+    const next = [];
+    frontier.forEach(nid => {
+      parentsOf(nid).forEach(p => {
+        if (!isGraphEligible(p) || seen.has(p)) return;
+        seen.add(p); out.add(p); next.push(p);
+      });
     });
-  });
+    frontier = next;
+  }
   return out;
 }
 
-// BFS to `depth` hops with capping. Returns {nodes:Set, edges:[], capped:bool}.
-// depth defaults to 1: focus + its direct neighbors only (calm, readable).
+function directChildren(id) {
+  return (children.get(String(id)) || []).filter(cid => isGraphEligible(cid));
+}
+
+function oneHopEdges(focusId, depth) {
+  depth = depth || 1;
+  const includeSoft = depth >= 2;
+  const out = [];
+  const d = byId.get(String(focusId));
+  if (!d) return out;
+  edgeList(d, "belongs_to").forEach(o => {
+    if (isGraphEligible(o)) out.push({ other: o, type: "belongs_to", role: "ancestor", source: focusId, target: o });
+  });
+  directChildren(focusId).forEach(o => {
+    out.push({ other: o, type: "children", role: "descendant", source: focusId, target: o });
+  });
+  edgeList(d, "requires").forEach(o => {
+    if (isGraphEligible(o)) out.push({ other: o, type: "requires", role: "requires", source: focusId, target: o });
+  });
+  (requiredBy.get(String(focusId)) || []).forEach(o => {
+    if (isGraphEligible(o)) out.push({ other: o, type: "required_by", role: "required_by", source: o, target: focusId });
+  });
+  if (includeSoft) {
+    edgeList(d, "relates").forEach(o => {
+      if (isGraphEligible(o)) out.push({ other: o, type: "relates", role: "relates", source: focusId, target: o });
+    });
+    edgeList(d, "superseded_by").forEach(o => {
+      if (isGraphEligible(o)) out.push({ other: o, type: "superseded_by", role: "superseded", source: focusId, target: o });
+    });
+    DOCS.forEach(s => {
+      if (String(s.id) === String(focusId) || isArchived(s)) return;
+      edgeList(s, "relates").forEach(o => {
+        if (o === String(focusId) && isGraphEligible(s.id)) {
+          out.push({ other: s.id, type: "relates", role: "relates", source: s.id, target: focusId });
+        }
+      });
+      edgeList(s, "superseded_by").forEach(o => {
+        if (o === String(focusId) && isGraphEligible(s.id)) {
+          out.push({ other: s.id, type: "superseded_by", role: "superseded", source: s.id, target: focusId });
+        }
+      });
+    });
+  }
+  return out;
+}
+
+function secondHopFrom(nodeId, via) {
+  const extras = [];
+  const role = via && via.role;
+  if (role === "ancestor") {
+    belongsToAncestors(nodeId, 2).forEach(a => extras.push({ id: a, via: { type: "belongs_to", role: "ancestor" } }));
+  } else if (role === "descendant") {
+    directChildren(nodeId).forEach(c => extras.push({ id: c, via: { type: "children", role: "descendant" } }));
+  } else if (role === "requires" || role === "required_by") {
+    parentsOf(nodeId).slice(0, 1).forEach(a => {
+      if (isGraphEligible(a)) extras.push({ id: a, via: { type: "belongs_to", role: "scope" } });
+    });
+  }
+  return extras;
+}
+
 function neighborhood(focus, depth) {
   depth = depth || 1;
-  const dist = new Map([[String(focus), 0]]);
-  const oneHop = [];
-  incidentEdges(focus).forEach(e => { if (!dist.has(e.other)) { dist.set(e.other, 1); oneHop.push(e.other); } });
+  const focusId = String(focus);
+  const dist = new Map();
+  const viaMap = new Map();
+  if (!isGraphEligible(focusId)) return { nodes: new Set(), edges: [], capped: false, dist };
+  dist.set(focusId, 0);
+
+  const oneHop = oneHopEdges(focusId, depth);
+  oneHop.forEach(e => {
+    if (!dist.has(e.other)) { dist.set(e.other, 1); viaMap.set(e.other, e); }
+  });
+
   let capped = false;
-  // expand to 2-hop only when the user opts in (depth >= 2)
   if (depth >= 2) {
-    for (const n of oneHop) {
-      incidentEdges(n).forEach(e => {
-        if (dist.has(e.other)) return;
+    for (const [nid, hop] of [...dist.entries()]) {
+      if (hop !== 1) continue;
+      secondHopFrom(nid, viaMap.get(nid)).forEach(ex => {
         if (dist.size >= NODE_CAP) { capped = true; return; }
-        dist.set(e.other, 2);
+        if (!dist.has(ex.id)) { dist.set(ex.id, 2); viaMap.set(ex.id, ex.via); }
       });
     }
   }
+
   const nodes = new Set(dist.keys());
-  // collect undirected edges among kept nodes, dedup by from|to|type
   const seen = new Set(), edges = [];
-  nodes.forEach(n => incidentEdges(n).forEach(e => {
-    if (!nodes.has(e.other)) return;
-    const a = String(e.from), b = String(e.to);
-    const k = a + "|" + b + "|" + e.type;
-    const rk = b + "|" + a + "|" + e.type;
-    if (seen.has(k) || seen.has(rk)) return;
-    seen.add(k);
-    edges.push({ source: a, target: b, type: e.type });
-  }));
+  nodes.forEach(nid => {
+    oneHopEdges(nid, depth).forEach(e => {
+      if (!nodes.has(e.other)) return;
+      const k = e.source + "|" + e.target + "|" + e.type;
+      const rk = e.target + "|" + e.source + "|" + e.type;
+      if (seen.has(k) || seen.has(rk)) return;
+      seen.add(k);
+      edges.push({ source: String(e.source), target: String(e.target), type: e.type });
+    });
+    if (nid !== focusId) return;
+    oneHop.forEach(e => {
+      const k = e.source + "|" + e.target + "|" + e.type;
+      if (seen.has(k)) return;
+      seen.add(k);
+      edges.push({ source: String(e.source), target: String(e.target), type: e.type });
+    });
+  });
   return { nodes, edges, capped, dist };
 }
 
 function graphPanelHtml() {
-  const toggles = EDGE_TYPES.map(t =>
+  const toggles = GRAPH_EDGE_TYPES.map(t =>
     `<span class="gtoggle${graphPrefs[t.key].on ? "" : " off"}" data-etype="${t.key}">`
     + `<span class="swatch" style="background:${t.color}"></span>${t.label}</span>`).join("");
-  const tune = EDGE_TYPES.map(t =>
+  const tune = GRAPH_EDGE_TYPES.map(t =>
     `<tr><td><span class="swatch" style="background:${t.color};width:14px;height:3px;display:inline-block;border-radius:2px"></span> ${t.label}</td>`
     + `<td>dist <input type="range" min="40" max="220" value="${graphPrefs[t.key].dist}" data-tune="dist" data-etype="${t.key}"></td>`
     + `<td>pull <input type="range" min="5" max="100" value="${Math.round(graphPrefs[t.key].strength*100)}" data-tune="strength" data-etype="${t.key}"></td></tr>`).join("");
-  const hop = `<span class="ghop">depth `
-    + `<label><input type="radio" name="ghop" value="1"${graphView.depth===1?" checked":""}> 1-hop</label>`
-    + `<label><input type="radio" name="ghop" value="2"${graphView.depth===2?" checked":""}> 2-hop</label></span>`;
-  return `<details class="ngraph"><summary>Neighborhood graph</summary><div class="gwrap">`
+  const hop = `<span class="ghop">zoom `
+    + `<label><input type="radio" name="ghop" value="1"${graphView.depth===1?" checked":""}> near</label>`
+    + `<label><input type="radio" name="ghop" value="2"${graphView.depth===2?" checked":""}> wide</label></span>`;
+  return `<div class="ngraph"><h3 class="gtitle">Neighborhood graph</h3><div class="gwrap">`
     + `<div class="gcap" data-cap hidden></div>`
     + `<div class="gcontrols">${hop}${toggles}</div>`
     + `<details class="gtune"><summary>force tuning</summary><table>${tune}</table></details>`
     + `<svg class="graph" data-graph></svg>`
-    + `<div class="ghint">Drag nodes to rearrange · click a node to refocus · hover for summary.</div>`
-    + `</div></details>`;
+    + `<div class="ghint">Drag nodes to rearrange · hover for summary</div>`
+    + `</div></div>`;
 }
 
 // mount + run the sim inside the panel just rendered into `container`
@@ -1384,7 +1609,7 @@ function mountGraph(container, focusId) {
 
   function build() {
     const nb = neighborhood(focusId, graphView.depth);
-    if (nb.capped) { capEl.hidden = false; capEl.textContent = `Capped at ${NODE_CAP} nodes — 1-hop kept fully, 2-hop sampled. (Neighborhood is larger than shown.)`; }
+    if (nb.capped) { capEl.hidden = false; capEl.textContent = `Capped at ${NODE_CAP} nodes — near neighborhood kept fully, wide neighborhood sampled.`; }
     else capEl.hidden = true;
 
     const W = svg.clientWidth || 600, H = 420;
@@ -1405,7 +1630,29 @@ function mountGraph(container, focusId) {
 
   let G = build();
 
-  function activeEdges() { return G.edges.filter(e => graphPrefs[e.type].on); }
+  function activeEdges() { return G.edges.filter(e => graphPrefs[e.type] && graphPrefs[e.type].on && e.s && e.t); }
+
+  function visibleNodes() {
+    const focus = String(focusId);
+    const edges = activeEdges();
+    const adj = new Map();
+    edges.forEach(e => {
+      const a = String(e.source), b = String(e.target);
+      if (!adj.has(a)) adj.set(a, []);
+      if (!adj.has(b)) adj.set(b, []);
+      adj.get(a).push(b);
+      adj.get(b).push(a);
+    });
+    const seen = new Set([focus]);
+    const stack = [focus];
+    while (stack.length) {
+      const n = stack.pop();
+      (adj.get(n) || []).forEach(nb => {
+        if (!seen.has(nb)) { seen.add(nb); stack.push(nb); }
+      });
+    }
+    return seen;
+  }
 
   // ---- simulated-annealing cooling ----
   // alpha is a global temperature in [0,1] that scales every displacement and
@@ -1487,7 +1734,9 @@ function mountGraph(container, focusId) {
       ge.appendChild(ln);
     });
     svg.appendChild(ge);
+    const visible = visibleNodes();
     G.nodes.forEach(n => {
+      if (!visible.has(String(n.id))) return;
       const d = byId.get(n.id);
       const g = document.createElementNS(ns, "g");
       g.setAttribute("class", "gnode" + (n.focus ? " focus" : ""));
@@ -1497,9 +1746,15 @@ function mountGraph(container, focusId) {
       // icons), so the graph reads its taxonomy at a glance. Focus stays dark ink.
       const tdef = d ? (TYPE_ICONS[String(d.type)] || null) : null;
       const typeFill = tdef ? tdef.color : (isSignpost(n.id) ? "#5b6e8c" : "#a9b4c6");
+      const domains = d ? ownDomains(d) : [];
+      const domainStroke = domains.length ? domainColor(domains[0]).fg : null;
       const c = document.createElementNS(ns, "circle");
       c.setAttribute("r", n.focus ? 9 : (n.hop === 1 ? 6.5 : 5));
       c.setAttribute("fill", n.focus ? "#2b2b2b" : typeFill);
+      if (domainStroke && !n.focus) {
+        c.setAttribute("stroke", domainStroke);
+        c.setAttribute("stroke-width", "2");
+      }
       g.appendChild(c);
       // a tiny inline type glyph just LEFT of the node label, matching the rest of
       // the UI. Rendered as a nested SVG using the same Lucide path data.
@@ -1561,13 +1816,8 @@ function mountGraph(container, focusId) {
     if (!raf) loop();
   }
 
-  // only run while the panel is open (cheap when collapsed)
-  panel.addEventListener("toggle", () => {
-    if (panel.open) start();
-    else if (raf) { cancelAnimationFrame(raf); raf = null; }
-  });
-
-  // hop-depth control: changes the node SET, so a full restart is warranted
+  // graph is always visible — start immediately
+  start();
   panel.querySelectorAll('input[name="ghop"]').forEach(el => el.addEventListener("change", () => {
     graphView.depth = +el.value;
     start();
@@ -1621,12 +1871,10 @@ function mountGraph(container, focusId) {
     hideTip();
     location.hash = "#/" + g.getAttribute("data-nid");
   });
-
-  if (panel.open) start();
 }
 
 /* ===== CATALOG ===== */
-const catalogState = { type: "", status: "", level: "", scope: "", domain: "", q: "", group: "", sort: "", dir: 1 };
+const catalogState = { type: "", status: "living", level: "", scope: "", domain: "", q: "", group: "", sort: "", dir: 1 };
 let catalogFacetBound = false;
 function applyCatalogFilter(field, value) {
   if (!(field in catalogState)) return;
@@ -1659,13 +1907,14 @@ function renderCatalog() {
   html += ` group by <select id="f-group"><option value="">none</option>`
     + ["type","status","level"].concat(scopes.length ? ["scope"] : []).concat(domains.length ? ["domain"] : [])
         .map(g => `<option ${g===catalogState.group?"selected":""}>${g}</option>`).join("") + `</select>`;
-  html += ` <input id="f-q" placeholder="search label/title…" value="${escapeHtml(catalogState.q)}">`;
+  html += ` <input id="f-q" placeholder="search label/title/id…" value="${escapeHtml(catalogState.q)}">`;
   html += `</div>`;
   html += `<div class="count-note" id="cat-count"></div>`;
   html += `<table class="catalog"><thead><tr>`;
   const sortMark = c => catalogState.sort === c ? (catalogState.dir > 0 ? " ▲" : " ▼") : (catalogState.sort === "" && c === "type" ? " ▲" : "");
   html += `<th data-sort="created">created${sortMark("created")}</th>`;
   html += `<th data-sort="label">label${sortMark("label")}</th>`;
+  html += `<th data-sort="id">id${sortMark("id")}</th>`;
   html += `<th data-sort="type">type${sortMark("type")}</th>`;
   html += `<th>scope</th><th>domain</th>`;
   html += `<th data-sort="level">level${sortMark("level")}</th>`;
@@ -1680,7 +1929,7 @@ function renderCatalog() {
       (!catalogState.level || d.level === catalogState.level) &&
       (!catalogState.scope || effectiveScopes(d.id).includes(catalogState.scope)) &&
       (!catalogState.domain || ownDomains(d).includes(catalogState.domain)) &&
-      (!catalogState.q || ((d.label||"")+" "+(d.title||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
+      (!catalogState.q || ((d.label||"")+" "+(d.title||"")+" "+(d.id||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
     const s = catalogState.sort;
     if (!s) {
       rows.sort((a, b) => compareDocsByTypeThenLabel(a, b) * catalogState.dir);
@@ -1688,6 +1937,8 @@ function renderCatalog() {
       rows.sort((a, b) => (compareDocsByTypeThenLabel(a, b)) * catalogState.dir);
     } else if (s === "label") {
       rows.sort((a, b) => docSortKey(a).localeCompare(docSortKey(b)) * catalogState.dir);
+    } else if (s === "id") {
+      rows.sort((a, b) => String(a.id).localeCompare(String(b.id)) * catalogState.dir);
     } else {
       rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
     }
@@ -1695,6 +1946,7 @@ function renderCatalog() {
     const body = document.getElementById("cat-body");
     const cell = d => `<td>${escapeHtml(String(d.created||"").slice(0,10))}</td>`
       + `<td>${linkHtml(d.id, null, {icon:1})}</td>`
+      + `<td>${idBadge(d.id)}</td>`
       + `<td>${catEnumFacet("type", d.type)}</td>`
       + `<td>${scopeBreadcrumbs(d.id, { catalog: 1, title: 1 }) || '<span class="sub">—</span>'}</td>`
       + `<td>${domainTags(d.id, { catalog: 1, title: 1 }) || '<span class="sub">—</span>'}</td>`
@@ -1713,7 +1965,7 @@ function renderCatalog() {
         } else push(d[catalogState.group]||"(none)", d);
       });
       body.innerHTML = sortGroupKeys(catalogState.group, Object.keys(groups)).map(k =>
-        `<tr class="grouphdr"><td colspan="7">${escapeHtml(catalogState.group)}: ${escapeHtml(groupKeyLabel(catalogState.group, k))} (${groups[k].length})</td></tr>`
+        `<tr class="grouphdr"><td colspan="8">${escapeHtml(catalogState.group)}: ${escapeHtml(groupKeyLabel(catalogState.group, k))} (${groups[k].length})</td></tr>`
         + groups[k].map(d => `<tr>${cell(d)}</tr>`).join("")).join("");
     } else {
       body.innerHTML = rows.map(d => `<tr>${cell(d)}</tr>`).join("");
@@ -1736,7 +1988,7 @@ function renderCatalog() {
   }));
   el.querySelectorAll(".preset").forEach(p => p.addEventListener("click", () => {
     const k = p.getAttribute("data-preset");
-    Object.assign(catalogState, { type: "", status: "", level: "", scope: "", domain: "", q: "", group: "" });
+    Object.assign(catalogState, { type: "", status: "living", level: "", scope: "", domain: "", q: "", group: "" });
     if (k === "decisions") catalogState.type = "decision";
     else if (k === "principles") catalogState.type = "principle";
     else if (k === "living") catalogState.status = "living";
@@ -1769,6 +2021,17 @@ function signoffBadges(r) {
   }).join(" ");
 }
 
+function reviewStatsLine(r) {
+  const s = r.stats || {};
+  const parts = [];
+  if (s.new_docs) parts.push(`${s.new_docs} new`);
+  if (s.touched_docs) parts.push(`${s.touched_docs} revised`);
+  if (s.minor_docs) parts.push(`${s.minor_docs} minor`);
+  if (s.new_edges) parts.push(`${s.new_edges} edge${s.new_edges === 1 ? "" : "s"}`);
+  if (!parts.length && (r.touched || []).length) parts.push(`${(r.touched || []).length} touched`);
+  return parts.join(" · ");
+}
+
 function renderReviews() {
   const el = document.getElementById("page-reviews");
   const revs = REVIEWS.slice().sort((a,b) => String(b.id).localeCompare(String(a.id))); // newest first
@@ -1777,18 +2040,20 @@ function renderReviews() {
   html += `<div style="margin:0 24px 40px">`;
   revs.forEach(r => {
     const signed = Array.isArray(r.signoffs) && r.signoffs.length > 0;
-    const n = (r.touched || []).length;
+    const stats = r.stats || {};
+    const statsLine = reviewStatsLine(r);
     const cmd = `ldoc review sign ${r.id}`;
     html += `<div class="card rev-card ${signed?"signed":"unsigned"}" data-rid="${escapeHtml(String(r.id))}">`;
-    // collapsed head: size signal + when + signoff badges
     html += `<div class="rev-head">`
       + `<span class="rev-toggle">▸</span>`
-      + `<span class="rev-size">${n} <small>doc${n===1?"":"s"} touched</small></span>`
-      + `<span class="rev-when">${escapeHtml(String(r.created||"").slice(0,10))}</span>`
+      + `<span class="rev-size">${escapeHtml(statsLine || "changes")}</span>`
+      + `<span class="rev-when">${escapeHtml(String(r.created||"").slice(0,10))} ${idBadge(r.id)}</span>`
       + `<span class="spacer"></span>`
       + `${signoffBadges(r)}</div>`;
-    // expanded body: change summary + sign snippet
     html += `<div class="rev-body">`;
+    if (stats.summary) {
+      html += `<div class="doc-summary" style="margin-bottom:12px">${escapeHtml(stats.summary)}</div>`;
+    }
     html += r.body ? `<div class="md">${renderMarkdown(r.body)}</div>` : `<div class="sub">No change summary recorded.</div>`;
     html += `<div class="snippet" style="margin-top:14px"><code>${escapeHtml(cmd)}</code>`
       + `<button class="copybtn" data-cmd="${escapeHtml(cmd)}">copy sign-off command</button></div>`;
@@ -1825,6 +2090,8 @@ function renderTypeKey() {
 }
 
 /* ===== boot ===== */
+applyViewerConfig();
+applyViewerThemeOverrides();
 renderTypeKey();
 renderHome();
 renderCatalog();

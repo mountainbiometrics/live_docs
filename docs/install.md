@@ -99,5 +99,44 @@ The config is discovered by walking up from the working directory. Keys:
 
 - **`base`** — set the KB parent directory once; omitted box keys default to the numbered layout under it (`00-inbox`, `01-raw`, `02-docs`, `reviews`). Explicit per-box keys still override.
 - **`store`** — point this repo at an external store, by **registered name** or by path. A consumer repo is **not** itself a store — it carries only a marker that points elsewhere, so `store` is a *pointer, not inheritance*. All store path keys on a delegating marker are ignored; layout comes wholly from the target, so changing the shared store config once updates every consumer.
+- **`[viewer]`** — optional HTML viewer presentation (`title`, `subtitle`, `favicon`, domain colors, type icons); baked into `build/viewer.html` at `ldoc viewer` build time. See below.
 
 `STORE_ROOT` is where the KB lives (the shared store root when delegating); `CONSUMER_ROOT` is where the discovered local marker lives (the code repo). They coincide when a repo owns its store. Generated artifacts such as `build/viewer.html` land under `STORE_ROOT`, never the consumer. Per-key `LIVEDOCS_*_DIR` environment variables override the file for a single invocation.
+
+### `[viewer]` — HTML viewer presentation
+
+Optional table read from the store's `.live_docs.toml` at `ldoc viewer` build time and baked into `build/viewer.html`. Paths resolve relative to `STORE_ROOT` (absolute and `~` also work).
+
+| Key | Type | Default | Effect |
+|-----|------|---------|--------|
+| `title` | string | `live_docs` | Browser tab title (`<title>`) and navbar heading |
+| `subtitle` | string | `viewer · read-only` | Small subtitle beside the heading |
+| `favicon` | path | — | Image file embedded as a data-URI favicon |
+
+**Domain colors** — `[viewer.domain_colors]` (alias: `[viewer.domains]`). Keys are domain tag names. Values may be:
+
+- A hex color string (`"#5b6e8c"`) — used for node rings and pill foreground; background/border are derived.
+- A table `{ bg = "...", fg = "...", border = "..." }` — used verbatim for domain pills and graph node strokes.
+
+**Type icons** — `[viewer.type_icons]` (alias: `[viewer.types]`). Keys are doc `type` enum values. Each entry may set:
+
+- `color` — stroke/fill hue for the inline Lucide glyph and graph node fill
+- `label` — legend/tooltip name override
+- `svg` — inner SVG path markup (Lucide 24×24 viewBox) replacing the built-in glyph for that type
+
+Unknown types keep the viewer's built-in fallback icon. Omitted types keep their built-in glyphs and colors.
+
+Example:
+
+```toml
+[viewer]
+title = "ACME design docs"
+subtitle = "internal knowledge base"
+favicon = "assets/favicon.png"
+
+[viewer.domain_colors]
+platform = "#5b6e8c"
+
+[viewer.type_icons.decision]
+color = "#3f7a55"
+```

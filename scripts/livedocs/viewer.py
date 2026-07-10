@@ -11,12 +11,17 @@ export where frontmatter on disk is the contract.
 
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 import os
+import re
 from pathlib import Path
 
+from ._paths import CONFIG_FILENAME
 from .model import DOCS_DIR, REVIEWS_DIR, STORE_ROOT
 from .serialize import parse_doc
+from .toml_flat import parse_config
 
 AUTO_VIEWER_ENV = "LIVEDOCS_AUTO_VIEWER"
 AUTO_VIEWER_VERBOSE_ENV = "LIVEDOCS_AUTO_VIEWER_VERBOSE"
@@ -26,13 +31,11 @@ _VIEWER_DIR = Path(__file__).resolve().parent.parent / "viewer"
 _TEMPLATE = _VIEWER_DIR / "template.html"
 _MARKED_JS = _VIEWER_DIR / "vendor" / "marked.min.js"
 
+_WIKILINK_RE = re.compile(r"\[\[(\d+)\]\]")
 
-def _load_dir(path: Path, *, strip_wal: bool = False) -> list[dict]:
-    """Load all .md files in a directory into export records.
 
-    strip_wal=True removes the non-rendered WAL-archive block from review bodies
-    so the raw session log never surfaces in the viewer (on-disk-session-records).
-    """
+def _load_dir(path: Path) -> list[dict]:
+    """Load all .md files in a directory into export records."""
     out: list[dict] = []
     if not path.is_dir():
         return out
@@ -40,9 +43,6 @@ def _load_dir(path: Path, *, strip_wal: bool = False) -> list[dict]:
         parsed = parse_doc(md_path)
         body = parsed.pop("body", "")
         if isinstance(body, str):
-            if strip_wal:
-                from .reviews import strip_wal_archive
-                body = strip_wal_archive(body)
             body = body.strip()
         rec = dict(parsed)
         rec["id"] = str(rec.get("id", md_path.stem))
@@ -59,6 +59,162 @@ def _load_dir(path: Path, *, strip_wal: bool = False) -> list[dict]:
     return out
 
 
+def _parse_wal(body: str) -> list[dict]:
+    """Extract JSON WAL lines from a review body's archive block."""
+    from .reviews import _WAL_ARCHIVE_BEGIN, _WAL_ARCHIVE_END
+
+    if _WAL_ARCHIVE_BEGIN not in body:
+        return []
+    start = body.find(_WAL_ARCHIVE_BEGIN)
+    end = body.find(_WAL_ARCHIVE_END)
+    block = body[start:end] if end != -1 else body[start:]
+    wal: list[dict] = []
+    for line in block.splitlines():
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                wal.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return wal
+
+
+def _section_link_ids(body: str, headings: tuple[str, ...]) -> set[str]:
+    """Return wiki-link ids from top-level list items in the first matching section."""
+    from .reviews import _section_heading_match
+
+    if not body:
+        return set()
+
+    lines = body.splitlines()
+    in_section = False
+    collected: list[str] = []
+    for line in lines:
+        if line.startswith("## "):
+            if in_section:
+                break
+            if _section_heading_match(line, headings):
+                in_section = True
+            continue
+        if in_section:
+            collected.append(line)
+
+    ids: set[str] = set()
+    for line in collected:
+        stripped = line.lstrip()
+        if not stripped.startswith("- "):
+            continue
+        for m in _WIKILINK_RE.finditer(line):
+            ids.add(m.group(1))
+    return ids
+
+
+def _review_stats(body: str) -> dict:
+    """Compute headline counts for the review card before WAL is stripped."""
+    from .reviews import _extract_body_section, strip_wal_archive
+
+    visible = strip_wal_archive(body)
+    summary = _extract_body_section(visible, ("Summary",)).strip()
+    new_docs = _section_link_ids(visible, ("Additions",))
+    touched_docs = _section_link_ids(visible, ("Revisions", "Restructure"))
+    minor_docs = _section_link_ids(visible, ("Minor Alterations", "Organizational"))
+
+    wal = _parse_wal(body)
+    new_edges = 0
+    for entry in wal:
+        if entry.get("op") == "new":
+            continue
+        ctypes = entry.get("change_type") or []
+        if "organizational" in ctypes:
+            new_edges += 1
+
+    return {
+        "new_docs": len(new_docs),
+        "touched_docs": len(touched_docs),
+        "minor_docs": len(minor_docs),
+        "new_edges": new_edges,
+        "summary": summary,
+    }
+
+
+def _load_reviews(path: Path) -> list[dict]:
+    """Load review records with precomputed stats; WAL stripped from body."""
+    from .reviews import parse_review, strip_wal_archive
+
+    out: list[dict] = []
+    if not path.is_dir():
+        return out
+    for md_path in sorted(path.glob("*.md")):
+        rec = parse_review(md_path)
+        raw_body = rec.get("body", "") or ""
+        stats = _review_stats(raw_body)
+        body = strip_wal_archive(raw_body)
+        if isinstance(body, str):
+            body = body.strip()
+        rec["body"] = body
+        rec["stats"] = stats
+        out.append(rec)
+    return out
+
+
+def _load_viewer_config() -> dict:
+    """Read optional ``[viewer]`` settings from the store's ``.live_docs.toml``."""
+    default: dict = {
+        "title": "live_docs",
+        "subtitle": "viewer · read-only",
+        "domain_colors": {},
+        "type_icons": {},
+        "favicon": None,
+    }
+    cfg_path = STORE_ROOT / CONFIG_FILENAME
+    if not cfg_path.is_file():
+        return default
+
+    try:
+        data = parse_config(cfg_path.read_text(encoding="utf-8"))
+    except OSError:
+        return default
+
+    viewer = data.get("viewer")
+    if not isinstance(viewer, dict):
+        return default
+
+    out = dict(default)
+    for key in ("title", "subtitle"):
+        val = viewer.get(key)
+        if isinstance(val, str) and val.strip():
+            out[key] = val.strip()
+
+    domain_colors = viewer.get("domain_colors") or viewer.get("domains") or {}
+    if isinstance(domain_colors, dict):
+        out["domain_colors"] = {
+            str(k): v for k, v in domain_colors.items()
+            if isinstance(v, (str, dict))
+        }
+
+    type_icons = viewer.get("type_icons") or viewer.get("types") or {}
+    if isinstance(type_icons, dict):
+        clean: dict[str, dict] = {}
+        for k, v in type_icons.items():
+            if isinstance(v, dict):
+                clean[str(k)] = {sk: sv for sk, sv in v.items() if isinstance(sv, str)}
+            elif isinstance(v, str):
+                clean[str(k)] = {"color": v}
+        out["type_icons"] = clean
+
+    fav = viewer.get("favicon")
+    if isinstance(fav, str) and fav.strip():
+        fav_path = Path(fav.strip())
+        if not fav_path.is_absolute():
+            fav_path = (STORE_ROOT / fav_path).resolve()
+        if fav_path.is_file():
+            mime = mimetypes.guess_type(fav_path.name)[0] or "image/png"
+            encoded = base64.b64encode(fav_path.read_bytes()).decode("ascii")
+            out["favicon"] = f"data:{mime};base64,{encoded}"
+
+    return out
+
+
 def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
     """
     Generate viewer.html from the discovered store.
@@ -71,7 +227,8 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
         raise FileNotFoundError(f"vendored marked.js not found: {_MARKED_JS}")
 
     docs = _load_dir(DOCS_DIR)
-    reviews = _load_dir(REVIEWS_DIR, strip_wal=True)
+    reviews = _load_reviews(REVIEWS_DIR)
+    viewer_config = _load_viewer_config()
 
     dest = out_path or (STORE_ROOT / "build" / "viewer.html")
     dest = dest.resolve()
@@ -82,6 +239,10 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
 
     html = template.replace("/*__DOCS_JSON__*/", json.dumps(docs, ensure_ascii=False))
     html = html.replace("/*__REVIEWS_JSON__*/", json.dumps(reviews, ensure_ascii=False))
+    html = html.replace(
+        "/*__VIEWER_CONFIG__*/",
+        json.dumps(viewer_config, ensure_ascii=False),
+    )
     html = html.replace("/*__MARKED_JS__*/", marked_js)
 
     dest.write_text(html, encoding="utf-8")

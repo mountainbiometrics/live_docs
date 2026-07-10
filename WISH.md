@@ -34,29 +34,30 @@ Noting these here as potential followup tasks so that it's recorded without havi
 
 ## Viewer Improvements
 
-- [ ] Type icons should show up in wiki-link-style expansions in text
-- [ ] "Neighbor-graph" could be a lot more useful if it were edge-aware; hopping to only specific edges depending on the current edge:
-  - When showing ancestors, hop to their ancestors (maybe two generations up?)
-  - When showing descendents, hop to their descendants (one generation)
-  - When showing requires, hop to their _ancestor_ (one generation, just to see their immedite scope)
-  - When showing relates, don't hop anywhere
-  - Don't even show a single hop to references
-- [ ] Neighbor-graph always on
-- [ ] Neighbor-graph nodes styled based on type and/or domain?
-- [ ] Review "summary" shows more:
-  - [ ] count new docs
+- [x] Type icons should show up in wiki-link-style expansions in text
+- [x] Doc ID should be visible in more views (doesn't need to be prominent, but agents will usually reference docs by id)
+- [x] "Neighbor-graph" could be a lot more useful if it were edge-aware; hopping to only specific edges depending on the current edge:
+  - [x] When showing ancestors, hop to their ancestors (maybe two generations up?)
+  - [x] When showing descendents, hop to their descendants (one generation)
+  - [x] When showing requires, hop to their _ancestor_ (one generation, just to see their immedite scope)
+  - [x] When showing relates, don't hop anywhere
+  - [x] Don't even show a single hop to references
+- [x] Neighbor-graph always on
+- [x] Neighbor-graph nodes styled based on type and/or domain?
+- [x] Review "summary" shows more:
+  - [x] count new docs
   - [ ] count how many new edges to existing docs
-  - [ ] count touched (existing) docs
+  - [x] count touched (existing) docs
   - [ ] count of new edges from existing to existing docs
-  - [ ] Summary text (if provided; see below)
-- [ ] "inline" view should be in a side-panel
+  - [x] Summary text (if provided; see below)
+- [x] "inline" view should be in a side-panel
 
 ## Reference handling
 
 - [ ] Make the "normalized" reference docs... better.
 - [ ] Disregard reference (or archived) docs in most `ldoc` commands (like validate)
   - [ ] And deprioritize them in search commands (ie: group them last)
-- [ ] Disregard reference (or archived) docs in most views within the viewer (don't show in graph, don't list in reader, default to filtering them out in catalog, etc.)
+- [ ] Disregard reference (or archived) docs in most views within the viewer (don't show in graph or reader tree; catalog defaults to living status — references still appear in per-doc connection lists)
 - [ ] Reference (or archived) files should be immutable (`ldoc` should prevent changes, and warn against attempts)
   - This is to prevent attempts at treating references as live docs; they're "snapshots"; if they're irrelevant, they should be deleted (re-snapshotted)
   - Just to make the "live_docs" vs. "normal documentation" distinction clear.
@@ -88,9 +89,9 @@ Noting these here as potential followup tasks so that it's recorded without havi
 - [ ] Custom viewer options
   - [ ] build location
   - [ ] port and stuff (if server, see below)
-  - [ ] Options for setting the html `title`, favicon, and navbar's `h1`
-  - [ ] domain -> color map for pill/node colors
-  - [ ] type -> icon map for the prefix icons
+  - [x] Options for setting the html `title` (tab + navbar heading), `subtitle`, and `favicon`
+  - [x] domain -> color map for pill/node colors
+  - [x] type -> icon map for the prefix icons
   - [ ] custom css rules?
 
 ## Storage Improvements
