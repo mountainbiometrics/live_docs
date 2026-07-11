@@ -46,9 +46,9 @@ Noting these here as potential followup tasks so that it's recorded without havi
 - [x] Neighbor-graph nodes styled based on type and/or domain?
 - [x] Review "summary" shows more:
   - [x] count new docs
-  - [ ] count how many new edges to existing docs
+  - [x] count how many new edges to existing docs
   - [x] count touched (existing) docs
-  - [ ] count of new edges from existing to existing docs
+  - [x] count of new edges from existing to existing docs
   - [x] Summary text (if provided; see below)
 - [x] "inline" view should be in a side-panel
 

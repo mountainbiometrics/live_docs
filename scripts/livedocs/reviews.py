@@ -58,6 +58,81 @@ def _normalize_ref(token: str) -> str:
 from .serialize import _yaml_str, _yaml_wikilink_list, _parse_frontmatter_text
 
 
+# Edge fields counted for review integration. Provenance is excluded — linking
+# at raw/reference material is not store integration.
+_INTEGRATION_EDGE_FIELDS = ("requires", "belongs_to", "relates", "superseded_by")
+_INTEGRATION_STATUSES = frozenset({"living", "target"})
+
+
+def _is_reference_type(doc: dict | None) -> bool:
+    """True when the doc is a normalized reference (type: reference)."""
+    return bool(doc) and doc.get("type") == "reference"
+
+
+def _is_integration_target(doc: dict | None) -> bool:
+    """True when an edge target counts as store integration (living|target, not reference)."""
+    if not doc or _is_reference_type(doc):
+        return False
+    return doc.get("status", "") in _INTEGRATION_STATUSES
+
+
+def _yaml_integration(integration: dict) -> list[str]:
+    """Emit an ``integration:`` frontmatter block (snapshot counts at mint)."""
+    lines = ["integration:"]
+    for key in ("new_to_new", "new_to_existing", "edges_added_to_existing"):
+        lines.append(f"  {key}: {int(integration.get(key, 0))}")
+    return lines
+
+
+def compute_integration_stats(
+    new_ids: set[str],
+    docs: dict,
+    wal: list[dict] | None = None,
+) -> dict:
+    """Point-in-time integration snapshot for a review's new (non-reference) docs.
+
+    Returns ``{new_to_new, new_to_existing, edges_added_to_existing}``:
+    - ``new_to_new`` / ``new_to_existing`` — forward edges on new docs (mint snapshot)
+    - ``edges_added_to_existing`` — sum of WAL ``edges_added`` on non-new docs
+    """
+    new_to_new = 0
+    new_to_existing = 0
+    for nid in new_ids:
+        doc = docs.get(nid)
+        if not doc or _is_reference_type(doc):
+            continue
+        for field in _INTEGRATION_EDGE_FIELDS:
+            for target in doc.get(field, []) or []:
+                if target in new_ids:
+                    tdoc = docs.get(target)
+                    if tdoc and not _is_reference_type(tdoc):
+                        new_to_new += 1
+                elif _is_integration_target(docs.get(target)):
+                    new_to_existing += 1
+
+    edges_added_to_existing = 0
+    if wal:
+        for entry in wal:
+            ref = entry.get("ref", "")
+            if not ref or ref in new_ids:
+                continue
+            if _is_reference_type(docs.get(ref)):
+                continue
+            added = entry.get("edges_added") or {}
+            for field, n in added.items():
+                if field in _INTEGRATION_EDGE_FIELDS:
+                    try:
+                        edges_added_to_existing += int(n)
+                    except (TypeError, ValueError):
+                        continue
+
+    return {
+        "new_to_new": new_to_new,
+        "new_to_existing": new_to_existing,
+        "edges_added_to_existing": edges_added_to_existing,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Body section extraction for review summaries
 # ---------------------------------------------------------------------------
@@ -183,13 +258,17 @@ def _format_addition_entry(link: str, doc: dict) -> list[str]:
 def parse_review(path: Path) -> dict:
     """
     Parse a reviews/<id>.md file into a dict:
-        id, created, touched (list), signoffs (list of {who, at}), body
+        id, created, touched (list), signoffs (list of {who, at}),
+        integration (dict|None), body
     """
     text = path.read_text(encoding="utf-8")
     parts = text.split("---", 2)
 
     if len(parts) < 3:
-        return {"id": path.stem, "created": "", "touched": [], "signoffs": [], "body": text}
+        return {
+            "id": path.stem, "created": "", "touched": [], "signoffs": [],
+            "integration": None, "body": text,
+        }
 
     fm = _parse_frontmatter_text(parts[1])
     body = parts[2].lstrip("\n")
@@ -215,6 +294,19 @@ def parse_review(path: Path) -> dict:
             clean.append({"who": s.get("who", ""), "at": s.get("at", "")})
     fm["signoffs"] = clean
 
+    # Optional mint-time integration snapshot (absent on legacy reviews).
+    integration = fm.get("integration")
+    if isinstance(integration, dict):
+        clean_int = {}
+        for key in ("new_to_new", "new_to_existing", "edges_added_to_existing"):
+            try:
+                clean_int[key] = int(integration.get(key, 0) or 0)
+            except (TypeError, ValueError):
+                clean_int[key] = 0
+        fm["integration"] = clean_int
+    else:
+        fm["integration"] = None
+
     fm["id"] = path.stem
     fm["body"] = body
     return fm
@@ -224,8 +316,8 @@ def dump_review(fm: dict, body: str) -> str:
     """
     Serialize a review record to its on-disk format.
 
-    Frontmatter fields emitted: id, created, touched, signoffs.
-    Body is preserved byte-for-byte.
+    Frontmatter fields emitted: id, created, touched, signoffs, integration
+    (when present). Body is preserved byte-for-byte.
     """
     lines = ["---"]
     lines.append(f"id: {_yaml_str(fm.get('id', ''))}")
@@ -245,6 +337,10 @@ def dump_review(fm: dict, body: str) -> str:
         for entry in signoffs:
             lines.append(f"  - who: {_yaml_str(entry.get('who', ''))}")
             lines.append(f"    at: {_yaml_str(entry.get('at', ''))}")
+
+    integration = fm.get("integration")
+    if isinstance(integration, dict):
+        lines.extend(_yaml_integration(integration))
 
     lines.append("---")
 
@@ -386,22 +482,27 @@ class ReviewLedger:
 
         touched: list[str] = []
         wal_archive = ""
+        integration: dict | None = None
 
         if wal is not None and not body:
             body = self._build_body_from_wal(wal, docs)
             touched = self._collect_touched_from_wal(wal, docs)
             wal_archive = _archive_wal_block(wal)
+            integration = self._integration_from_wal(wal, docs)
         elif session and not body:
             body = self._build_body_by_session(session, docs)
             touched = self._collect_touched_by_session(session, docs)
+            integration = self._integration_from_additions(body, docs)
         elif since and not body:
             body = self._build_body_since(since, docs)
             touched = self._collect_touched_since(since, docs)
+            integration = self._integration_from_additions(body, docs)
         elif touched_refs is not None and not body:
             # Explicit touched list, no --summary provided. Normalize so callers
             # may pass bare ids or canonical "[[<id>]]" wiki-links.
             touched = [r for r in (_normalize_ref(t) for t in touched_refs) if r in docs]
             body = self._build_body_from_touched(touched, docs)
+            integration = self._integration_from_additions(body, docs)
         elif touched_refs is not None:
             # Explicit touched list + explicit body
             touched = [r for r in (_normalize_ref(t) for t in touched_refs) if r in docs]
@@ -422,6 +523,8 @@ class ReviewLedger:
             "touched": touched,
             "signoffs": [],
         }
+        if integration is not None:
+            fm["integration"] = integration
 
         path = self.reviews_dir / f"{review_id}.md"
         path.write_text(dump_review(fm, body), encoding="utf-8")
@@ -446,14 +549,49 @@ class ReviewLedger:
                 seen.append(ref)
         return seen
 
+    def _integration_from_wal(self, wal: list[dict], docs: dict) -> dict:
+        """Mint-time integration snapshot from the session WAL + live docs."""
+        from .sessions import collapse_wal_per_doc
+
+        agg, order = collapse_wal_per_doc(wal)
+        new_ids = {
+            ref for ref in order
+            if agg[ref].get("dominant") == "addition"
+            and ref in docs
+            and not _is_reference_type(docs[ref])
+        }
+        return compute_integration_stats(new_ids, docs, wal)
+
+    def _integration_from_additions(self, body: str, docs: dict) -> dict:
+        """Fallback integration snapshot when only the body Additions are known."""
+        # Collect ids from ## Additions only (Reference files are demoted).
+        new_ids: set[str] = set()
+        in_additions = False
+        for line in (body or "").splitlines():
+            if line.startswith("## "):
+                in_additions = _section_heading_match(line, ("Additions",))
+                continue
+            if not in_additions:
+                continue
+            stripped = line.lstrip()
+            if not stripped.startswith("- "):
+                continue
+            m = WIKILINK_RE.search(line)
+            if m:
+                rid = m.group(1)
+                if rid in docs and not _is_reference_type(docs[rid]):
+                    new_ids.add(rid)
+        return compute_integration_stats(new_ids, docs, wal=None)
+
     def _build_body_from_wal(self, wal: list[dict], docs: dict) -> str:
-        """Build the five-section review body from the session WAL.
+        """Build the review body from the session WAL.
 
         Each doc is filed ONCE under its dominant change_type by precedence
         deletion > addition > revision > restructure > organizational, computed
         over the UNION of every WAL line's change_type list for that doc — so a
-        doc never appears in two sections. Empty sections are omitted entirely.
-        The best available author note per doc is used as the change blurb.
+        doc never appears in two sections. ``type: reference`` additions are
+        demoted to a trailing ## Reference files section (still listed, not
+        counted as new docs). Empty sections are omitted entirely.
         """
         # Collapse the WAL into one record per doc (dominant type + best note +
         # captured label/type for deletions) — the same projection the per-doc
@@ -465,15 +603,17 @@ class ReviewLedger:
         # Bucket each doc under its single dominant type.
         buckets: dict[str, list[str]] = {
             "addition": [], "revision": [], "restructure": [],
-            "organizational": [], "deletion": [],
+            "organizational": [], "deletion": [], "reference": [],
         }
         for ref in order:
             dom = agg[ref].get("dominant", "")
-            if dom in buckets:
+            if dom == "addition" and ref in docs and _is_reference_type(docs[ref]):
+                buckets["reference"].append(ref)
+            elif dom in buckets:
                 buckets[dom].append(ref)
 
-        # Emit only non-empty sections, in canonical order. Each doc appears in
-        # exactly one section (its dominant type), so there are no duplicates.
+        # Emit only non-empty sections, in canonical order. Reference files
+        # trail at the bottom so they are visible but not "additional docs."
         blocks: list[str] = []
         for heading, key in (
             ("Additions", "addition"),
@@ -481,13 +621,14 @@ class ReviewLedger:
             ("Restructure", "restructure"),
             ("Organizational", "organizational"),
             ("Deletions", "deletion"),
+            ("Reference files", "reference"),
         ):
             refs = buckets[key]
             if not refs:
                 continue
             block = [f"## {heading}"]
             for ref in refs:
-                if key == "addition":
+                if key in ("addition", "reference"):
                     if ref in docs:
                         block.extend(_format_addition_entry(ref_token(ref), docs[ref]))
                     else:
@@ -528,26 +669,29 @@ class ReviewLedger:
 
     def _build_body_since(self, since: str, docs: dict) -> str:
         """
-        Build the three-section summary body by scanning docs since `since`.
+        Build the summary body by scanning docs since `since`.
 
-        Additions: doc created >= since
+        Additions: non-reference docs created >= since
+        Reference files: type:reference docs created >= since (trailing section)
         Revisions: doc with history entry at >= since (and created before since)
-        Minor Alterations: (not auto-detected; placeholder if none)
         """
         additions: list[str] = []
+        references: list[str] = []
         revisions: list[str] = []
 
         for doc_id, doc in sorted(docs.items()):
             created = _doc_created_at(doc)
             if created >= since:
-                additions.append(doc_id)
+                if _is_reference_type(doc):
+                    references.append(doc_id)
+                else:
+                    additions.append(doc_id)
                 continue
             for h in doc.get("history", []):
                 if h.get("at", "") >= since:
                     revisions.append(doc_id)
                     break
 
-        # Emit only non-empty sections (coarse fallback: additions vs revisions).
         blocks: list[str] = []
         if additions:
             block = ["## Additions"]
@@ -559,13 +703,17 @@ class ReviewLedger:
             for doc_id in revisions:
                 doc = docs[doc_id]
                 link = ref_token(doc_id)
-                # Use the most recent history entry at >= since as the summary.
                 last_summary = ""
                 for h in reversed(doc.get("history", [])):
                     if h.get("at", "") >= since:
                         last_summary = h.get("summary", "")
                         break
                 block.append(f"- {link} — {last_summary}" if last_summary else f"- {link}")
+            blocks.append("\n".join(block))
+        if references:
+            block = ["## Reference files"]
+            for doc_id in references:
+                block.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
             blocks.append("\n".join(block))
 
         body = "\n\n".join(blocks) if blocks else "(no changes recorded)"
@@ -592,19 +740,23 @@ class ReviewLedger:
         return touched
 
     def _build_body_by_session(self, session: str, docs: dict) -> str:
-        """Build the three-section summary body by exact session tag.
+        """Build the summary body by exact session tag.
 
-        Additions: doc created within the session window (created >= start).
+        Additions: non-reference docs created within the session window.
+        Reference files: type:reference docs created in the window (trailing).
         Revisions: doc with a history entry tagged with this session id.
-        Minor Alterations: not auto-detected (placeholder).
         """
         start = session_start_iso(session)
         additions: list[str] = []
+        references: list[str] = []
         revisions: list[tuple[str, str]] = []
 
         for doc_id, doc in sorted(docs.items()):
             if start and doc.get("created", "") >= start:
-                additions.append(doc_id)
+                if _is_reference_type(doc):
+                    references.append(doc_id)
+                else:
+                    additions.append(doc_id)
                 continue
             # Most recent history entry stamped with this session becomes the summary.
             last_summary = ""
@@ -635,20 +787,24 @@ class ReviewLedger:
         else:
             lines.append("(none)")
 
-        lines.append("")
-        lines.append("## Minor Alterations")
-        lines.append("(none)")
+        if references:
+            lines.append("")
+            lines.append("## Reference files")
+            for doc_id in references:
+                lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
 
         return "\n".join(lines) + "\n"
 
     def _build_body_from_touched(self, touched: list[str], docs: dict) -> str:
         """Build a skeleton summary body from an explicit touched list."""
+        additions = [d for d in touched if d in docs and not _is_reference_type(docs[d])]
+        references = [d for d in touched if d in docs and _is_reference_type(docs[d])]
+
         lines = []
         lines.append("## Additions")
-        if touched:
-            for doc_id in touched:
-                if doc_id in docs:
-                    lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
+        if additions:
+            for doc_id in additions:
+                lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
         else:
             lines.append("(none)")
 
@@ -656,9 +812,11 @@ class ReviewLedger:
         lines.append("## Revisions")
         lines.append("(none)")
 
-        lines.append("")
-        lines.append("## Minor Alterations")
-        lines.append("(none)")
+        if references:
+            lines.append("")
+            lines.append("## Reference files")
+            for doc_id in references:
+                lines.extend(_format_addition_entry(ref_token(doc_id), docs[doc_id]))
 
         return "\n".join(lines) + "\n"
 

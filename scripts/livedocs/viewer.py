@@ -59,26 +59,6 @@ def _load_dir(path: Path) -> list[dict]:
     return out
 
 
-def _parse_wal(body: str) -> list[dict]:
-    """Extract JSON WAL lines from a review body's archive block."""
-    from .reviews import _WAL_ARCHIVE_BEGIN, _WAL_ARCHIVE_END
-
-    if _WAL_ARCHIVE_BEGIN not in body:
-        return []
-    start = body.find(_WAL_ARCHIVE_BEGIN)
-    end = body.find(_WAL_ARCHIVE_END)
-    block = body[start:end] if end != -1 else body[start:]
-    wal: list[dict] = []
-    for line in block.splitlines():
-        line = line.strip()
-        if line.startswith("{"):
-            try:
-                wal.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return wal
-
-
 def _section_link_ids(body: str, headings: tuple[str, ...]) -> set[str]:
     """Return wiki-link ids from top-level list items in the first matching section."""
     from .reviews import _section_heading_match
@@ -109,8 +89,13 @@ def _section_link_ids(body: str, headings: tuple[str, ...]) -> set[str]:
     return ids
 
 
-def _review_stats(body: str) -> dict:
-    """Compute headline counts for the review card before WAL is stripped."""
+def _review_stats(body: str, integration: dict | None = None) -> dict:
+    """Compute headline counts for the review card.
+
+    Section counts come from the visible body. Integration edge counts come from
+    the mint-time ``integration`` frontmatter snapshot when present — never
+    recomputed from the live graph or guessed from WAL organizational lines.
+    """
     from .reviews import _extract_body_section, strip_wal_archive
 
     visible = strip_wal_archive(body)
@@ -118,23 +103,25 @@ def _review_stats(body: str) -> dict:
     new_docs = _section_link_ids(visible, ("Additions",))
     touched_docs = _section_link_ids(visible, ("Revisions", "Restructure"))
     minor_docs = _section_link_ids(visible, ("Minor Alterations", "Organizational"))
+    reference_docs = _section_link_ids(visible, ("Reference files",))
 
-    wal = _parse_wal(body)
-    new_edges = 0
-    for entry in wal:
-        if entry.get("op") == "new":
-            continue
-        ctypes = entry.get("change_type") or []
-        if "organizational" in ctypes:
-            new_edges += 1
-
-    return {
+    stats = {
         "new_docs": len(new_docs),
         "touched_docs": len(touched_docs),
         "minor_docs": len(minor_docs),
-        "new_edges": new_edges,
+        "reference_docs": len(reference_docs),
         "summary": summary,
     }
+    if isinstance(integration, dict):
+        stats["new_to_new"] = int(integration.get("new_to_new", 0) or 0)
+        stats["new_to_existing"] = int(integration.get("new_to_existing", 0) or 0)
+        stats["edges_added_to_existing"] = int(
+            integration.get("edges_added_to_existing", 0) or 0
+        )
+        stats["has_integration"] = True
+    else:
+        stats["has_integration"] = False
+    return stats
 
 
 def _load_reviews(path: Path) -> list[dict]:
@@ -147,7 +134,7 @@ def _load_reviews(path: Path) -> list[dict]:
     for md_path in sorted(path.glob("*.md")):
         rec = parse_review(md_path)
         raw_body = rec.get("body", "") or ""
-        stats = _review_stats(raw_body)
+        stats = _review_stats(raw_body, rec.get("integration"))
         body = strip_wal_archive(raw_body)
         if isinstance(body, str):
             body = body.strip()

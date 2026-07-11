@@ -32,6 +32,8 @@ Record format (sessions/<id>.md):
 
     ```json
     {"at": "...", "op": "set", "ref": "<id>", "change_type": ["revision"], "note": "..."}
+    {"at": "...", "op": "change", "ref": "<id>", "change_type": ["restructure"],
+     "note": "...", "edges_added": {"requires": 1}, "edges_removed": {"relates": 1}}
     {"at": "...", "op": "rm",  "ref": "<id>", "change_type": ["deletion"], "note": "...",
      "label": "...", "type": "...", "stripped_edges": [["<id>", "requires"], ...]}
     ```
@@ -306,6 +308,8 @@ def record_doc_change(
     change_type: list[str],
     *,
     auto_note: str = "",
+    edges_added: dict | None = None,
+    edges_removed: dict | None = None,
 ) -> None:
     """The single choke-point for a NON-DELETION doc change.
 
@@ -318,6 +322,10 @@ def record_doc_change(
     pre-computed obvious-op fallback used only when `note` is empty. The WAL
     marks whether the note was author-supplied so the close-gate can tell a real
     explanation from an auto-fill.
+
+    `edges_added` / `edges_removed` are optional per-type count dicts from
+    link/unlink (e.g. ``{"requires": 1, "relates": 2}``). Provenance is never
+    recorded here — it is excluded from integration accounting. Omitted when empty.
     """
     doc_id = kb.resolve(ref)
 
@@ -338,6 +346,10 @@ def record_doc_change(
         "note": effective_note,
         "author_note": author_supplied,
     }
+    if edges_added:
+        entry["edges_added"] = {k: int(v) for k, v in edges_added.items() if v}
+    if edges_removed:
+        entry["edges_removed"] = {k: int(v) for k, v in edges_removed.items() if v}
     store.append_wal(session_id, entry)
 
 

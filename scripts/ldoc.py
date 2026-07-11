@@ -205,12 +205,72 @@ def _kb(fn, *a, **kw) -> bool:
         return True
 
 
+# Edge fields that count toward review integration stats. Provenance is
+# intentionally excluded (raw/reference provenance is not store integration).
+_INTEGRATION_EDGE_FIELDS = ("requires", "belongs_to", "relates", "superseded_by")
+
+
+def _edge_link_deltas(
+    kb: KB,
+    ref: str,
+    edges: dict,
+    *,
+    replace_belongs_to: bool = False,
+) -> tuple[dict, dict]:
+    """Return (edges_added, edges_removed) per-type counts for a pending link.
+
+    Counts only edges that will actually change on disk. Provenance is ignored.
+    """
+    doc_id = kb.resolve(ref)
+    doc = kb._docs.get(doc_id, {})
+    added: dict[str, int] = {}
+    removed: dict[str, int] = {}
+    for field in _INTEGRATION_EDGE_FIELDS:
+        new_refs = edges.get(field) or []
+        if not new_refs:
+            continue
+        resolved = {kb.resolve(r) for r in new_refs}
+        existing = set(doc.get(field, []) or [])
+        if field == "belongs_to" and replace_belongs_to:
+            to_add = resolved - existing
+            to_remove = existing - resolved
+        else:
+            to_add = resolved - existing
+            to_remove = set()
+        if to_add:
+            added[field] = len(to_add)
+        if to_remove:
+            removed[field] = len(to_remove)
+    return added, removed
+
+
+def _edge_unlink_deltas(kb: KB, ref: str, edges: dict) -> dict:
+    """Return edges_removed per-type counts for a pending unlink (no provenance)."""
+    doc_id = kb.resolve(ref)
+    doc = kb._docs.get(doc_id, {})
+    removed: dict[str, int] = {}
+    for field in _INTEGRATION_EDGE_FIELDS:
+        remove_refs = edges.get(field) or []
+        if not remove_refs:
+            continue
+        resolved = {
+            kb.resolve_edge_value(r, allow_missing=True) for r in remove_refs
+        }
+        existing = set(doc.get(field, []) or [])
+        to_remove = resolved & existing
+        if to_remove:
+            removed[field] = len(to_remove)
+    return removed
+
+
 def _record_change(
     kb: KB,
     ref: str,
     note: str,
     change_type: list[str],
     auto_note: str = "",
+    edges_added: dict | None = None,
+    edges_removed: dict | None = None,
 ) -> bool:
     """Record one doc-level change: append a per-doc history entry (with its
     change_type) AND a WAL line to the open session (the double-write —
@@ -221,13 +281,21 @@ def _record_change(
     a revision at close. A revision-class change with no author note NAGS (warns,
     does not block). Returns True on error (already printed).
 
+    `edges_added` / `edges_removed` are optional per-type count dicts from
+    link/unlink, stamped onto the WAL for review integration stats.
+
     This is the single choke-point every mutation routes through so history and
     the session WAL never diverge.
     """
     from livedocs.sessions import record_doc_change
     from livedocs.model import dominant_change_type
     try:
-        record_doc_change(kb, ref, note or "", change_type, auto_note=auto_note)
+        record_doc_change(
+            kb, ref, note or "", change_type,
+            auto_note=auto_note,
+            edges_added=edges_added,
+            edges_removed=edges_removed,
+        )
     except ValueError as e:
         _err(str(e))
         return True
@@ -1092,10 +1160,19 @@ def cmd_link(kb: KB, args) -> int:
         auto_note = ""
         if replace and edges.get("belongs_to"):
             auto_note = _reparent_note(kb, ref, edges["belongs_to"])
+        # Edge deltas BEFORE the write — WAL records what actually changes.
+        edges_added, edges_removed = _edge_link_deltas(
+            kb, ref, edges, replace_belongs_to=replace
+        )
         if _kb(kb.link, ref, **{k: v or None for k, v in edges.items()},
                replace_belongs_to=replace):
             return 1
-        if _record_change(kb, ref, note, change_type, auto_note=auto_note):
+        if _record_change(
+            kb, ref, note, change_type,
+            auto_note=auto_note,
+            edges_added=edges_added or None,
+            edges_removed=edges_removed or None,
+        ):
             return 1
 
     print(f"Linked {', '.join(refs)}")
@@ -1124,9 +1201,14 @@ def cmd_unlink(kb: KB, args) -> int:
         # Auto-note for an unlink: "Removed <edge> to <label>" (per inline-notes).
         # Compute BEFORE the unlink so labels still resolve.
         auto_note = _unlink_note(kb, edges)
+        edges_removed = _edge_unlink_deltas(kb, ref, edges)
         if _kb(kb.unlink, ref, **{k: v or None for k, v in edges.items()}):
             return 1
-        if _record_change(kb, ref, note, change_type, auto_note=auto_note):
+        if _record_change(
+            kb, ref, note, change_type,
+            auto_note=auto_note,
+            edges_removed=edges_removed or None,
+        ):
             return 1
 
     print(f"Unlinked {', '.join(refs)}")

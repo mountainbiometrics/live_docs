@@ -328,15 +328,38 @@
   .timeline .what { color: var(--ink); margin-top: 1px; }
   .timeline .what p { margin: 0; }
 
-  /* reviews (redesigned) */
+  /* reviews */
   .rev-card { padding: 0; overflow: hidden; }
-  .rev-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; cursor: pointer; user-select: none; }
+  .rev-head { padding: 12px 16px; cursor: pointer; user-select: none; }
   .rev-head:hover { background: var(--accent-soft); }
-  .rev-head .rev-toggle { color: var(--faint); font-size: 12px; width: 12px; }
-  .rev-head .rev-size { font-weight: 700; font-size: 15px; }
-  .rev-head .rev-size small { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .rev-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rev-head .rev-toggle { color: var(--faint); font-size: 12px; width: 12px; flex: none; }
   .rev-head .rev-when { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .rev-head .spacer { flex: 1; }
+  .rev-metrics {
+    display: flex; flex-wrap: wrap; gap: 8px 14px;
+    margin: 10px 0 0 22px;
+  }
+  .rev-group {
+    display: inline-flex; align-items: baseline; gap: 8px;
+    padding: 4px 10px 4px 8px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: #fafaf8; font-size: 13px; line-height: 1.3;
+  }
+  .rev-group .rev-glabel {
+    font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .rev-group .rev-gnum { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .rev-group .rev-gunit { color: var(--muted); font-weight: 400; }
+  .rev-group .rev-gsep { color: var(--line); margin: 0 1px; }
+  .rev-blurb {
+    margin: 10px 0 0 22px; color: var(--muted); font-size: 13.5px;
+    font-style: italic; line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .rev-card.open .rev-blurb { -webkit-line-clamp: unset; overflow: visible; }
   .rev-body { padding: 4px 16px 16px; border-top: 1px solid var(--line); display: none; }
   .rev-card.open .rev-body { display: block; }
   .sig { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 9px; border-radius: 12px; background: #e6f1e2; color: #4d7a3f; }
@@ -2008,9 +2031,9 @@ function renderCatalog() {
 }
 
 /* ===== REVIEWS =====
-   Collapsed card: change-size (count of touched docs) + timestamp + signoffs as
-   readable badges. Expanded card: the body's change summary (resolver active),
-   with the sign-off CLI snippet living INSIDE the summary (you sign after reading). */
+   Header (always visible): date/id/signoffs + two metric clusters (existing vs
+   new) + session summary blurb. Expanded body: change sections only — the
+   ## Summary block is stripped so it is not double-rendered. */
 function signoffBadges(r) {
   const sigs = Array.isArray(r.signoffs) ? r.signoffs : [];
   if (!sigs.length) return `<span class="badge unsigned">unsigned</span>`;
@@ -2021,40 +2044,99 @@ function signoffBadges(r) {
   }).join(" ");
 }
 
-function reviewStatsLine(r) {
+function reviewMetric(num, unit, title) {
+  const n = Number(num) || 0;
+  const tip = title ? ` title="${escapeHtml(title)}"` : "";
+  return `<span class="rev-metric"${tip}><span class="rev-gnum">${n}</span>`
+    + (unit ? ` <span class="rev-gunit">${escapeHtml(unit)}</span>` : "")
+    + `</span>`;
+}
+
+function reviewMetricsHtml(r) {
   const s = r.stats || {};
-  const parts = [];
-  if (s.new_docs) parts.push(`${s.new_docs} new`);
-  if (s.touched_docs) parts.push(`${s.touched_docs} revised`);
-  if (s.minor_docs) parts.push(`${s.minor_docs} minor`);
-  if (s.new_edges) parts.push(`${s.new_edges} edge${s.new_edges === 1 ? "" : "s"}`);
-  if (!parts.length && (r.touched || []).length) parts.push(`${(r.touched || []).length} touched`);
-  return parts.join(" · ");
+  const existingDocs = (s.touched_docs || 0) + (s.minor_docs || 0);
+  const newDocs = s.new_docs || 0;
+  const refDocs = s.reference_docs || 0;
+  const hasInt = !!s.has_integration;
+  const edgesOnExisting = s.edges_added_to_existing || 0;
+  const outToExisting = s.new_to_existing || 0;
+  const amongNew = s.new_to_new || 0;
+  const fallbackTouched = (!existingDocs && !newDocs && !refDocs && (r.touched || []).length)
+    ? (r.touched || []).length : 0;
+
+  const groups = [];
+
+  if (newDocs || (hasInt && (outToExisting || amongNew))) {
+    const bits = [];
+    bits.push(reviewMetric(newDocs, "docs", "New living docs added"));
+    if (hasInt) {
+      bits.push(`<span class="rev-gsep">·</span>`);
+      bits.push(reviewMetric(outToExisting, "→", "Edges from new docs to existing docs"));
+      bits.push(`<span class="rev-gsep">·</span>`);
+      bits.push(reviewMetric(amongNew, "↔", "Edges among the new docs"));
+    }
+    groups.push(`<div class="rev-group"><span class="rev-glabel">New</span>${bits.join(" ")}</div>`);
+  }
+
+  if (existingDocs || (hasInt && edgesOnExisting) || fallbackTouched) {
+    const bits = [];
+    bits.push(reviewMetric(existingDocs || fallbackTouched, "docs", "Docs revised in this session"));
+    if (hasInt) {
+      bits.push(`<span class="rev-gsep">·</span>`);
+      bits.push(reviewMetric(edgesOnExisting, "edges", "New edges added on existing docs"));
+    }
+    groups.push(`<div class="rev-group"><span class="rev-glabel">Revised</span>${bits.join(" ")}</div>`);
+  }
+
+  if (refDocs) {
+    groups.push(`<div class="rev-group"><span class="rev-glabel">refs</span>${reviewMetric(refDocs, "", "Reference files (not counted as new docs)")}</div>`);
+  }
+
+  if (!groups.length) return "";
+  return `<div class="rev-metrics">${groups.join("")}</div>`;
+}
+
+function stripReviewSummarySection(body) {
+  // Drop the leading ## Summary block — it lives in the card header via stats.summary.
+  if (!body) return "";
+  const lines = String(body).split("\n");
+  const out = [];
+  let skipping = false;
+  for (const line of lines) {
+    if (/^##\s+Summary\b/i.test(line)) { skipping = true; continue; }
+    if (skipping && /^##\s+/.test(line)) skipping = false;
+    if (!skipping) out.push(line);
+  }
+  return out.join("\n").replace(/^\s+/, "").replace(/\s+$/, "");
 }
 
 function renderReviews() {
   const el = document.getElementById("page-reviews");
   const revs = REVIEWS.slice().sort((a,b) => String(b.id).localeCompare(String(a.id))); // newest first
-  let html = `<h1 class="pagetitle">Reviews</h1><div class="sub">The review queue, newest first. Click a card to read the change summary; the sign-off command lives there. The viewer never writes — run the command in a terminal.</div>`;
+  let html = `<h1 class="pagetitle">Reviews</h1><div class="sub">The review queue, newest first. Click a card to read the change sections; the sign-off command lives there. The viewer never writes — run the command in a terminal.</div>`;
   if (!revs.length) html += `<div class="sub" style="margin-left:24px">No reviews.</div>`;
   html += `<div style="margin:0 24px 40px">`;
   revs.forEach(r => {
     const signed = Array.isArray(r.signoffs) && r.signoffs.length > 0;
     const stats = r.stats || {};
-    const statsLine = reviewStatsLine(r);
     const cmd = `ldoc review sign ${r.id}`;
+    const bodySansSummary = stripReviewSummarySection(r.body || "");
     html += `<div class="card rev-card ${signed?"signed":"unsigned"}" data-rid="${escapeHtml(String(r.id))}">`;
-    html += `<div class="rev-head">`
+    html += `<div class="rev-head">`;
+    html += `<div class="rev-top">`
       + `<span class="rev-toggle">▸</span>`
-      + `<span class="rev-size">${escapeHtml(statsLine || "changes")}</span>`
       + `<span class="rev-when">${escapeHtml(String(r.created||"").slice(0,10))} ${idBadge(r.id)}</span>`
       + `<span class="spacer"></span>`
       + `${signoffBadges(r)}</div>`;
-    html += `<div class="rev-body">`;
+    html += reviewMetricsHtml(r);
     if (stats.summary) {
-      html += `<div class="doc-summary" style="margin-bottom:12px">${escapeHtml(stats.summary)}</div>`;
+      html += `<div class="rev-blurb">${escapeHtml(stats.summary)}</div>`;
     }
-    html += r.body ? `<div class="md">${renderMarkdown(r.body)}</div>` : `<div class="sub">No change summary recorded.</div>`;
+    html += `</div>`;
+    html += `<div class="rev-body">`;
+    html += bodySansSummary
+      ? `<div class="md">${renderMarkdown(bodySansSummary)}</div>`
+      : `<div class="sub">No change summary recorded.</div>`;
     html += `<div class="snippet" style="margin-top:14px"><code>${escapeHtml(cmd)}</code>`
       + `<button class="copybtn" data-cmd="${escapeHtml(cmd)}">copy sign-off command</button></div>`;
     html += `</div></div>`;
