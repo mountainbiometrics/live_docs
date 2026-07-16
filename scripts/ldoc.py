@@ -1969,7 +1969,7 @@ def cmd_viewer(kb: KB, args) -> int:
 
     out_path = Path(args.out).resolve() if args.out else None
     try:
-        path, n_docs, n_reviews = build_viewer(out_path=out_path)
+        path, n_docs, n_reviews, n_terms = build_viewer(out_path=out_path)
     except FileNotFoundError as e:
         _err(str(e))
         return 1
@@ -1980,6 +1980,188 @@ def cmd_viewer(kb: KB, args) -> int:
     print(f"Wrote {path}")
     print(f"  docs:    {n_docs}")
     print(f"  reviews: {n_reviews}")
+    print(f"  terms:   {n_terms}")
+    return 0
+
+
+def cmd_term(kb: KB, args) -> int:
+    """Dispatch ldoc term <verb> over the lexicon/ sibling box."""
+    from livedocs.lexicon import LexiconStore
+
+    store = LexiconStore()
+    verb = args.term_verb
+
+    if verb == "new":
+        return _term_new(store, args)
+    if verb == "get":
+        return _term_get(store, args)
+    if verb == "show":
+        return _term_show(store, args)
+    if verb in ("ls", "list"):
+        return _term_ls(store, args)
+    if verb == "find":
+        return _term_find(store, args)
+    if verb == "set":
+        return _term_set(store, args)
+    if verb == "rm":
+        return _term_rm(store, args)
+    _err(f"Unknown term subcommand: {verb!r}")
+    return 1
+
+
+def _parse_csv_list(raw: str) -> list[str]:
+    return [p.strip() for p in (raw or "").split(",") if p.strip()]
+
+
+def _term_new(store, args) -> int:
+    from livedocs.lexicon import display_form
+
+    definition = args.definition or ""
+    if definition == "-":
+        definition = sys.stdin.read().strip()
+    if not args.term or not definition:
+        _err("--term and --definition are required")
+        return 1
+    try:
+        tid, path = store.new(
+            term=args.term,
+            definition=definition,
+            context=args.context or None,
+            allowed_aliases=_parse_csv_list(args.allowed_aliases) or None,
+            restricted_aliases=_parse_csv_list(args.restricted_aliases) or None,
+            similar_terms=_parse_csv_list(args.similar_terms) or None,
+        )
+    except ValueError as e:
+        _err(str(e))
+        return 1
+    print(f"id:   {tid}")
+    print(f"path: {path}")
+    print(f"display: {display_form(args.term, args.context or None)}")
+    return 0
+
+
+def _term_get(store, args) -> int:
+    try:
+        rec = store.get(args.ref)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+    for key in (
+        "id", "term", "context", "definition", "allowed_aliases",
+        "restricted_aliases", "similar_terms",
+    ):
+        if key in rec and rec[key] not in (None, [], ""):
+            print(f"{key}: {rec[key]}")
+    return 0
+
+
+def _term_show(store, args) -> int:
+    from livedocs.lexicon import display_form
+
+    try:
+        rec = store.get(args.ref)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+    disp = display_form(rec.get("term", ""), rec.get("context"))
+    print(f"{'=' * 60}")
+    print(f"  Term: {disp}")
+    print(f"  id:     {rec.get('id', '')}")
+    print(f"  term:   {rec.get('term', '')}")
+    if rec.get("context"):
+        print(f"  context: {rec['context']}")
+    print(f"{'=' * 60}")
+    print()
+    print(rec.get("definition", ""))
+    print()
+    for key, label in (
+        ("allowed_aliases", "ALLOWED ALIASES"),
+        ("restricted_aliases", "RESTRICTED ALIASES"),
+        ("similar_terms", "SIMILAR TERMS"),
+    ):
+        vals = rec.get(key) or []
+        if vals:
+            print(f"{label}:")
+            for v in vals:
+                print(f"  - {v}")
+            print()
+    body = (rec.get("body") or "").strip()
+    if body:
+        print("BODY:")
+        print(body)
+    return 0
+
+
+def _term_ls(store, args) -> int:
+    from livedocs.lexicon import display_form
+
+    records = sorted(store.load_all().values(), key=lambda r: r.get("id", ""))
+    if args.context:
+        ctx_slug = args.context.strip().lower().replace(" ", "-")
+        records = [
+            r for r in records
+            if (r.get("context") or "").lower().replace(" ", "-") == ctx_slug
+            or r.get("id", "").startswith(ctx_slug + "/")
+        ]
+    if not records:
+        print("(no terms)")
+        return 0
+    for r in records:
+        disp = display_form(r.get("term", ""), r.get("context"))
+        print(f"{r['id']:40}  {disp}")
+    return 0
+
+
+def _term_find(store, args) -> int:
+    from livedocs.lexicon import display_form
+
+    hits = store.find(" ".join(args.terms) if args.terms else "")
+    if not hits:
+        print("(no matches)")
+        return 0
+    for r in hits:
+        disp = display_form(r.get("term", ""), r.get("context"))
+        defn = (r.get("definition") or "").replace("\n", " ")
+        if len(defn) > 80:
+            defn = defn[:77] + "..."
+        print(f"{r['id']:40}  {disp}")
+        print(f"  {defn}")
+    return 0
+
+
+def _term_set(store, args) -> int:
+    fields = {}
+    if args.definition is not None:
+        definition = args.definition
+        if definition == "-":
+            definition = sys.stdin.read().strip()
+        fields["definition"] = definition
+    if args.allowed_aliases is not None:
+        fields["allowed_aliases"] = _parse_csv_list(args.allowed_aliases)
+    if args.restricted_aliases is not None:
+        fields["restricted_aliases"] = _parse_csv_list(args.restricted_aliases)
+    if args.similar_terms is not None:
+        fields["similar_terms"] = _parse_csv_list(args.similar_terms)
+    if not fields:
+        _err("nothing to set — pass --definition / --allowed-aliases / "
+             "--restricted-aliases / --similar-terms")
+        return 1
+    try:
+        rec = store.set(args.ref, **fields)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+    print(f"updated: {rec['id']}")
+    return 0
+
+
+def _term_rm(store, args) -> int:
+    try:
+        tid = store.rm(args.ref)
+    except ValueError as e:
+        _err(str(e))
+        return 1
+    print(f"removed: {tid}")
     return 0
 
 
@@ -2930,6 +3112,53 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("edges", help="Print forward/reverse edge maps.")
     p.add_argument("--json", action="store_true")
 
+    # --- term (lexicon sibling box) ---
+    p_term = sub.add_parser(
+        "term",
+        help="Lexicon: human-ratified vocabulary terms (sibling box, not the doc graph).",
+    )
+    term_sub = p_term.add_subparsers(dest="term_verb", metavar="verb")
+    term_sub.required = True
+
+    p_tn = term_sub.add_parser("new", help="Create a term record.")
+    p_tn.add_argument("--term", required=True, help="Canonical term (filename slugified).")
+    p_tn.add_argument("--definition", required=True,
+                      help="Definition text, or '-' to read from stdin.")
+    p_tn.add_argument("--context", default="",
+                      help="Bounded context when the same string means different things.")
+    p_tn.add_argument("--allowed-aliases", dest="allowed_aliases", default="",
+                      help="Comma-separated allowed aliases.")
+    p_tn.add_argument("--restricted-aliases", dest="restricted_aliases", default="",
+                      help="Comma-separated restricted (discouraged) aliases.")
+    p_tn.add_argument("--similar-terms", dest="similar_terms", default="",
+                      help="Comma-separated similar term refs/ids.")
+
+    p_tg = term_sub.add_parser("get", help="Print term frontmatter fields.")
+    p_tg.add_argument("ref", help="Term id, display form, or unique substring.")
+
+    p_ts = term_sub.add_parser("show", help="Print term with definition and alias lists.")
+    p_ts.add_argument("ref", help="Term id, display form, or unique substring.")
+
+    p_tl = term_sub.add_parser("ls", aliases=["list"], help="List terms.")
+    p_tl.add_argument("--context", default="", help="Filter to one context slug/name.")
+
+    p_tf = term_sub.add_parser("find", help="Search terms by substring.")
+    p_tf.add_argument("terms", nargs="*", help="Search terms.")
+
+    p_tset = term_sub.add_parser("set", help="Update definition or alias lists (not identity).")
+    p_tset.add_argument("ref", help="Term id, display form, or unique substring.")
+    p_tset.add_argument("--definition", default=None,
+                        help="New definition, or '-' for stdin.")
+    p_tset.add_argument("--allowed-aliases", dest="allowed_aliases", default=None,
+                        help="Replace allowed aliases (comma-separated; empty clears).")
+    p_tset.add_argument("--restricted-aliases", dest="restricted_aliases", default=None,
+                        help="Replace restricted aliases (comma-separated; empty clears).")
+    p_tset.add_argument("--similar-terms", dest="similar_terms", default=None,
+                        help="Replace similar-term refs (comma-separated; empty clears).")
+
+    p_trm = term_sub.add_parser("rm", help="Delete a term (links to it stay broken).")
+    p_trm.add_argument("ref", help="Term id, display form, or unique substring.")
+
     # --- review ---
     p_rev = sub.add_parser("review", help="Manage review summaries in the reviews/ ledger.")
     rev_sub = p_rev.add_subparsers(dest="review_verb", metavar="verb")
@@ -3048,6 +3277,7 @@ def build_parser() -> argparse.ArgumentParser:
 # Subcommands that mutate tiers exported into viewer.html (docs/, reviews/).
 _VIEWER_MUTATING = frozenset({"new", "set", "edit", "link", "unlink", "history", "rm", "migrate"})
 _REVIEW_MUTATING = frozenset({"new", "sign"})
+_TERM_MUTATING = frozenset({"new", "set", "rm"})
 
 
 def _should_auto_rebuild_viewer(args, rc: int) -> bool:
@@ -3064,6 +3294,8 @@ def _should_auto_rebuild_viewer(args, rc: int) -> bool:
         return not getattr(args, "dry_run", False)
     if cmd == "review":
         return getattr(args, "review_verb", None) in _REVIEW_MUTATING
+    if cmd == "term":
+        return getattr(args, "term_verb", None) in _TERM_MUTATING
     if cmd == "session":
         # close/end mint a review — rebuild so it shows in the viewer.
         return getattr(args, "session_verb", None) == "close"
@@ -3113,6 +3345,7 @@ COMMANDS = {
     "reindex": cmd_reindex,
     "viewer": cmd_viewer,
     "edges": cmd_edges,
+    "term": cmd_term,
     "review": cmd_review,
     "session": cmd_session,
     "config": cmd_config,

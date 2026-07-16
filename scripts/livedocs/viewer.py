@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from ._paths import CONFIG_FILENAME
-from .model import DOCS_DIR, REVIEWS_DIR, STORE_ROOT
+from .model import DOCS_DIR, LEXICON_DIR, REVIEWS_DIR, STORE_ROOT
 from .serialize import parse_doc
 from .toml_flat import parse_config
 
@@ -152,6 +152,7 @@ def _load_viewer_config() -> dict:
         "domain_colors": {},
         "type_icons": {},
         "favicon": None,
+        "autolink_terms": False,
     }
     cfg_path = STORE_ROOT / CONFIG_FILENAME
     if not cfg_path.is_file():
@@ -171,6 +172,13 @@ def _load_viewer_config() -> dict:
         val = viewer.get(key)
         if isinstance(val, str) and val.strip():
             out[key] = val.strip()
+
+    if "autolink_terms" in viewer:
+        raw = viewer.get("autolink_terms")
+        if isinstance(raw, bool):
+            out["autolink_terms"] = raw
+        elif isinstance(raw, str):
+            out["autolink_terms"] = raw.strip().lower() in ("1", "true", "yes", "on")
 
     domain_colors = viewer.get("domain_colors") or viewer.get("domains") or {}
     if isinstance(domain_colors, dict):
@@ -202,11 +210,26 @@ def _load_viewer_config() -> dict:
     return out
 
 
-def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
+def _load_lexicon() -> tuple[list[dict], dict[str, dict]]:
+    """Export lexicon terms plus cheap usage stats over doc prose."""
+    from .lexicon import LexiconStore, compute_term_stats
+
+    store = LexiconStore(LEXICON_DIR)
+    terms = store.export_records()
+    docs = _load_dir(DOCS_DIR)
+    stats = compute_term_stats(terms, docs)
+    for t in terms:
+        t["stats"] = stats.get(t["id"], {
+            "docs": 0, "by_type": {}, "by_domain": {}, "by_scope": {},
+        })
+    return terms, stats
+
+
+def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int, int]:
     """
     Generate viewer.html from the discovered store.
 
-    Returns (output_path, doc_count, review_count).
+    Returns (output_path, doc_count, review_count, term_count).
     """
     if not _TEMPLATE.is_file():
         raise FileNotFoundError(f"viewer template not found: {_TEMPLATE}")
@@ -215,6 +238,7 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
 
     docs = _load_dir(DOCS_DIR)
     reviews = _load_reviews(REVIEWS_DIR)
+    terms, _stats = _load_lexicon()
     viewer_config = _load_viewer_config()
 
     dest = out_path or (STORE_ROOT / "build" / "viewer.html")
@@ -226,6 +250,7 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
 
     html = template.replace("/*__DOCS_JSON__*/", json.dumps(docs, ensure_ascii=False))
     html = html.replace("/*__REVIEWS_JSON__*/", json.dumps(reviews, ensure_ascii=False))
+    html = html.replace("/*__LEXICON_JSON__*/", json.dumps(terms, ensure_ascii=False))
     html = html.replace(
         "/*__VIEWER_CONFIG__*/",
         json.dumps(viewer_config, ensure_ascii=False),
@@ -233,7 +258,7 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int]:
     html = html.replace("/*__MARKED_JS__*/", marked_js)
 
     dest.write_text(html, encoding="utf-8")
-    return dest, len(docs), len(reviews)
+    return dest, len(docs), len(reviews), len(terms)
 
 
 def auto_viewer_enabled() -> bool:
@@ -261,12 +286,15 @@ def auto_rebuild_viewer(*, quiet: bool | None = None) -> Path | None:
         )
 
     try:
-        path, n_docs, n_reviews = build_viewer()
+        path, n_docs, n_reviews, n_terms = build_viewer()
     except (FileNotFoundError, OSError):
         return None
 
     if not quiet:
         import sys
 
-        print(f"viewer: rebuilt {path} ({n_docs} docs, {n_reviews} reviews)", file=sys.stderr)
+        print(
+            f"viewer: rebuilt {path} ({n_docs} docs, {n_reviews} reviews, {n_terms} terms)",
+            file=sys.stderr,
+        )
     return path

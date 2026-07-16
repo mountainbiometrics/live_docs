@@ -18,7 +18,7 @@ import importlib
 
 _EXPORT_MAP = [
     ("model",     {"STORE_ROOT", "CONSUMER_ROOT", "REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
-                   "INBOX_DIR", "INDEX_DIR",
+                   "LEXICON_DIR", "INBOX_DIR", "INDEX_DIR",
                    "VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
                    "generate_id", "generate_session_id", "session_start_iso",
                    "change_types_for_fields", "dominant_change_type",
@@ -28,6 +28,9 @@ _EXPORT_MAP = [
                    "parse_doc", "dump_doc", "build_raw_frontmatter"}),
     ("sessions",  {"SessionStore", "record_doc_change", "resolve_open_session",
                    "ensure_session"}),
+    ("lexicon",   {"LexiconStore", "parse_term", "dump_term", "term_id", "display_form",
+                   "ref_to_id", "iter_term_wikilinks", "compute_term_stats",
+                   "TERM_WIKILINK_RE"}),
     ("graph",     {"forward_edges", "reverse_edges", "reverse_requires", "reverse_belongs_to",
                    "dangling_edges", "inbound_edges",
                    "reference_edges", "referenced_by", "dangling_references", "relates_edges",

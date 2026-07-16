@@ -15,8 +15,8 @@ from typing import Any
 
 from ._paths import CONFIG_FILENAME, HOME_CONFIG
 
-STORE_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "index")
-BOX_KEYS = ("inbox", "raw", "docs", "reviews", "sessions")
+STORE_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "lexicon", "index")
+BOX_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "lexicon")
 STORE_CONFIG_KEYS = ("base", *STORE_KEYS)
 
 # A consumer marker points at an external store with ``store`` — either a path
@@ -42,6 +42,7 @@ BASE_DEFAULT_SUBDIRS: dict[str, str] = {
     "docs": "02-docs",
     "reviews": "reviews",
     "sessions": "sessions",
+    "lexicon": "lexicon",
 }
 
 

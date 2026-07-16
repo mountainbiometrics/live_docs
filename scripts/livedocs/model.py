@@ -46,6 +46,7 @@ _DEFAULT_PATHS = {
     "raw": "raw",
     "reviews": "reviews",
     "sessions": "sessions",
+    "lexicon": "lexicon",
     "inbox": "inbox",
     "index": None,  # None → derived as <docs>/.index
 }
@@ -57,6 +58,7 @@ _ENV_VARS = {
     "raw": "LIVEDOCS_RAW_DIR",
     "reviews": "LIVEDOCS_REVIEWS_DIR",
     "sessions": "LIVEDOCS_SESSIONS_DIR",
+    "lexicon": "LIVEDOCS_LEXICON_DIR",
     "inbox": "LIVEDOCS_INBOX_DIR",
 }
 
@@ -192,6 +194,7 @@ _PATH_ATTRS: dict[str, str] = {
     "RAW_DIR": "raw",
     "REVIEWS_DIR": "reviews",
     "SESSIONS_DIR": "sessions",
+    "LEXICON_DIR": "lexicon",
     "INBOX_DIR": "inbox",
     "INDEX_DIR": "index",
 }

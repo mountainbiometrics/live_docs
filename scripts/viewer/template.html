@@ -56,6 +56,10 @@
   a.dl:hover { background: var(--accent-soft); }
   a.dl.broken { color: var(--broken); border-bottom-color: var(--broken); }
   a.dl.broken::after { content: " (broken)"; font-size: 11px; }
+  a.tl { color: #6b5b3e; text-decoration: none; cursor: pointer; border-bottom: 1px dashed #6b5b3e55; }
+  a.tl:hover { background: #f3efe6; }
+  a.tl.broken { color: var(--broken); border-bottom-color: var(--broken); }
+  a.tl.broken::after { content: " (?)"; font-size: 11px; }
   .pill {
     display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px;
     background: var(--tag-bg); color: var(--muted); margin-left: 4px; vertical-align: middle;
@@ -412,6 +416,7 @@
     <button data-page="home" class="active">Home</button>
     <button data-page="reader">Reader</button>
     <button data-page="catalog">Catalog</button>
+    <button data-page="lexicon">Lexicon</button>
     <button data-page="reviews">Reviews</button>
   </nav>
   <span style="flex:1"></span>
@@ -424,6 +429,7 @@
   <section id="page-home" class="page active"></section>
   <section id="page-reader" class="page"></section>
   <section id="page-catalog" class="page"></section>
+  <section id="page-lexicon" class="page"></section>
   <section id="page-reviews" class="page"></section>
 </main>
 <div id="tooltip"></div>
@@ -442,6 +448,7 @@
 /* ---- inlined data (the export contract: frontmatter + body) ---- */
 const DOCS = /*__DOCS_JSON__*/;
 const REVIEWS = /*__REVIEWS_JSON__*/;
+const LEXICON = /*__LEXICON_JSON__*/;
 const VIEWER_CONFIG = /*__VIEWER_CONFIG__*/;
 </script>
 <script>
@@ -455,6 +462,40 @@ marked.setOptions({ gfm: true, breaks: false });
 /* ===== build in-memory maps ===== */
 const byId = new Map();
 DOCS.forEach(d => byId.set(String(d.id), d));
+
+const byTermId = new Map();
+const termMatchList = []; // longest-first surfaces for implicit auto-link
+(LEXICON || []).forEach(t => {
+  byTermId.set(String(t.id), t);
+  const surfaces = [
+    t.display, t.term, t.id, String(t.id).split("/").pop(),
+    ...(t.allowed_aliases || []),
+    ...(t.restricted_aliases || []),
+  ].filter(Boolean);
+  const seen = new Set();
+  surfaces.forEach(s => {
+    const k = String(s).toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    termMatchList.push({ surface: String(s), id: String(t.id) });
+  });
+});
+termMatchList.sort((a, b) => b.surface.length - a.surface.length);
+
+function slugifyTerm(s) {
+  return String(s || "").trim().toLowerCase()
+    .replace(/_/g, "-").replace(/\s+/g, "-")
+    .replace(/[^a-z0-9/-]+/g, "-")
+    .replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+function parseTermRef(inner) {
+  const raw = String(inner || "").trim();
+  if (!raw) return null;
+  if (byTermId.has(raw)) return raw;
+  const m = raw.match(/^\(\s*([^)]+?)\s*\)\s+(.+)$/);
+  if (m) return slugifyTerm(m[1]) + "/" + slugifyTerm(m[2]);
+  return slugifyTerm(raw);
+}
 
 /* Reference/archived docs are kept in byId for link resolution but hidden from
    most navigational surfaces (tree, graph, catalog default). */
@@ -784,6 +825,50 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
+function termLinkHtml(termId, overrideText) {
+  const t = byTermId.get(String(termId));
+  const text = overrideText || (t && t.display) || termId;
+  if (!t) {
+    return `<a class="tl broken" data-term="${escapeHtml(String(termId))}" data-missing="1">${escapeHtml(text)}</a>`;
+  }
+  return `<a class="tl" data-term="${escapeHtml(String(termId))}" tabindex="0">${escapeHtml(text)}</a>`;
+}
+
+function autolinkTermsSegment(text, tokens) {
+  if (!text || !termMatchList.length) return text;
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    // never auto-link inside an already-emitted TOKEN placeholder
+    if (text.startsWith("TOKEN", i)) {
+      const m = text.slice(i).match(/^TOKEN\d+TOKEN/);
+      if (m) { out += m[0]; i += m[0].length; continue; }
+    }
+    let hit = null;
+    for (const cand of termMatchList) {
+      const s = cand.surface;
+      if (text.length - i < s.length) continue;
+      if (text.slice(i, i + s.length).toLowerCase() !== s.toLowerCase()) continue;
+      const before = i === 0 ? "" : text[i - 1];
+      const after = text[i + s.length] || "";
+      if (before && /[A-Za-z0-9_]/.test(before)) continue;
+      if (after && /[A-Za-z0-9_]/.test(after)) continue;
+      hit = cand;
+      break;
+    }
+    if (hit) {
+      const n = tokens.length;
+      tokens.push({ kind: "term", id: hit.id, text: text.slice(i, i + hit.surface.length) });
+      out += `TOKEN${n}TOKEN`;
+      i += hit.surface.length;
+    } else {
+      out += text[i];
+      i += 1;
+    }
+  }
+  return out;
+}
+
 /* ===== TYPE ICONS (inline Lucide, MIT) =====
    Each doc `type` gets a small Lucide glyph rendered immediately BEFORE its label
    everywhere a label appears (replacing the old trailing type pill). The SVG path
@@ -913,10 +998,18 @@ function renderMarkdown(src, depth) {
     tokens.push({ kind: "trans", id });
     return `\n\nTOKEN${i}TOKEN\n\n`;
   });
-  // [[id]] wiki-link
-  s = s.replace(/\[\[([0-9]+)\]\]/g, (_, id) => {
+  // [[id]] doc wiki-link (14-digit)
+  s = s.replace(/\[\[([0-9]{14})\]\]/g, (_, id) => {
     const i = tokens.length;
     tokens.push({ kind: "link", id });
+    return `TOKEN${i}TOKEN`;
+  });
+  // [[Term]] / [[(Context) Term]] / [[context/term]] — soft lexicon links
+  s = s.replace(/\[\[([^\]]+)\]\]/g, (full, inner) => {
+    if (/^\d{14}$/.test(String(inner).trim())) return full;
+    const tid = parseTermRef(inner);
+    const i = tokens.length;
+    tokens.push({ kind: "term", id: tid, text: String(inner).trim() });
     return `TOKEN${i}TOKEN`;
   });
   // [text](14digits.md) markdown link -> resolved link using the doc's label
@@ -926,12 +1019,19 @@ function renderMarkdown(src, depth) {
     return `TOKEN${i}TOKEN`;
   });
 
+  // Implicit auto-link of known term surfaces — opt-in formatting
+  // (VIEWER_CONFIG.autolink_terms or ?autolink=1). Explicit [[Term]] always on.
+  const cfgAuto = !!(VIEWER_CONFIG && VIEWER_CONFIG.autolink_terms);
+  const urlAuto = /(?:\?|&)autolink=1(?:&|$)/.test(location.search || "");
+  if (cfgAuto || urlAuto) s = autolinkTermsSegment(s, tokens);
+
   let html = marked.parse(s);
 
   html = html.replace(/TOKEN(\d+)TOKEN/g, (_, n) => {
     const t = tokens[+n];
     if (!t) return "";
     if (t.kind === "link") return linkHtml(t.id, t.text || null, { icon: 1 });
+    if (t.kind === "term") return termLinkHtml(t.id, t.text || null);
     if (t.kind === "trans") {
       const d = byId.get(String(t.id));
       if (!d) return `<span class="dl broken">${t.id}</span>`;
@@ -946,6 +1046,25 @@ function renderMarkdown(src, depth) {
 /* ===== tooltip + link interactions (delegated) ===== */
 const tooltip = document.getElementById("tooltip");
 function showTip(el) {
+  const termId = el.getAttribute("data-term");
+  if (termId) {
+    const t = byTermId.get(String(termId));
+    if (!t) {
+      tooltip.innerHTML =
+        `<div class="tt-label">${escapeHtml(termId)}</div>` +
+        `<div class="tt-meta">lexicon · undocumented</div>` +
+        `<div class="tt-sum">No definition yet — a soft link saying this term should be documented.</div>`;
+      tooltip.style.display = "block";
+      return;
+    }
+    const n = (t.stats && t.stats.docs) || 0;
+    tooltip.innerHTML =
+      `<div class="tt-label">${escapeHtml(t.display || t.term || termId)}</div>` +
+      `<div class="tt-meta">lexicon${t.context ? " · " + escapeHtml(t.context) : ""} · ${n} doc${n === 1 ? "" : "s"}</div>` +
+      `<div class="tt-sum">${escapeHtml(t.definition || "(no definition)")}</div>`;
+    tooltip.style.display = "block";
+    return;
+  }
   const id = el.getAttribute("data-ref");
   const d = byId.get(String(id));
   if (!d) return;
@@ -972,19 +1091,26 @@ function moveTip(e) {
 function hideTip() { tooltip.style.display = "none"; }
 
 document.addEventListener("mouseover", e => {
-  const a = e.target.closest("a.dl[data-ref]");
+  const a = e.target.closest("a.dl[data-ref], a.tl[data-term]");
   if (a) showTip(a);
 });
 document.addEventListener("mousemove", e => {
   if (tooltip.style.display === "block") moveTip(e);
 });
 document.addEventListener("mouseout", e => {
-  if (e.target.closest("a.dl[data-ref]")) hideTip();
+  if (e.target.closest("a.dl[data-ref], a.tl[data-term]")) hideTip();
 });
 
 // single click = expand in place (accordion); double click = navigate
 let clickTimer = null;
 document.addEventListener("click", e => {
+  const tl = e.target.closest("a.tl[data-term]");
+  if (tl) {
+    e.preventDefault();
+    hideTip();
+    location.hash = "#/term/" + encodeURIComponent(tl.getAttribute("data-term"));
+    return;
+  }
   const a = e.target.closest("a.dl[data-ref]");
   if (!a) return;
   e.preventDefault();
@@ -1074,7 +1200,7 @@ function toggleExpand(a) {
 }
 
 /* ===== nav / routing ===== */
-const pages = ["home", "reader", "catalog", "reviews"];
+const pages = ["home", "reader", "catalog", "lexicon", "reviews"];
 function activate(page) {
   pages.forEach(p => {
     document.getElementById("page-" + p).classList.toggle("active", p === page);
@@ -1092,6 +1218,12 @@ document.querySelectorAll("header.topnav nav button").forEach(b => {
 
 function route() {
   const h = location.hash || "#home";
+  if (h.startsWith("#/term/")) {
+    hideReaderGraph();
+    activate("lexicon");
+    renderLexicon(h.slice("#/term/".length));
+    return;
+  }
   if (h.startsWith("#/")) {
     const id = h.slice(2);
     activate("reader");
@@ -1100,6 +1232,7 @@ function route() {
     hideReaderGraph();
     const p = h.slice(1);
     activate(pages.includes(p) ? p : "home");
+    if ((p || "home") === "lexicon") renderLexicon();
   }
 }
 window.addEventListener("hashchange", () => {
@@ -2030,6 +2163,147 @@ function renderCatalog() {
   draw();
 }
 
+/* ===== LEXICON =====
+   Own view (not a Catalog tab): catalog-like table of ratified terms, with
+   cheap usage stats and a detail pane for one term. */
+const lexiconState = { q: "", context: "", sort: "term", dir: 1 };
+function renderLexicon(focusId) {
+  const el = document.getElementById("page-lexicon");
+  if (!el) return;
+  const terms = (LEXICON || []).slice();
+  const contexts = [...new Set(terms.map(t => t.context).filter(Boolean))].sort();
+  const q = (lexiconState.q || "").toLowerCase();
+  let rows = terms.filter(t => {
+    if (lexiconState.context && (t.context || "") !== lexiconState.context) return false;
+    if (!q) return true;
+    const blob = [t.id, t.term, t.display, t.definition, t.context,
+      ...(t.allowed_aliases || []), ...(t.restricted_aliases || [])]
+      .filter(Boolean).join(" ").toLowerCase();
+    return blob.includes(q);
+  });
+  const dir = lexiconState.dir || 1;
+  const sortKey = lexiconState.sort || "term";
+  rows.sort((a, b) => {
+    let av, bv;
+    if (sortKey === "docs") {
+      av = (a.stats && a.stats.docs) || 0;
+      bv = (b.stats && b.stats.docs) || 0;
+      return (av - bv) * dir;
+    }
+    av = String(a[sortKey] || a.display || a.id || "");
+    bv = String(b[sortKey] || b.display || b.id || "");
+    return av.localeCompare(bv) * dir;
+  });
+
+  let html = `<h1 class="pagetitle">Lexicon</h1>
+    <div class="sub">Human-ratified vocabulary. Soft links — missing terms are invitations, not errors.</div>
+    <div class="catalog-tools">
+      <input id="lex-q" type="search" placeholder="filter terms…" value="${escapeHtml(lexiconState.q || "")}" style="min-width:200px">
+      context <select id="lex-context"><option value="">(all)</option>${
+        contexts.map(c => `<option ${c===lexiconState.context?"selected":""}>${escapeHtml(c)}</option>`).join("")
+      }</select>
+      <span class="sub" style="margin-left:8px">${rows.length} / ${terms.length}</span>
+    </div>`;
+
+  if (focusId) {
+    const tid = decodeURIComponent(focusId);
+    const t = byTermId.get(tid);
+    if (t) {
+      html += lexiconDetailHtml(t);
+    } else {
+      html += `<div class="card" style="margin:0 24px 16px;padding:14px 16px">
+        <div class="tt-label">${escapeHtml(tid)}</div>
+        <div class="sub">Undocumented term — soft link with no lexicon entry yet.</div>
+      </div>`;
+    }
+  }
+
+  html += `<table class="catalog"><thead><tr>
+    <th data-lsort="display">Term</th>
+    <th data-lsort="context">Context</th>
+    <th>Definition</th>
+    <th data-lsort="docs">Docs</th>
+    <th>By type</th>
+  </tr></thead><tbody>`;
+  if (!rows.length) {
+    html += `<tr><td colspan="5" class="sub">(no terms)</td></tr>`;
+  } else {
+    rows.forEach(t => {
+      const n = (t.stats && t.stats.docs) || 0;
+      const byType = t.stats && t.stats.by_type
+        ? Object.entries(t.stats.by_type).map(([k, v]) => `${k}:${v}`).join(" · ")
+        : "";
+      const def = String(t.definition || "");
+      const short = def.length > 140 ? def.slice(0, 137) + "…" : def;
+      html += `<tr>
+        <td><a class="tl" data-term="${escapeHtml(t.id)}" href="#/term/${encodeURIComponent(t.id)}">${escapeHtml(t.display || t.term)}</a>
+          <div class="sub" style="font-size:11px">${escapeHtml(t.id)}</div></td>
+        <td>${t.context ? escapeHtml(t.context) : "<span class=sub>—</span>"}</td>
+        <td>${escapeHtml(short)}</td>
+        <td>${n}</td>
+        <td class="sub">${escapeHtml(byType)}</td>
+      </tr>`;
+    });
+  }
+  html += `</tbody></table>`;
+  el.innerHTML = html;
+
+  const qEl = document.getElementById("lex-q");
+  if (qEl) qEl.addEventListener("input", () => {
+    lexiconState.q = qEl.value;
+    renderLexicon(focusId);
+  });
+  const cEl = document.getElementById("lex-context");
+  if (cEl) cEl.addEventListener("change", () => {
+    lexiconState.context = cEl.value;
+    renderLexicon(focusId);
+  });
+  el.querySelectorAll("th[data-lsort]").forEach(th => {
+    th.style.cursor = "pointer";
+    th.addEventListener("click", () => {
+      const k = th.getAttribute("data-lsort");
+      if (lexiconState.sort === k) lexiconState.dir *= -1;
+      else { lexiconState.sort = k; lexiconState.dir = 1; }
+      renderLexicon(focusId);
+    });
+  });
+}
+
+function lexiconDetailHtml(t) {
+  const n = (t.stats && t.stats.docs) || 0;
+  const fmtMap = (obj) => {
+    const entries = Object.entries(obj || {});
+    if (!entries.length) return "<span class=sub>—</span>";
+    return entries.map(([k, v]) => `<code>${escapeHtml(k)}</code> ${v}`).join(" · ");
+  };
+  let aliases = "";
+  if ((t.allowed_aliases || []).length) {
+    aliases += `<div><strong>Allowed aliases:</strong> ${t.allowed_aliases.map(escapeHtml).join(", ")}</div>`;
+  }
+  if ((t.restricted_aliases || []).length) {
+    aliases += `<div><strong>Restricted aliases:</strong> ${t.restricted_aliases.map(escapeHtml).join(", ")}</div>`;
+  }
+  if ((t.similar_terms || []).length) {
+    aliases += `<div><strong>Similar:</strong> ${
+      t.similar_terms.map(s => termLinkHtml(s)).join(", ")
+    }</div>`;
+  }
+  return `<div class="card" style="margin:0 24px 16px;padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+      <div class="tt-label" style="font-size:18px">${escapeHtml(t.display || t.term)}</div>
+      <a class="sub" href="#lexicon">← all terms</a>
+    </div>
+    <div class="sub" style="margin:4px 0 10px">${escapeHtml(t.id)}${t.context ? " · context " + escapeHtml(t.context) : " · ubiquitous"}</div>
+    <div style="margin-bottom:10px">${escapeHtml(t.definition || "")}</div>
+    ${aliases}
+    <div style="margin-top:10px" class="sub">
+      <strong>${n}</strong> doc${n===1?"":"s"} · by type: ${fmtMap(t.stats && t.stats.by_type)}
+      · by domain: ${fmtMap(t.stats && t.stats.by_domain)}
+      · by scope: ${fmtMap(t.stats && t.stats.by_scope)}
+    </div>
+  </div>`;
+}
+
 /* ===== REVIEWS =====
    Header (always visible): date/id/signoffs + two metric clusters (existing vs
    new) + session summary blurb. Expanded body: change sections only — the
@@ -2177,6 +2451,7 @@ applyViewerThemeOverrides();
 renderTypeKey();
 renderHome();
 renderCatalog();
+renderLexicon();
 renderReviews();
 route();
 </script>
