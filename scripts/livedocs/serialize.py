@@ -46,11 +46,11 @@ def _yaml_wikilink_list(items: list) -> str:
 
 # Canonical order for ALL doc types (baseline)
 # Spec: id, title, label, summary, type, status, level, belongs_to, requires,
-#       relates, provenance, superseded_by, domain, keywords, scope, created, history
+#       relates, provenance, superseded_by, domain, scope, created, history
 CANONICAL_FIELD_ORDER = [
     "id", "title", "label", "summary", "type", "status", "level",
     "belongs_to", "requires", "relates", "provenance", "superseded_by",
-    "domain", "keywords", "scope", "created", "history",
+    "domain", "scope", "created", "history",
 ]
 
 # Edge fields that use wikilink-wrapped lists on disk.
@@ -284,9 +284,9 @@ def parse_doc(path: Path) -> dict:
     elif not isinstance(hist, list):
         fm["history"] = []
 
-    # Normalize domain / keywords: flat top-level inline lists.
+    # Normalize domain: a flat top-level inline list.
     # Absent fields are left absent — callers use .get("domain", []).
-    for tag_key in ("domain", "keywords"):
+    for tag_key in ("domain",):
         tag_val = fm.get(tag_key)
         if isinstance(tag_val, list):
             fm[tag_key] = tag_val
@@ -347,8 +347,8 @@ def _emit_field(key: str, value: Any) -> list[str]:
     if value is None:
         return []
 
-    # domain / keywords: flat inline tag lists — omitted entirely when empty
-    if key in ("domain", "keywords") and isinstance(value, list):
+    # domain: flat inline tag list — omitted entirely when empty
+    if key == "domain" and isinstance(value, list):
         if not value:
             return []
         return [f"{key}: {_yaml_list(value)}"]

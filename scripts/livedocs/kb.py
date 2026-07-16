@@ -26,7 +26,7 @@ from .graph import (reverse_edges, reverse_requires, reverse_belongs_to,
 # ---------------------------------------------------------------------------
 
 def _doc_tag_list(doc: dict, key: str) -> list:
-    """Return a doc's flat list tag field (`domain`, `keywords`) from frontmatter."""
+    """Return a doc's flat list tag field (`domain`) from frontmatter."""
     flat = doc.get(key)
     return flat if isinstance(flat, list) else []
 
@@ -391,7 +391,6 @@ class KB:
                 continue
 
             doc_domain = _doc_tag_list(doc, "domain")
-            doc_keywords = _doc_tag_list(doc, "keywords")
             # scope is now a single string naming a topological zone; match the
             # filter against the doc's EFFECTIVE scope (own + belongs_to ancestry)
             # so a scope query finds the whole subtree, not just hand-stamped docs.
@@ -403,7 +402,6 @@ class KB:
             # Build searchable text fields
             title_lower = doc.get("title", "").lower()
             label_lower = doc.get("label", "").lower()
-            keywords_lower = " ".join(k.lower() for k in doc_keywords)
             body_raw = doc.get("body", "")
             body_lower = body_raw.lower()
 
@@ -422,7 +420,6 @@ class KB:
                     return (
                         t in title_lower
                         or t in label_lower
-                        or t in keywords_lower
                         or t in body_lower
                     )
 
@@ -443,7 +440,7 @@ class KB:
             if compiled_regex:
                 combined = (
                     f"{doc.get('title','')} {doc.get('label','')} "
-                    f"{' '.join(doc_keywords)} {body_raw}"
+                    f"{body_raw}"
                 )
                 if not compiled_regex.search(combined):
                     continue
@@ -750,7 +747,6 @@ class KB:
         provenance: list[str] = None,
         superseded_by: list[str] = None,
         tags_domain: list[str] = None,
-        tags_keywords: list[str] = None,
         tags_scope: list[str] = None,
         body: str = "",
         # reference-type extras
@@ -805,14 +801,11 @@ class KB:
         if summary:
             fm["summary"] = summary
 
-        # Flat domain/keywords/scope tags: omitted entirely when empty (per schema)
+        # Flat domain/scope tags: omitted entirely when empty (per schema)
         domain = normalize_tag_list(tags_domain)
-        keywords = normalize_tag_list(tags_keywords)
         scope = list(tags_scope or [])
         if domain:
             fm["domain"] = domain
-        if keywords:
-            fm["keywords"] = keywords
         if scope:
             fm["scope"] = scope
 
@@ -841,17 +834,16 @@ class KB:
     def set(self, ref: str, **fields) -> None:
         """
         Update scalar frontmatter fields: title, label, summary, level, status,
-        type, scope, domain, keywords.
+        type, scope, domain.
 
         Resolves ref, loads doc, updates fields, writes back. Setting `summary`
-        or `scope` to an empty string — or `domain` / `keywords` to an empty list —
-        removes the field (all omitted on disk when empty). `scope` is a single
-        STRING naming a topological zone, applying to this doc and its whole
-        belongs_to subtree (see effective_scope); `domain` and `keywords` are flat
-        LISTS (NOT inherited) — domain is a governed business-grouping facet;
-        keywords is an ungoverned findability synonym list.
+        or `scope` to an empty string — or `domain` to an empty list — removes
+        the field (all omitted on disk when empty). `scope` is a single STRING
+        naming a topological zone, applying to this doc and its whole
+        belongs_to subtree (see effective_scope); `domain` is a flat LIST (NOT
+        inherited) — a governed business-grouping facet.
         """
-        allowed = {"title", "label", "summary", "level", "status", "type", "scope", "domain", "keywords"}
+        allowed = {"title", "label", "summary", "level", "status", "type", "scope", "domain"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -859,9 +851,9 @@ class KB:
         doc_id = self.resolve(ref)
         fm, body = self._load_doc_raw(doc_id)
         for k, v in fields.items():
-            if k in ("domain", "keywords") and v is not None:
+            if k == "domain" and v is not None:
                 v = normalize_tag_list(v if isinstance(v, list) else [])
-            if k in ("summary", "scope", "domain", "keywords") and not v:
+            if k in ("summary", "scope", "domain") and not v:
                 fm.pop(k, None)
             else:
                 fm[k] = v

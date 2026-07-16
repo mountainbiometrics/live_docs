@@ -63,7 +63,7 @@ Illustrative examples:
 - "clean up duplicates" / "merge duplicates" → `garden-collapse`
 - "remove cruft" / "excavate dead implementation" / "strip stale symbol names" / "drop refactor-chore docs" → `garden-cruft`
 - "find homes for orphans" / "grouping" / "hierarchy" → `garden-hierarchy`
-- "fix cut-off titles" / "surface quality" / "keywords" → `garden-refine`
+- "fix cut-off titles" / "surface quality" → `garden-refine`
 - "split overloaded" / "decompose" → `garden-decompose`
 - "domain tags" → `garden-domains`
 - "densify edges" / "build missing edges" / "materialize wikilinks" / "make cascade reach related docs" → `garden-densify`

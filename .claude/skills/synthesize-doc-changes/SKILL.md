@@ -140,8 +140,8 @@ liberally** — apply every domain that plausibly applies (optimize for recall);
 do NOT guess conservatively, since gardening (with full-store context) is what
 prunes. Two rules from the shared policy: **consult `ldoc domains` and reuse an
 existing domain over coining a new synonym**; and a term that is really a domain
-goes in `--tags-domain`, not `keywords`. Ingest originates liberally; gardening
-prunes authoritatively.
+goes in `--tags-domain`. Ingest originates liberally; gardening prunes
+authoritatively.
 
 **Provenance rule**: every new doc must include `--provenance <anchor>` (the
 `REQ_ID`/`NORM_ID` the orchestrator supplied). The anchor lives in `docs/`, so

@@ -158,7 +158,7 @@ of changes, and one review. Phases are never user-invocable directly.
 | `garden-summarize` | structure | signpost orientation guides |
 | `garden-domains` | structure | cross-cutting `domain` curation |
 | `garden-densify` | structure | build missing edges — materialize prose `[[id]]` wikilinks into real edges and add genuine missing dependencies (favoring cascade-HARD `requires`) so cascade can self-heal |
-| `garden-refine` | form | sampling QA: titles, summaries, schema drift, `keywords` |
+| `garden-refine` | form | sampling QA: titles, summaries, schema drift |
 | `garden-integrity` | form | mechanical repair (`validate` fixes) |
 
 Invoke `/garden` (triage), `/garden <intent>`, or `/garden all`. Staleness detection
@@ -192,11 +192,12 @@ Fields must appear in this order in the frontmatter:
 ```
 id, title, label, summary, type, status, level,
 belongs_to, requires, relates, provenance, superseded_by,
-domain, keywords, scope, created, history
+domain, scope, created, history
 ```
 
-`keywords` is an optional flat findability synonym list (like `domain` in shape,
-distinct in purpose — see `20260623233935`). Omitted when empty.
+`domain` is an optional flat, governed business-grouping facet (not inherited).
+Omitted when empty. Docs are also findable by full-text search over title,
+label, and body.
 
 `reference` type docs additionally carry `kind`, `source`, `imported` after `history`.
 

@@ -14,9 +14,6 @@ the same for both.
 - The set of domains in use is a **finite shared resource**: each domain must
   **justify its own existence** — pull its weight as a distinct grouping a reader
   would filter by. Not a scope-count; weight (see `20260624185845`).
-- `domain` is **not** `keywords`. Keywords are ungoverned search aliases; domain
-  is the governed facet. The two **must not overlap**: a term that is or matches
-  an existing domain belongs as a `domain`, not a keyword (`20260623233935`).
 - Scope/domain *value* overlap is **expected and fine** — most `viewer`-scope
   docs sharing a `ui` domain is not noise; the axes answer different questions.
 

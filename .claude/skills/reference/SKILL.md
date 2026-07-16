@@ -65,7 +65,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc map [--json]` | Entry points (signpost roots) with summaries — start here |
-| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search (terms match title, label, body, keywords; facets filter by scope/domain only) |
+| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search (terms match title, label, body; facets filter by scope/domain only) |
 | `ldoc ls [--type T] [--json]` | List docs (optionally one type) |
 | `ldoc orphans` | Docs outside the belongs_to hierarchy |
 | `ldoc domains [--json]` | List in-use domain tags with doc counts (the domain registry) |
@@ -81,7 +81,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc new --type T --label "..." [--title "..."] [options]` | Create a doc (`--label` required; `--title` optional, defaults to label) |
-| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--keywords][--body -\|TEXT]` | Update fields/body |
+| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--body -\|TEXT]` | Update fields/body |
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
 | `ldoc unlink <ref> [same edge flags]` | Remove edges; accepts literal 14-digit dead ids as edge targets |
 | `<mutate> ... --note "why"` | Explain a change inline — **preferred over `ldoc history`**. Auto-filled for obvious ops (new/re-parent/unlink/rm); required for a revision (body/label/title/summary), enforced at `session close` |
@@ -111,11 +111,12 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 ```
 id, title, label, summary, type, status, level,
 belongs_to, requires, relates, provenance, superseded_by,
-domain, keywords, scope, created, history
+domain, scope, created, history
 ```
 
-`keywords` — optional flat findability synonym list (same list shape as
-`domain`, distinct purpose; not inherited, not cascade). Omitted when empty.
+`domain` — optional flat governed business-grouping facet (not inherited, not
+cascade). Omitted when empty. Docs are also findable by full-text search over
+title, label, and body.
 
 `reference`-type docs additionally carry `kind, source, imported` after
 `history`.

@@ -113,6 +113,12 @@ Noting these here as potential followup tasks so that it's recorded without havi
 
 ## Integrated Lexicon
 
+### Why a sibling system
+
+A store-hosted lexicon: its own box of term records (canonical term, definition, allowed/restricted aliases, similar terms, and a bounded context only when the same string means different things — ubiquitous by default), with `ldoc` porcelain to read/write them and optional viewer/stdout projection (explicit term links plus implicit linking as a formatting option). It is not another typed-doc subsystem and not a cascade/contract layer — just a formal list of known vocabulary that humans ratify from language already accruing in the KB, that agents can read (and that separate skills may gently align prose toward on later edits). Soft sync both ways: the KB suggests candidates; the lexicon guides wording without mandating rewrites.
+
+### Steps
+
 - [ ] A "box" for listing lexical terms
 - [ ] A structure/definition for defining terms: (domain, term, definition, allowed_aliases, restricted_aliases, similar_terms, etc.)
 - [ ] Define a format for explicit linking (specifically for terms that appear in multiple "domains")
@@ -122,7 +128,7 @@ Noting these here as potential followup tasks so that it's recorded without havi
   - [ ] and hover/tooltip definitions
   - [ ] a "catalog-like" view for lexical terms
     - [ ] (maybe) some usage stats (num of docs with backlinks, count per doc_type?, count per scope/domain?)
-- [ ] Replace any vestigial "keywords" field/functionality to instead lookup by these "terms" as keywords.
+- [x] Replace any vestigial "keywords" field/functionality (to disambiguate it from lookup by these "terms" as keywords).
 - [ ] New or integrated Agent Skills:
   - [ ] identify terms that should be added to the lexicon
   - [ ] add/adjust definitions of terms

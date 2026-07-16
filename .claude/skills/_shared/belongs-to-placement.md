@@ -81,7 +81,7 @@ This is the operative form of rule 4 below.
 
 2. **A placement is a navigational claim, not a tag.** `belongs_to` asserts
    "this doc is part of, and would be orphaned without, that grouping." It is
-   the membership/hierarchy axis — distinct from `domain`/`keywords` tags and from
+   the membership/hierarchy axis — distinct from `domain` tags and from
    the logical `requires` web.
 
 3. **One primary parent.** A doc declares the single grouping that defines it,

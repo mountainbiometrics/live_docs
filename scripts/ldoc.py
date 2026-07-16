@@ -389,7 +389,7 @@ def cmd_get(kb: KB, args) -> int:
         print(f"type:   {fm.get('type', '')}")
         print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}")
         print(f"created: {fm.get('created', '')}")
-        print(f"domain: {fm.get('domain', [])}  keywords: {fm.get('keywords', [])}  scope: {fm.get('scope', '') or '(none)'}")
+        print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', '') or '(none)'}")
         hist = fm.get("history", [])
         churn = _churn_count(fm)
         # Total entries, plus the churn count (additions excluded — hot-file signal).
@@ -876,8 +876,6 @@ def cmd_new(kb: KB, args) -> int:
     edges = _parse_edge_args(args)
     domain_tags = [s.strip() for s in args.tags_domain.split(",") if s.strip()] \
         if args.tags_domain else []
-    keyword_tags = [s.strip() for s in args.tags_keywords.split(",") if s.strip()] \
-        if getattr(args, "tags_keywords", "") else []
     scope_tags = [s.strip() for s in args.tags_scope.split(",") if s.strip()] \
         if args.tags_scope else []
 
@@ -930,7 +928,6 @@ def cmd_new(kb: KB, args) -> int:
             status=args.status,
             **edges,
             tags_domain=domain_tags,
-            tags_keywords=keyword_tags,
             tags_scope=scope_tags,
             body=body,
             kind=args.kind or "",
@@ -990,8 +987,6 @@ def cmd_set(kb: KB, args) -> int:
         set_fields["scope"] = args.scope
     if args.domain is not None:
         set_fields["domain"] = _split_csv(args.domain)
-    if getattr(args, "keywords", None) is not None:
-        set_fields["keywords"] = _split_csv(args.keywords)
 
     # --body: read new body from stdin or inline (before resolving refs, which may also use stdin)
     new_body = None
@@ -1005,7 +1000,7 @@ def cmd_set(kb: KB, args) -> int:
         return 1
 
     if not set_fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, --keywords, or --body.")
+        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, or --body.")
         return 1
 
     note = getattr(args, "note", "")
@@ -1058,7 +1053,7 @@ def cmd_edit(kb: KB, args) -> int:
     set_args = argparse.Namespace(
         refs=[args.ref], body="-", note=getattr(args, "note", ""),
         title=None, summary=None, label=None, level=None, status=None,
-        type=None, scope=None, domain=None, keywords=None, dry_run=False,
+        type=None, scope=None, domain=None, dry_run=False,
     )
     return cmd_set(kb, set_args)
 
@@ -2542,7 +2537,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,keywords,created,history.")
+                        "level,scope,summary,domain,created,history.")
 
     # --- body ---
     p = sub.add_parser("body", help="Print the body text of one or more docs.")
@@ -2560,7 +2555,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- find ---
     p = sub.add_parser("find", help="Search/filter docs. Multiple terms = AND (use --or for OR).")
     p.add_argument("terms", nargs="*", metavar="term",
-                   help="Search terms (matches title + label + body + keywords, case-insensitive).")
+                   help="Search terms (matches title + label + body, case-insensitive).")
     p.add_argument("--or", dest="or_mode", action="store_true",
                    help="Combine multiple terms with OR instead of AND.")
     p.add_argument("--regex", default="", metavar="PATTERN",
@@ -2575,7 +2570,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label output instead of typed wiki-links.")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,keywords,created,history.")
+                        "level,scope,summary,domain,created,history.")
     p.add_argument("--count", action="store_true", help="Print result count only.")
     p.add_argument("--limit", type=int, default=None, metavar="N",
                    help="Show at most N results.")
@@ -2588,7 +2583,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label output instead of typed wiki-links.")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,keywords,created,history.")
+                        "level,scope,summary,domain,created,history.")
     p.add_argument("--count", action="store_true", help="Print doc count only.")
     p.add_argument("--limit", type=int, default=None, metavar="N",
                    help="Show at most N results.")
@@ -2603,7 +2598,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label output instead of typed wiki-links.")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,keywords,created,history.")
+                        "level,scope,summary,domain,created,history.")
     p.add_argument("--count", action="store_true", help="Print orphan count only.")
     p.add_argument("--limit", type=int, default=None, metavar="N",
                    help="Show at most N results.")
@@ -2705,8 +2700,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--superseded-by", default="", dest="superseded_by",
                    help="Comma-separated ids/labels/titles. Deprecation pointer. Validated before write.")
     p.add_argument("--tags-domain", default="", dest="tags_domain")
-    p.add_argument("--tags-keywords", default="", dest="tags_keywords",
-                   help="Comma-separated findability keywords (flat list, replace semantics).")
     p.add_argument("--tags-scope", default="", dest="tags_scope")
     p.add_argument("--kind", default="", choices=REFERENCE_KIND_CHOICES + [""])
     p.add_argument("--source", default="")
@@ -2739,9 +2732,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--domain", default=None,
                    help="Comma-separated cross-cutting domain tags (flat list, NOT "
                         "inherited). Replaces the doc's domain list; empty string clears it.")
-    p.add_argument("--keywords", default=None,
-                   help="Comma-separated findability keywords (flat list, NOT inherited). "
-                        "Replaces the doc's keywords list; empty string clears it.")
     p.add_argument("--body", default=None,
                    help="Replace body: TEXT value or '-' to read from stdin.")
     p.add_argument("--note", default="",

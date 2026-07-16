@@ -3,12 +3,12 @@ name: garden-refine
 user-invocable: false
 description: >
   Gardening phase: sampling-based surface-quality pass — truncated titles/labels,
-  summary quality, body-shape consistency, schema normalization (no alias JSON),
-  and keywords curation. Catches sporadic agentic formatting drift. Nested phase;
-  garden dispatcher owns the episode.
+  summary quality, body-shape consistency, and schema normalization (no alias JSON).
+  Catches sporadic agentic formatting drift. Nested phase; garden dispatcher owns
+  the episode.
 ---
 
-# garden-refine — Surface quality and findability (form phase)
+# garden-refine — Surface quality (form phase)
 
 **Contract:** nested phase only. Capture no START, run no `cascade-check`, emit
 no review. All writes non-destructive to meaning; pass `--note "garden-refine: …"`
@@ -53,29 +53,8 @@ concentrate every pass on the same well-worn center of the store.
      edit to remove the `state:` line).
    - `state: actual` → leave/set `status: living`; drop `state`.
    - Enum fixes via `ldoc set --status` / `--level`.
-5. **Keywords curation** — populate/curate `keywords` (findability synonyms,
-   distinct from `domain`):
-   ```bash
-   ldoc set <id> --keywords "synonym1,synonym2,alias"
-   ```
-   Terms a searcher might type; no governance bar.
-
-   **Keyword/domain non-overlap**: before adding a keyword,
-   check it against the domain registry:
-   ```bash
-   ldoc domains
-   ```
-   If a candidate keyword IS or MATCHES an existing domain, it belongs as a
-   `domain` tag — NOT a keyword. `--domain` has **replace semantics**, so
-   reconstruct the doc's full domain list with the matched value added (never
-   pass only the new domain, or you clobber existing ones):
-   ```bash
-   ldoc show <id>                                   # read current domains
-   ldoc set <id> --domain "Matched Domain,<existing-domains-unchanged>"
-   ```
-   Duplicating a domain as a keyword fragments the two axes and makes both
-   useless for filtering. Keywords are only the search aliases that are NOT
-   domains.
+   - Legacy `keywords:` frontmatter key (retired field): drop the key if still
+     present on a sampled doc.
 
 ---
 

@@ -110,9 +110,9 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
     if level and level not in VALID_LEVELS:
         errors.append(f"{prefix}  invalid `level` value `{level}`")
 
-    # Tags: `domain` and `keywords` are flat top-level lists; `scope` is a single
+    # Tags: `domain` is a flat top-level list; `scope` is a single
     # STRING naming a topological zone (per the scope-as-topology reframe).
-    for tag_key in ("domain", "keywords"):
+    for tag_key in ("domain",):
         tag_val = doc.get(tag_key)
         if tag_val is not None and not isinstance(tag_val, list):
             errors.append(f"{prefix}  `{tag_key}` is not a list")

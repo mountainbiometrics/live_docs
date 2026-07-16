@@ -263,7 +263,6 @@ FIELD_CHANGE_TYPE = {
     "relates": "organizational",
     "provenance": "organizational",
     "domain": "organizational",
-    "keywords": "organizational",
     # deletion
     "rm": "deletion",
 }
