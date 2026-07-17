@@ -10,9 +10,10 @@ Record path:
     lexicon/<term>.md              — ubiquitous
     lexicon/<context>/<term>.md    — disambiguated sense
 
-Prose / explicit link display form:
-    Cascade
-    (Graph) Cascade
+Explicit term links use ``{{…}}`` (separate from doc ``[[14-digit]]`` wikilinks):
+    {{Cascade}}
+    {{(Lexicon) Term}}
+    {{Hard Edge}}s
 
 Stdlib only. No external dependencies.
 """
@@ -25,10 +26,16 @@ from typing import Any
 
 from .serialize import _parse_frontmatter_text, _yaml_str
 
-# Explicit term wiki-links: [[Cascade]] or [[(Graph) Cascade]] or [[graph/cascade]]
-TERM_WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
-# Doc-id wikilinks stay numeric; anything else in [[…]] is a term candidate.
-DOC_ID_INNER_RE = re.compile(r"^\d{14}$")
+# Explicit term links: {{Cascade}}, {{(Lexicon) Term}}, {{lexicon/term}}
+# Optional display alias: {{hard-edge|Hard Edges}}
+# Plural / inflection suffix outside the braces: {{Hard Edge}}s → displays "Hard Edges"
+TERM_LINK_RE = re.compile(
+    r"\{\{"
+    r"([^}|]+?)"           # target (display/path form)
+    r"(?:\|([^}]*))?"      # optional |display
+    r"\}\}"
+    r"([A-Za-z]*)"         # trailing inflection (s, es, …)
+)
 DISPLAY_WITH_CONTEXT_RE = re.compile(
     r"^\(\s*([^)]+?)\s*\)\s+(.+)$"
 )
@@ -115,27 +122,20 @@ def parse_term_ref(inner: str) -> tuple[str | None, str]:
 
 
 def ref_to_id(inner: str) -> str:
-    """Resolve a wiki-link inner (or bare display/path) to a term id."""
+    """Resolve a term-link inner (or bare display/path) to a term id."""
     ctx, term = parse_term_ref(inner)
     return term_id(term, ctx)
 
 
-def is_doc_wikilink_inner(inner: str) -> bool:
-    return bool(DOC_ID_INNER_RE.match((inner or "").strip()))
-
-
-def iter_term_wikilinks(text: str) -> list[tuple[str, str]]:
-    """Return [(full_token, inner), ...] for non-doc [[…]] wiki-links."""
-    out: list[tuple[str, str]] = []
-    for m in TERM_WIKILINK_RE.finditer(text or ""):
-        inner = m.group(1).strip()
-        if is_doc_wikilink_inner(inner):
-            continue
-        # skip embed/transclude already handled as ![[digits]]
-        start = m.start()
-        if start > 0 and text[start - 1] == "!":
-            continue
-        out.append((m.group(0), inner))
+def iter_term_links(text: str) -> list[tuple[str, str, str]]:
+    """Return [(full_token, target_inner, display_text), ...] for ``{{…}}`` term links."""
+    out: list[tuple[str, str, str]] = []
+    for m in TERM_LINK_RE.finditer(text or ""):
+        target = m.group(1).strip()
+        alias = (m.group(2) or "").strip()
+        suffix = m.group(3) or ""
+        display = (alias or target) + suffix
+        out.append((m.group(0), target, display))
     return out
 
 
@@ -489,7 +489,7 @@ def compute_term_stats(terms: list[dict], docs: list[dict]) -> dict[str, dict]:
         )
         # explicit term links in this doc
         linked_ids: set[str] = set()
-        for _tok, inner in iter_term_wikilinks(blob):
+        for _tok, inner, _disp in iter_term_links(blob):
             try:
                 linked_ids.add(ref_to_id(inner))
             except ValueError:

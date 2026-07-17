@@ -834,6 +834,15 @@ function termLinkHtml(termId, overrideText) {
   return `<a class="tl" data-term="${escapeHtml(String(termId))}" tabindex="0">${escapeHtml(text)}</a>`;
 }
 
+/** Render prose that may contain {{term}} / [[id]] links (definitions, tooltips). */
+function renderInlineProse(src) {
+  let html = renderMarkdown(src || "");
+  // Collapse a single outer paragraph for table/tooltip density.
+  const m = String(html).match(/^<p>([\s\S]*)<\/p>\s*$/i);
+  if (m && !/<p[\s>]/i.test(m[1])) return m[1];
+  return html;
+}
+
 function autolinkTermsSegment(text, tokens) {
   if (!text || !termMatchList.length) return text;
   let out = "";
@@ -1004,12 +1013,13 @@ function renderMarkdown(src, depth) {
     tokens.push({ kind: "link", id });
     return `TOKEN${i}TOKEN`;
   });
-  // [[Term]] / [[(Context) Term]] / [[context/term]] — soft lexicon links
-  s = s.replace(/\[\[([^\]]+)\]\]/g, (full, inner) => {
-    if (/^\d{14}$/.test(String(inner).trim())) return full;
-    const tid = parseTermRef(inner);
+  // {{Term}} / {{(Context) Term}} / {{path}} — soft lexicon links
+  // Optional {{id|Display}} and trailing inflection: {{Hard Edge}}s → "Hard Edges"
+  s = s.replace(/\{\{([^}|]+?)(?:\|([^}]*))?\}\}([A-Za-z]*)/g, (_, target, alias, suffix) => {
+    const tid = parseTermRef(String(target).trim());
+    const display = (alias && String(alias).trim() ? String(alias).trim() : String(target).trim()) + (suffix || "");
     const i = tokens.length;
-    tokens.push({ kind: "term", id: tid, text: String(inner).trim() });
+    tokens.push({ kind: "term", id: tid, text: display });
     return `TOKEN${i}TOKEN`;
   });
   // [text](14digits.md) markdown link -> resolved link using the doc's label
@@ -1020,7 +1030,7 @@ function renderMarkdown(src, depth) {
   });
 
   // Implicit auto-link of known term surfaces — opt-in formatting
-  // (VIEWER_CONFIG.autolink_terms or ?autolink=1). Explicit [[Term]] always on.
+  // (VIEWER_CONFIG.autolink_terms or ?autolink=1). Explicit {{Term}} always on.
   const cfgAuto = !!(VIEWER_CONFIG && VIEWER_CONFIG.autolink_terms);
   const urlAuto = /(?:\?|&)autolink=1(?:&|$)/.test(location.search || "");
   if (cfgAuto || urlAuto) s = autolinkTermsSegment(s, tokens);
@@ -1061,7 +1071,7 @@ function showTip(el) {
     tooltip.innerHTML =
       `<div class="tt-label">${escapeHtml(t.display || t.term || termId)}</div>` +
       `<div class="tt-meta">lexicon${t.context ? " · " + escapeHtml(t.context) : ""} · ${n} doc${n === 1 ? "" : "s"}</div>` +
-      `<div class="tt-sum">${escapeHtml(t.definition || "(no definition)")}</div>`;
+      `<div class="tt-sum">${renderInlineProse(t.definition || "(no definition)")}</div>`;
     tooltip.style.display = "block";
     return;
   }
@@ -2233,13 +2243,11 @@ function renderLexicon(focusId) {
       const byType = t.stats && t.stats.by_type
         ? Object.entries(t.stats.by_type).map(([k, v]) => `${k}:${v}`).join(" · ")
         : "";
-      const def = String(t.definition || "");
-      const short = def.length > 140 ? def.slice(0, 137) + "…" : def;
       html += `<tr>
         <td><a class="tl" data-term="${escapeHtml(t.id)}" href="#/term/${encodeURIComponent(t.id)}">${escapeHtml(t.display || t.term)}</a>
           <div class="sub" style="font-size:11px">${escapeHtml(t.id)}</div></td>
         <td>${t.context ? escapeHtml(t.context) : "<span class=sub>—</span>"}</td>
-        <td>${escapeHtml(short)}</td>
+        <td class="lex-def">${renderInlineProse(t.definition || "")}</td>
         <td>${n}</td>
         <td class="sub">${escapeHtml(byType)}</td>
       </tr>`;
@@ -2294,7 +2302,7 @@ function lexiconDetailHtml(t) {
       <a class="sub" href="#lexicon">← all terms</a>
     </div>
     <div class="sub" style="margin:4px 0 10px">${escapeHtml(t.id)}${t.context ? " · context " + escapeHtml(t.context) : " · ubiquitous"}</div>
-    <div style="margin-bottom:10px">${escapeHtml(t.definition || "")}</div>
+    <div class="lex-def" style="margin-bottom:10px">${renderInlineProse(t.definition || "")}</div>
     ${aliases}
     <div style="margin-top:10px" class="sub">
       <strong>${n}</strong> doc${n===1?"":"s"} · by type: ${fmtMap(t.stats && t.stats.by_type)}
