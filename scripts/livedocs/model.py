@@ -232,6 +232,26 @@ VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
 
+def is_archived(doc: dict | None) -> bool:
+    """True when a doc is reference/archived surface material.
+
+    Matches viewer ``isArchived``: ``type: reference`` OR ``status: reference``.
+    ``status: target`` is NOT archived — demotion is about reference material,
+    not the living-vs-target adoption axis.
+    """
+    if not doc:
+        return False
+    return doc.get("type") == "reference" or doc.get("status") == "reference"
+
+
+# Clear message when porcelain refuses to mutate a reference snapshot.
+ARCHIVED_IMMUTABLE_MSG = (
+    "refusing to mutate reference/archived doc {ref!r} "
+    "(type:reference or status:reference) — snapshots are immutable; "
+    "delete and re-ingest if the snapshot is wrong"
+)
+
+
 # ---------------------------------------------------------------------------
 # Change-type taxonomy (change-type-taxonomy 20260701201617)
 # ---------------------------------------------------------------------------

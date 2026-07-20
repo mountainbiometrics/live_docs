@@ -20,6 +20,7 @@ _EXPORT_MAP = [
     ("model",     {"STORE_ROOT", "CONSUMER_ROOT", "REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
                    "LEXICON_DIR", "INBOX_DIR", "INDEX_DIR",
                    "VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
+                   "is_archived", "ARCHIVED_IMMUTABLE_MSG",
                    "generate_id", "generate_session_id", "session_start_iso",
                    "change_types_for_fields", "dominant_change_type",
                    "title_to_label", "unique_label", "display_label",

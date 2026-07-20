@@ -3,9 +3,11 @@
 validate.py — Read-only structural integrity check for a live_docs store.
 
 Usage:
-    python scripts/validate.py [docs_dir]
+    python scripts/validate.py [docs_dir] [--include-reference]
 
 docs_dir defaults to DOCS_DIR from livedocs (repo root / docs).
+By default, type:reference / status:reference docs are skipped (archive
+hygiene is not a requirement); pass --include-reference to check them too.
 Exits 0 if no errors, 1 if any errors found.
 
 Stdlib only. No external dependencies.
@@ -43,9 +45,12 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import argparse
+
 from livedocs import (
     DOCS_DIR, load_all, dangling_edges, dangling_references, doc_prefix,
     VALID_TYPES, VALID_STATUSES, VALID_LEVELS, VALID_REFERENCE_KINDS,
+    is_archived,
 )
 from livedocs.lint import prose_links_not_edged, malformed_body_wikilinks
 
@@ -296,28 +301,57 @@ def find_cycles(docs: dict, edge_field: str) -> list[list[str]]:
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    if len(sys.argv) > 1:
-        docs_dir = Path(sys.argv[1])
-    else:
-        docs_dir = DOCS_DIR
+    parser = argparse.ArgumentParser(
+        description="Read-only structural integrity check for a live_docs store.",
+    )
+    parser.add_argument(
+        "docs_dir",
+        nargs="?",
+        default=None,
+        help="Docs directory (default: store docs/ from discovery).",
+    )
+    parser.add_argument(
+        "--include-reference",
+        action="store_true",
+        help="Also check type:reference / status:reference docs (opt-in; "
+             "archive hygiene is not a requirement for the current model).",
+    )
+    args = parser.parse_args()
+    docs_dir = Path(args.docs_dir) if args.docs_dir else DOCS_DIR
+    include_reference = args.include_reference
 
     if not docs_dir.is_dir():
         print(f"ERROR: docs directory not found: {docs_dir}", file=sys.stderr)
         return 1
 
     docs = load_all(docs_dir)
+    # Keep every id for edge resolution (living docs may cite archived ones).
     all_ids = set(docs.keys())
-    doc_files_sorted = sorted(docs.values(), key=lambda d: d["id"])
+    checked_docs = {
+        did: d for did, d in docs.items()
+        if include_reference or not is_archived(d)
+    }
+    doc_files_sorted = sorted(checked_docs.values(), key=lambda d: d["id"])
+    archived_omitted = len(docs) - len(checked_docs)
 
     print(f"validate — {docs_dir}")
-    print(f"Scanned: {len(docs)} docs")
+    if archived_omitted:
+        print(
+            f"Scanned: {len(checked_docs)} docs "
+            f"({archived_omitted} reference/archived omitted; "
+            f"pass --include-reference to check them)"
+        )
+    else:
+        print(f"Scanned: {len(checked_docs)} docs")
     print()
 
     # Build reverse belongs_to map: parent_id → set of child ids.
     # Parents naturally reference children in prose without needing an explicit
     # forward edge — the hierarchy is already expressed on the child's side.
+    # Use the full store so archived children still suppress prose-not-edged
+    # warnings on living parents.
     children_of: dict[str, set[str]] = {}
-    for doc in doc_files_sorted:
+    for doc in docs.values():
         for parent_id in doc.get("belongs_to", []) or []:
             if parent_id:
                 children_of.setdefault(parent_id, set()).add(doc["id"])
@@ -330,12 +364,21 @@ def main() -> int:
         all_errors.extend(errs)
         all_warnings.extend(warns)
 
-    # Label uniqueness check, case-insensitive (cross-doc — after all docs loaded)
+    # Label uniqueness among the checked corpus. When references are omitted,
+    # still flag a collision if a checked doc shares a label with an archived
+    # doc — resolve() is store-wide and ambiguous labels break the porcelain.
     label_to_docs: dict[str, list] = {}
     for doc in doc_files_sorted:
         label = doc.get("label", "")
         if label:
             label_to_docs.setdefault(label.lower(), []).append(doc)
+    if not include_reference:
+        for doc in docs.values():
+            if not is_archived(doc):
+                continue
+            label = doc.get("label", "")
+            if label and label.lower() in label_to_docs:
+                label_to_docs[label.lower()].append(doc)
     for label_lower, docs_with_label in sorted(label_to_docs.items()):
         if len(docs_with_label) > 1:
             used_by = ", ".join(doc_prefix(d) for d in docs_with_label)
@@ -343,10 +386,10 @@ def main() -> int:
                 f"label `{label_lower}` is not unique (case-insensitive) — used by: {used_by}"
             )
 
-    # Per-edge-type acyclicity (store-wide). Each DAG edge must have NO cycles —
-    # a cycle is a hard error. belongs_to in particular is load-bearing: the
-    # effective-scope walk follows its genealogy, so a cycle would never
-    # terminate.
+    # Per-edge-type acyclicity over the full store (archived edges still matter
+    # for topology walks). Each DAG edge must have NO cycles — a cycle is a
+    # hard error. belongs_to in particular is load-bearing: the effective-scope
+    # walk follows its genealogy, so a cycle would never terminate.
     for edge_field in DAG_EDGE_FIELDS:
         for cycle in find_cycles(docs, edge_field):
             chain = " → ".join(cycle)

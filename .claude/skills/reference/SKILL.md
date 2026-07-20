@@ -51,6 +51,15 @@ That is your table of contents. From an entry point, follow edges
 (`ldoc show <ref>`, `ldoc neighbors <ref>`) or search within scope
 (`ldoc find ... --scope <zone>`).
 
+**Reference/archived docs are demoted.** Docs with `type: reference` or
+`status: reference` are footnote-grade snapshots, not current claims. By
+default `ldoc map`, `ldoc ls`, `ldoc orphans`, and `ldoc validate` omit them;
+`ldoc find` still matches them but ranks them last. Pass `--include-reference`
+when you deliberately want the archive (validate's flag is opt-in because
+archive-link hygiene is **not** a requirement). `status: target` docs are
+**not** demoted. Reference snapshots are immutable via porcelain — do not
+`set`/`history`/non-provenance-`link` them; delete and re-ingest if wrong.
+
 ---
 
 ## 1. The ldoc command surface
@@ -64,10 +73,10 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 
 | Command | Purpose |
 |---|---|
-| `ldoc map [--json]` | Entry points (signpost roots) with summaries — start here |
-| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search (terms match title, label, body; facets filter by scope/domain only) |
-| `ldoc ls [--type T] [--json]` | List docs (optionally one type) |
-| `ldoc orphans` | Docs outside the belongs_to hierarchy |
+| `ldoc map [--include-reference] [--json]` | Entry points (signpost roots) with summaries — start here; omits reference/archived by default |
+| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search; reference/archived hits ranked last |
+| `ldoc ls [--type T] [--include-reference] [--json]` | List docs (optionally one type); omits reference/archived by default |
+| `ldoc orphans [--include-reference]` | Docs outside the belongs_to hierarchy (reference/archived omitted by default) |
 | `ldoc domains [--json]` | List in-use domain tags with doc counts (the domain registry) |
 | `ldoc count` / `ldoc log [--since ISO] [--limit N]` | Stats / recent-changes view |
 | `ldoc get <ref...>` | Frontmatter summary |
@@ -81,12 +90,12 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc new --type T --label "..." [--title "..."] [options]` | Create a doc (`--label` required; `--title` optional, defaults to label) |
-| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--body -\|TEXT]` | Update fields/body |
-| `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges |
-| `ldoc unlink <ref> [same edge flags]` | Remove edges; accepts literal 14-digit dead ids as edge targets |
+| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--body -\|TEXT]` | Update fields/body (refused on reference/archived snapshots) |
+| `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges (on reference/archived: provenance repair only) |
+| `ldoc unlink <ref> [same edge flags]` | Remove edges; accepts literal 14-digit dead ids as edge targets (on reference/archived: provenance repair only) |
 | `<mutate> ... --note "why"` | Explain a change inline — **preferred over `ldoc history`**. Auto-filled for obvious ops (new/re-parent/unlink/rm); required for a revision (body/label/title/summary), enforced at `session close` |
-| `ldoc history <ref> --add "what changed"` | **Deprecated** post-hoc gap-filler for `--note` — use only to satisfy a close-gate after the fact (creation is now recorded in history) |
-| `ldoc rm <ref> [--force] [--dry-run]` | Delete a doc; blocked when any inbound edge exists unless `--force` (strips all inbound edges then deletes); reindexes automatically |
+| `ldoc history <ref> --add "what changed"` | **Deprecated** post-hoc gap-filler for `--note` — use only to satisfy a close-gate after the fact (creation is now recorded in history); refused on reference/archived |
+| `ldoc rm <ref> [--force] [--dry-run]` | Delete a doc; blocked when any inbound edge exists unless `--force` (strips all inbound edges then deletes); reindexes automatically. Allowed for reference/archived snapshots. |
 
 > **Every mutation runs inside an editing session** (`ldoc session start` → work → `ldoc session close`), which stamps each change and mints the review. Read `.claude/skills/_shared/session-lifecycle.md` for the recipe.
 
@@ -96,7 +105,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 |---|---|
 | `ldoc inbox add (--from-file P\|--body T\|-) [--title T] [--source S]` | Gate 0: capture verbatim, no processing |
 | `ldoc inbox list` / `ldoc promote <ref> [--all]` | List / Gate 1: inbox → raw |
-| `ldoc validate` | Structural integrity check; warns on staged-incomplete retirement, prose-not-edged body wikilinks, malformed wikilink syntax |
+| `ldoc validate [--include-reference]` | Structural integrity on the non-reference corpus by default; `--include-reference` opts into archive checks (not a requirement) |
 | `ldoc reindex` | Rebuild `<docs>/.index/` derived caches |
 | `ldoc viewer [--out PATH]` | Build the read-only HTML viewer |
 | `ldoc session start\|close\|list\|summary\|resume\|merge ...` | Editing-session lifecycle; every mutation runs in a session, `close` mints one review (see `_shared/session-lifecycle.md`) |

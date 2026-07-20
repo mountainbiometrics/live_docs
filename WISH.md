@@ -9,6 +9,7 @@ Noting these here as potential followup tasks so that it's recorded without havi
   - [ ] Like a review agent; looks at changes, checks cascade decisions, identifies cruft and stuff immediately instead of waiting for followup gardening passes, etc.
   - [ ] A tree exploring agent that tries looking at the system as a whole (and finds discrepancies in it)
   - [ ] A "Why" not "What" agent that focuses on live_docs' principles
+- [ ] Better "large impact detected" instructions... currently it "triggers" if there are lots of docs, or if it ties into lots of things; but it really should only be bringing things up if there are specifically "conflicts" (and specifically "unknown" conflicts that the user hadn't brought up (like if someone says "replace x with y", and then it looks like that decision would conflict with the decision to "use x"; that's not an unknown conflict))
 
 ## Review Improvements
 

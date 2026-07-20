@@ -14,11 +14,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import generate_id, display_label
+from .model import generate_id, display_label, is_archived, ARCHIVED_IMMUTABLE_MSG
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
 from .graph import (reverse_edges, reverse_requires, reverse_belongs_to,
                     referenced_by, forward_edges, relates_edges,
                     superseded_by_edges, inbound_edges)
+
+
+def _refuse_archived_mutation(doc: dict, ref: str) -> None:
+    """Raise ValueError when *doc* is a reference/archived snapshot."""
+    if is_archived(doc):
+        raise ValueError(ARCHIVED_IMMUTABLE_MSG.format(ref=ref))
 
 
 # ---------------------------------------------------------------------------
@@ -455,11 +461,14 @@ class KB:
                 "label": doc.get("label", ""),
                 "display": self.display_label(doc_id),
                 "snippet": snippet,
+                "archived": is_archived(doc),
             })
 
+        # Reference/archived hits last (Surfaces Demote References). Stable by id.
+        results.sort(key=lambda r: (r["archived"], r["id"]))
         return results
 
-    def orphans(self) -> list[dict]:
+    def orphans(self, *, include_reference: bool = False) -> list[dict]:
         """
         Return docs that sit OUTSIDE the belongs_to hierarchy entirely.
 
@@ -470,9 +479,11 @@ class KB:
         hierarchy.
 
         `requires` / `relates` / `provenance` / `superseded_by` are NOT hierarchy
-        and do NOT count. There are NO type-based exemptions here — consumers
-        (garden, the viewer) apply their own judgment (e.g. skip frozen/reference
-        docs) on top of this raw topology.
+        and do NOT count.
+
+        By default, reference/archived docs are omitted — they are demoted
+        archive material, not hierarchy orphans to "fix" by scoping. Pass
+        ``include_reference=True`` to include them.
 
         This is the authoritative orphan computation. It is intentionally NOT a
         derived cache: callers query it FRESH (cf. cascade-check using
@@ -491,6 +502,8 @@ class KB:
 
         results = []
         for doc_id, doc in sorted(self._docs.items()):
+            if not include_reference and is_archived(doc):
+                continue
             has_parent = any(t in all_ids for t in doc.get("belongs_to", []))
             if not has_parent and doc_id not in has_descendants:
                 results.append({
@@ -509,7 +522,7 @@ class KB:
                     children.setdefault(parent, []).append(doc_id)
         return children
 
-    def map_overview(self) -> dict:
+    def map_overview(self, *, include_reference: bool = False) -> dict:
         """
         Return the store's navigational map: the topological ROOTS of the
         belongs_to hierarchy, ranked so an agent can orient without a cold
@@ -521,14 +534,21 @@ class KB:
             and its direct children (next hop, each with its own summary)
           - floating: roots with no descendants (orphans + standalone docs)
 
+        By default, reference/archived docs (type:reference or status:reference)
+        are omitted from roots and child hops — they are footnote-grade, not
+        orientation peers. Pass ``include_reference=True`` to include them.
+        ``status: target`` roots are kept.
+
         Mirrors the viewer's structural-signpost derivation (the retired `index`
         type, re-computed from topology). Read-only.
 
-        Returns {total, signposts: [...], floating: [...]}.
+        Returns {total, archived_omitted, signposts: [...], floating: [...]}.
         """
         children = self._children_map()
 
         # Transitive descendant count, memoized, cycle-guarded.
+        # Count only non-archived descendants by default so entry-point weight
+        # reflects the current-claim tree agents should explore.
         _desc_cache: dict[str, int] = {}
 
         def desc_count(doc_id: str) -> int:
@@ -540,6 +560,8 @@ class KB:
                 c = stack.pop()
                 if c in seen:
                     continue
+                if not include_reference and is_archived(self._docs.get(c)):
+                    continue
                 seen.add(c)
                 stack.extend(children.get(c, []))
             _desc_cache[doc_id] = len(seen)
@@ -549,16 +571,28 @@ class KB:
             s = doc.get("summary")
             return s.strip() if isinstance(s, str) else ""
 
+        def _visible(doc: dict) -> bool:
+            return include_reference or not is_archived(doc)
+
+        archived_omitted = (
+            0 if include_reference
+            else sum(1 for d in self._docs.values() if is_archived(d))
+        )
+
         roots = [
             (doc_id, doc)
             for doc_id, doc in self._docs.items()
-            if not any(p in self._docs for p in doc.get("belongs_to", []))
+            if _visible(doc)
+            and not any(p in self._docs for p in doc.get("belongs_to", []))
         ]
 
         signposts = []
         floating = []
         for doc_id, doc in roots:
-            kids = sorted(children.get(doc_id, []))
+            kids = [
+                c for c in children.get(doc_id, [])
+                if _visible(self._docs[c])
+            ]
             if kids:
                 signposts.append({
                     "id": doc_id,
@@ -594,17 +628,31 @@ class KB:
         signposts.sort(key=lambda s: (-s["descendants"], s["id"]))
         floating.sort(key=lambda f: f["id"])
 
+        visible_total = (
+            len(self._docs) if include_reference
+            else len(self._docs) - archived_omitted
+        )
+
         return {
-            "total": len(self._docs),
+            "total": visible_total,
+            "archived_omitted": archived_omitted,
             "signposts": signposts,
             "floating": floating,
         }
 
-    def ls(self, type: str = None) -> list[dict]:
-        """List all docs. Returns [{id, label, display}]."""
+    def ls(self, type: str = None, *, include_reference: bool = False) -> list[dict]:
+        """List docs. Returns [{id, label, display}].
+
+        By default omits reference/archived docs. ``include_reference=True`` or
+        an explicit ``type='reference'`` filter includes them.
+        """
+        if type == "reference":
+            include_reference = True
         results = []
         for doc_id, doc in sorted(self._docs.items()):
             if type and doc.get("type") != type:
+                continue
+            if not include_reference and is_archived(doc):
                 continue
             results.append({
                 "id": doc_id,
@@ -849,6 +897,7 @@ class KB:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
 
         doc_id = self.resolve(ref)
+        _refuse_archived_mutation(self._docs[doc_id], ref)
         fm, body = self._load_doc_raw(doc_id)
         for k, v in fields.items():
             if k == "domain" and v is not None:
@@ -874,8 +923,17 @@ class KB:
 
         replace_belongs_to=True replaces the entire belongs_to list atomically.
         All ref args resolved via resolve().
+
+        Reference/archived docs refuse non-provenance edge mutations; provenance
+        repair alone is allowed.
         """
         doc_id = self.resolve(ref)
+        self._guard_archived_edges(
+            ref, doc_id,
+            requires=requires, belongs_to=belongs_to, relates=relates,
+            provenance=provenance, superseded_by=superseded_by,
+            replace_belongs_to=replace_belongs_to,
+        )
         fm, body = self._load_doc_raw(doc_id)
 
         for field, new_refs in [
@@ -911,8 +969,16 @@ class KB:
         The doc ref is resolved via resolve(). Edge targets normally resolve too;
         unlink accepts literal 14-digit ids (or [[id]] wrappers) for targets that
         no longer exist, so dangling edges can be cleared without hand-editing.
+
+        Reference/archived docs refuse non-provenance edge mutations; provenance
+        repair alone is allowed.
         """
         doc_id = self.resolve(ref)
+        self._guard_archived_edges(
+            ref, doc_id,
+            requires=requires, belongs_to=belongs_to, relates=relates,
+            provenance=provenance, superseded_by=superseded_by,
+        )
         fm, body = self._load_doc_raw(doc_id)
 
         for field, remove_refs in [
@@ -934,6 +1000,31 @@ class KB:
                     fm.pop(field, None)  # omit empty edge fields
 
         self._write_doc(doc_id, fm, body)
+
+    def _guard_archived_edges(
+        self,
+        ref: str,
+        doc_id: str,
+        *,
+        requires=None,
+        belongs_to=None,
+        relates=None,
+        provenance=None,
+        superseded_by=None,
+        replace_belongs_to: bool = False,
+    ) -> None:
+        """Refuse non-provenance edge mutations on reference/archived docs."""
+        doc = self._docs[doc_id]
+        if not is_archived(doc):
+            return
+        non_prov = any([requires, belongs_to, relates, superseded_by, replace_belongs_to])
+        if non_prov:
+            raise ValueError(
+                ARCHIVED_IMMUTABLE_MSG.format(ref=ref)
+                + "; only provenance edge repair is allowed"
+            )
+        if not provenance:
+            raise ValueError(ARCHIVED_IMMUTABLE_MSG.format(ref=ref))
 
     def strip_inbound_edges(
         self, target_id: str, inbound: list[tuple[str, str]] | None = None
@@ -987,6 +1078,7 @@ class KB:
         empty so pre-taxonomy history round-trips unchanged.
         """
         doc_id = self.resolve(ref)
+        _refuse_archived_mutation(self._docs[doc_id], ref)
         fm, body = self._load_doc_raw(doc_id)
 
         at = at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1064,6 +1156,7 @@ class KB:
         This is the ONLY porcelain way to edit a doc's body content.
         """
         doc_id = self.resolve(ref)
+        _refuse_archived_mutation(self._docs[doc_id], ref)
         fm, _ = self._load_doc_raw(doc_id)
         self._write_doc(doc_id, fm, body)
 

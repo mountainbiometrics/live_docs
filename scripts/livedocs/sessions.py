@@ -327,7 +327,12 @@ def record_doc_change(
     link/unlink (e.g. ``{"requires": 1, "relates": 2}``). Provenance is never
     recorded here — it is excluded from integration accounting. Omitted when empty.
     """
+    from .model import is_archived, ARCHIVED_IMMUTABLE_MSG
+
     doc_id = kb.resolve(ref)
+    doc = kb._docs.get(doc_id)
+    if is_archived(doc):
+        raise ValueError(ARCHIVED_IMMUTABLE_MSG.format(ref=ref))
 
     store = SessionStore()
     session_id, was_auto = ensure_session(store)

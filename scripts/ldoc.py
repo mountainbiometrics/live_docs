@@ -22,11 +22,12 @@ Subcommands (grouped):
         [--json]
 
   ── Orient / search / list ──
-    map [--json]                    # entry points (signpost roots) — start here
+    map [--include-reference] [--json]   # entry points — omits reference/archived by default
     find [term ...] [--or] [--regex PAT]
          [--type] [--level] [--status] [--scope] [--domain] [--json] [--plain]
-    ls [--type] [--json] [--plain]
-    orphans [--json] [--plain]
+         # reference/archived hits ranked last
+    ls [--type] [--include-reference] [--json] [--plain]
+    orphans [--include-reference] [--json] [--plain]
     log [--since <ISO>] [--limit N] [--json]
     count [--json]
     domains [--json] [--plain]
@@ -66,7 +67,7 @@ Subcommands (grouped):
     raw mark-ingested <ref>
 
   ── Maintenance ──
-    validate
+    validate [--include-reference]   # non-reference corpus by default
     reindex
     viewer [--out PATH]
     review <new|list|show|sign> ...
@@ -538,6 +539,11 @@ def cmd_find(kb: KB, args) -> int:
         _err(str(e))
         return 1
 
+    # Drop the internal ranking flag from JSON/TSV unless callers want it —
+    # keep it only for sort (already applied in KB.find).
+    for r in results:
+        r.pop("archived", None)
+
     results, done = _apply_count_limit(results, args)
     if done:
         return 0
@@ -560,7 +566,10 @@ def cmd_ls(kb: KB, args) -> int:
     plain = getattr(args, "plain", False)
     fields = _parse_fields(args)
     try:
-        results = kb.ls(type=args.type or None)
+        results = kb.ls(
+            type=args.type or None,
+            include_reference=getattr(args, "include_reference", False),
+        )
     except Exception as e:
         _err(str(e))
         return 1
@@ -584,7 +593,9 @@ def cmd_orphans(kb: KB, args) -> int:
     plain = getattr(args, "plain", False)
     fields = _parse_fields(args)
     try:
-        results = kb.orphans()
+        results = kb.orphans(
+            include_reference=getattr(args, "include_reference", False),
+        )
     except Exception as e:
         _err(str(e))
         return 1
@@ -610,7 +621,9 @@ def cmd_orphans(kb: KB, args) -> int:
 def cmd_map(kb: KB, args) -> int:
     """Orientation map: the topological entry points (signpost roots) of the store."""
     try:
-        overview = kb.map_overview()
+        overview = kb.map_overview(
+            include_reference=getattr(args, "include_reference", False),
+        )
     except Exception as e:
         _err(str(e))
         return 1
@@ -621,9 +634,15 @@ def cmd_map(kb: KB, args) -> int:
 
     signposts = overview["signposts"]
     floating = overview["floating"]
+    omitted = overview.get("archived_omitted", 0)
+    omit_note = (
+        f", {omitted} reference/archived omitted"
+        if omitted else ""
+    )
 
     print(f"# Store map — {overview['total']} docs, "
-          f"{len(signposts)} entry point(s), {len(floating)} floating\n")
+          f"{len(signposts)} entry point(s), {len(floating)} floating"
+          f"{omit_note}\n")
 
     if signposts:
         print("## Entry points (signpost roots, biggest first)\n")
@@ -1162,6 +1181,15 @@ def cmd_link(kb: KB, args) -> int:
         if _kb(kb.link, ref, **{k: v or None for k, v in edges.items()},
                replace_belongs_to=replace):
             return 1
+        # Provenance repair on reference/archived snapshots writes no history —
+        # the snapshot stays immutable aside from the provenance edge itself.
+        if _is_archived_provenance_only(kb, ref, edges):
+            print(
+                f"NOTE: provenance repair on reference/archived {ref!r} — "
+                f"no history entry written.",
+                file=sys.stderr,
+            )
+            continue
         if _record_change(
             kb, ref, note, change_type,
             auto_note=auto_note,
@@ -1199,6 +1227,13 @@ def cmd_unlink(kb: KB, args) -> int:
         edges_removed = _edge_unlink_deltas(kb, ref, edges)
         if _kb(kb.unlink, ref, **{k: v or None for k, v in edges.items()}):
             return 1
+        if _is_archived_provenance_only(kb, ref, edges):
+            print(
+                f"NOTE: provenance repair on reference/archived {ref!r} — "
+                f"no history entry written.",
+                file=sys.stderr,
+            )
+            continue
         if _record_change(
             kb, ref, note, change_type,
             auto_note=auto_note,
@@ -1208,6 +1243,20 @@ def cmd_unlink(kb: KB, args) -> int:
 
     print(f"Unlinked {', '.join(refs)}")
     return 0
+
+
+def _is_archived_provenance_only(kb: KB, ref: str, edges: dict) -> bool:
+    """True when *ref* is archived and *edges* is provenance-only repair."""
+    from livedocs import is_archived
+    try:
+        doc = kb.get(ref)["frontmatter"]
+    except ValueError:
+        return False
+    if not is_archived(doc):
+        return False
+    return bool(edges.get("provenance")) and not any(
+        edges.get(k) for k in ("requires", "belongs_to", "relates", "superseded_by")
+    )
 
 
 def cmd_history(kb: KB, args) -> int:
@@ -1951,7 +2000,10 @@ def cmd_validate(kb: KB, args) -> int:
     """Delegate to validate logic (same as validate.py) via shared KB state."""
     import subprocess
     script = Path(__file__).resolve().parent / "validate.py"
-    result = subprocess.run([sys.executable, str(script)], capture_output=False)
+    cmd = [sys.executable, str(script)]
+    if getattr(args, "include_reference", False):
+        cmd.append("--include-reference")
+    result = subprocess.run(cmd, capture_output=False)
     return result.returncode
 
 
@@ -2758,8 +2810,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Show at most N results.")
 
     # --- ls ---
-    p = sub.add_parser("ls", help="List all docs (optionally filter by type).")
+    p = sub.add_parser("ls", help="List docs (optionally filter by type).")
     p.add_argument("--type", default="", choices=VALID_TYPES_SORTED + [""])
+    p.add_argument(
+        "--include-reference",
+        action="store_true",
+        help="Include type:reference / status:reference docs (omitted by default).",
+    )
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
@@ -2775,6 +2832,11 @@ def build_parser() -> argparse.ArgumentParser:
         "orphans",
         help="List docs outside the belongs_to hierarchy (no belongs_to in OR out).",
     )
+    p.add_argument(
+        "--include-reference",
+        action="store_true",
+        help="Include type:reference / status:reference docs (omitted by default).",
+    )
     p.add_argument("--json", action="store_true")
     p.add_argument("--plain", action="store_true",
                    help="Plain id/label output instead of typed wiki-links.")
@@ -2789,6 +2851,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "map",
         help="Orientation map: the store's entry points (signpost roots) with summaries.",
+    )
+    p.add_argument(
+        "--include-reference",
+        action="store_true",
+        help="Include type:reference / status:reference roots (omitted by default).",
     )
     p.add_argument("--json", action="store_true")
 
@@ -3091,7 +3158,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Report what would change without writing.")
 
     # --- validate ---
-    sub.add_parser("validate", help="Run structural integrity checks.")
+    p = sub.add_parser(
+        "validate",
+        help="Run structural integrity checks (non-reference corpus by default).",
+    )
+    p.add_argument(
+        "--include-reference",
+        action="store_true",
+        help="Also check type:reference / status:reference docs (opt-in; "
+             "archive hygiene is not a requirement for the current model).",
+    )
 
     # --- reindex ---
     sub.add_parser("reindex", help="Rebuild docs/.index/ artifacts.")

@@ -8,7 +8,10 @@ schema, enums, and edge model in one page — invoke the **`reference`** skill
 (`/livedocs:reference`); it ships with the plugin, so it's available in any
 consumer repo, not just this one. **To orient in an unfamiliar store, run
 `ldoc map` first** — it prints the entry-point signposts with their summaries,
-so you start from context instead of a cold search.
+so you start from context instead of a cold search. Reference/archived docs
+(`type: reference` or `status: reference`) are omitted from `map`/`ls`/`orphans`/
+default `validate` and ranked last in `find`; they are immutable snapshots via
+porcelain. Use `--include-reference` only when you deliberately want the archive.
 
 ---
 
