@@ -2,8 +2,10 @@
 
 Single source of truth for every actor that judges whether a doc has decayed
 into cruft and decides what to do about it — the `garden-cruft` phase that runs
-the pass, and any skill (synthesize-doc-changes, revise-doc) that wants to apply
-the same vocabulary inline. Read and apply this; do not paraphrase from memory.
+the pass, and any skill (synthesize-doc-changes, revise-doc, apply-to-docs,
+ingest-reference) that wants to apply the same vocabulary inline, proactively,
+at write time rather than only at gardening time. Read and apply this; do not
+paraphrase from memory.
 
 The *why* behind this pass: docs capture the *why* (decisions, rationale,
 constraints, use-cases), not the *what* the code already encodes — docs lead,
@@ -35,6 +37,18 @@ that. In a scan, the signals that surface it (each routes to a verdict below):
   subsystem it touches.
 - **Mis-clustered survivor** — belongs under a different parent than its current,
   cruft-driven cluster.
+
+**Detail that is incidental vs. detail that is the subject.** Not all
+implementation-shaped language is cruft. A doc drifts into implementation
+detail when a concrete name or shape stands in for a concept it merely
+illustrates — e.g., a doc about retry behavior in general shouldn't lean on
+the literal name of one function's retry-count parameter to make its point.
+But when a doc's entire subject IS a decision about a concrete interface —
+what a public contract's fields are called, what an enum's values are, what a
+wire format looks like — naming those specifics is the decision, not detail
+leaking in. Test: strip the specific name and ask whether the doc's claim
+still makes sense. If yes, the name was incidental — strip it (this is
+EXCAVATE below). If no, the name is what's being decided — keep it.
 
 Do **not** lead with "wrong status" — status is usually not the cruft signal
 (see calibration below).

@@ -206,6 +206,9 @@ need not say so. Strip "extension"/addendum notes that are really migration
 plans; if a doc's own claim is wrong, deprecate it with a `## Correction`
 section (Step 1) rather than qualifying it.
 
+Apply `_shared/cruft-verdicts.md`'s detection lens here too, including its
+incidental-detail-vs-the-decision's-subject test, not only during gardening.
+
 ---
 
 ## Output — writes performed

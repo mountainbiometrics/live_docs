@@ -259,5 +259,6 @@ the episode for later signoff and never blocks the apply.
 Doc bodies describe the decision or mental model — what is true (or intended)
 and why. They do NOT narrate implementation state, absence, or history. If
 implementation lags the model, express the gap with `status: target` — the
-body need not say so. (Enforced by `synthesize-doc-changes`, restated here as
-the store-wide convention.)
+body need not say so. This also means applying `_shared/cruft-verdicts.md`'s
+detection lens proactively. (Enforced by `synthesize-doc-changes`, restated
+here as the store-wide convention.)

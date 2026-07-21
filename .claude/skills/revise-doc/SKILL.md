@@ -349,6 +349,9 @@ absence. Common anti-patterns to reject or correct before writing:
   corrections to the doc's own claim: strip them. If the doc's claim is itself
   wrong, write a `## Correction` section and deprecate the doc; if the claim is
   right but implementation lags, `status: target` is sufficient.
+- Implementation-shaped detail used as incidental illustration rather than the
+  doc's actual subject: strip it — apply `_shared/cruft-verdicts.md`'s
+  detection lens (including its incidental-vs-subject test).
 
 **Rule**: if implementation doesn't match the model, express the gap with
 `status: target` — the body need not narrate it.

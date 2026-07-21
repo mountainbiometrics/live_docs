@@ -399,6 +399,6 @@ signoff and never blocks the change. Reviewers inspect it via
 - [ ] `map-concepts-to-docs` conflict scan (Step 5a) ran before any write.
 - [ ] Any corrected or deprecated existing docs have a `## Correction` section and, if deprecated, a `superseded_by` edge.
 - [ ] cascade-check was run from CORRECTED EXISTING docs (not from freshly created docs).
-- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Gap between model and reality is expressed via `status: target`, not body text.
+- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Gap between model and reality is expressed via `status: target`, not body text. Apply `_shared/cruft-verdicts.md`'s detection lens proactively, including its incidental-vs-subject test.
 - [ ] No extracted doc duplicates an existing doc.
 - [ ] No `requires` edge points at RAW_ID — raw files are not graph nodes.

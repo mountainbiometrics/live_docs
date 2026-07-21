@@ -17,6 +17,15 @@ output, and the compact name shown in displays.
   `State Policy Is`, `Ddl Entities Are` — no: these are truncations that tell a
   reader nothing. If your label reads like the first few words of a sentence, it
   is wrong; rewrite it as a noun phrase naming the thing.
+- **Say what the reader would learn about by opening the doc — don't be a
+  label of the answer.** A label names the topic or tension the doc resolves,
+  not the resolved conclusion stated as a claim. `Retry Backoff` names the
+  topic (you'd learn about how retries back off); `Retries Wait Exponentially
+  Longer Between Attempts` states the answer outright and reads as a fragment
+  pulled from the doc's body, not a handle for it.
+- **Ban meta-jargon suffixes** that name the store's own machinery rather than
+  the domain — "Primitive," "Pattern," "Mechanism," a bare "Model." `Retry
+  Backoff Mechanism` tells a reader nothing `Retry Backoff` didn't already.
 - Title-Case, unique across the store (case-insensitive), letters/digits with
   single spaces or hyphens. Quote multi-word labels on the CLI.
 
