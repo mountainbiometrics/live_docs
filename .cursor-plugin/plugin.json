@@ -1,0 +1,19 @@
+{
+  "name": "live-docs",
+  "displayName": "live_docs",
+  "version": "0.1.1",
+  "description": "Living-documentation knowledge base: skills for ingesting, revising, gardening, and validating an atomic-docs store driven by the ldoc CLI. Operates on whichever store the current directory's .live_docs.toml points at.",
+  "author": {
+    "name": "Samuel Wecker",
+    "email": "samuel@themtn.ai"
+  },
+  "repository": "https://github.com/mountainbiometrics/live_docs",
+  "keywords": [
+    "documentation",
+    "knowledge-base",
+    "ldoc",
+    "living-docs",
+    "agent-skills"
+  ],
+  "skills": "./.claude/skills/"
+}

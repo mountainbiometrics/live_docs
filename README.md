@@ -64,7 +64,7 @@ requires: ["[[20260615182358]]"]
 ## Quick start
 
 ```bash
-./install.sh     # puts the `ldoc` CLI on your PATH + installs the livedocs skills plugin
+./install.sh     # puts the `ldoc` CLI on your PATH + installs the skills plugins
 ldoc map         # orient: the store's entry-point signposts, ranked, with summaries
 ldoc help        # the full command surface, grouped, with examples
 ```
@@ -101,7 +101,7 @@ The `ldoc` CLI is Python-3 stdlib-only (no dependencies); the skills target [Cla
 | `kb/` | the knowledge base — live_docs' own docs (`00-inbox/`, `01-raw/`, `02-docs/`, `reviews/`) |
 | `scripts/` | the `ldoc` porcelain (`ldoc.py`) and the KB layer (`livedocs/`) |
 | `.claude/skills/` | the agent skill definitions |
-| `.claude-plugin/` | packages the skills as the installable `livedocs` plugin |
-| `bin/`, `install.sh`, `mise.toml` | tooling to put `ldoc` on your PATH and install the plugin |
+| `.claude-plugin/`, `.cursor-plugin/` | package the shared skills for Claude Code and Cursor |
+| `bin/`, `install.sh`, `mise.toml` | tooling to put `ldoc` on your PATH and install the plugins |
 | `docs/` | human-facing guides (setup, and more over time) |
 | `reports/` | design analyses and research artifacts (not part of the KB graph) |

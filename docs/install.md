@@ -5,7 +5,7 @@ live_docs has three independent parts. The **CLI** and the **skills** are instal
 | Part | What it is | Scope |
 |------|-----------|-------|
 | `ldoc` CLI | `scripts/ldoc.py`, symlinked onto your PATH | one machine-wide install; works in any terminal |
-| `livedocs` skills | the Claude Code plugin in `.claude-plugin/` (exposes `.claude/skills/`) | one user-scope install; available in every project |
+| skills plugin | shared skills under `.claude/skills/`, packaged for Claude Code (`.claude-plugin/`) and Cursor (`.cursor-plugin/`) | one user-scope install per harness; available in every project |
 | the **store** | the `kb/` graph, located by a `.live_docs.toml` marker | per consumer repo — just the marker file |
 
 ---
@@ -15,14 +15,14 @@ live_docs has three independent parts. The **CLI** and the **skills** are instal
 From inside this repo:
 
 ```bash
-./install.sh                 # ldoc CLI on PATH + livedocs plugin (user scope)
+./install.sh                 # ldoc CLI on PATH + skills plugins (user scope)
 ```
 
-That symlinks `ldoc` into `~/.local/bin` and runs `claude plugin marketplace add` + `claude plugin install livedocs@live-docs`. It's idempotent — safe to re-run. Restart any running Claude Code session afterward to pick up the skills.
+That symlinks `ldoc` into `~/.local/bin`, installs the Claude Code plugin when `claude` is on `PATH`, and symlinks this repo into `~/.cursor/plugins/local/live-docs` when `~/.cursor` exists. It's idempotent — safe to re-run. Restart Claude Code / reload the Cursor window afterward to pick up the skills.
 
 Useful flags: `--no-plugin` / `--no-cli` to install just one part, `--bin-dir DIR` to link `ldoc` elsewhere. Run `./install.sh --help` for the full list. (Installing the tool never touches a store.)
 
-After installing, the skills are namespaced under the plugin: `/livedocs:garden`, `/livedocs:ingest-reference`, `/livedocs:validate`, and so on.
+After installing, invoke skills as `/garden`, `/ingest-reference`, `/validate`, and so on (Claude Code also accepts the `/livedocs:…` namespace).
 
 ---
 
@@ -34,9 +34,13 @@ If you'd rather not run the script, the two install steps are:
 # CLI — any PATH dir works; ldoc.py is stdlib-only
 ln -s /path/to/live_docs/scripts/ldoc.py ~/.local/bin/ldoc
 
-# skills plugin
+# Claude Code skills plugin
 claude plugin marketplace add /path/to/live_docs
-claude plugin install livedocs@live-docs        # --scope user is the default
+claude plugin install live_docs@live-docs       # --scope user is the default
+
+# Cursor skills plugin (no CLI — official local path is a symlink)
+mkdir -p ~/.cursor/plugins/local
+ln -s /path/to/live_docs ~/.cursor/plugins/local/live-docs
 ```
 
 Working *inside this repo*, `ldoc` is also provided via [`mise`](https://mise.jdx.dev/) (`mise trust` once per machine) without any global install.

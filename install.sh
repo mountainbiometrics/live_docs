@@ -4,8 +4,10 @@
 #
 # Two independent pieces, both installed by default:
 #   1. the `ldoc` CLI  — symlinked onto your PATH (works in any terminal)
-#   2. the `live_docs` skills plugin — registered + installed in Claude Code
-#      (user scope, so it's available in every project)
+#   2. the skills plugin — installed into whichever agent harnesses are present:
+#        - Claude Code: marketplace register + user-scope install
+#        - Cursor:      symlink into ~/.cursor/plugins/local/ (official local path)
+#      Skills live once under .claude/skills/; both manifests point at them.
 #
 # The store itself is NOT installed or configured here — that is a separate
 # concern (like `git` vs `git init`). `ldoc` and the skills locate a store by
@@ -13,9 +15,9 @@
 # attach a repo to a store, add that one-line marker yourself (see `ldoc store`).
 #
 # Usage:
-#   ./install.sh                     # install the CLI + the plugin (global)
+#   ./install.sh                     # install the CLI + plugins (global)
 #   ./install.sh --no-plugin         # CLI only
-#   ./install.sh --no-cli            # plugin only
+#   ./install.sh --no-cli            # plugins only
 #   ./install.sh --bin-dir ~/bin     # symlink ldoc somewhere other than ~/.local/bin
 #   ./install.sh -h | --help
 #
@@ -24,7 +26,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LDOC_SRC="$REPO_ROOT/scripts/ldoc.py"
 MARKETPLACE_NAME="live-docs"
+# Claude Code's plugin id (underscore). Cursor forbids underscores in names —
+# its manifest uses kebab-case `live-docs` (CURSOR_PLUGIN_NAME).
 PLUGIN_NAME="live_docs"
+CURSOR_PLUGIN_NAME="live-docs"
+CURSOR_LOCAL_DIR="${HOME}/.cursor/plugins/local"
+CURSOR_LOCAL_LINK="${CURSOR_LOCAL_DIR}/${CURSOR_PLUGIN_NAME}"
 
 BIN_DIR="${HOME}/.local/bin"
 DO_CLI=1
@@ -35,7 +42,7 @@ if [ -t 1 ]; then BOLD=$(tput bold); DIM=$(tput dim); RST=$(tput sgr0); else BOL
 say()  { printf '%s\n' "$*"; }
 step() { printf '\n%s==>%s %s\n' "$BOLD" "$RST" "$*"; }
 ok()   { printf '  %s✓%s %s\n' "$BOLD" "$RST" "$*"; }
-warn() { printf '  %s!%s %s\n' "$BOLD" "$RST" "$*" >&2; }
+warn() { printf '  %s!%s %s\n' "$BOLD" "$RST" "$*"; }
 die()  { printf '%sinstall.sh: %s%s\n' "$BOLD" "$*" "$RST" >&2; exit 1; }
 
 # ── args ───────────────────────────────────────────────────────────────────
@@ -74,10 +81,10 @@ install_cli() {
   esac
 }
 
-# ── 2. live_docs skills plugin ──────────────────────────────────────────────
-install_plugin() {
+# ── 2. skills plugins (Claude Code + Cursor) ────────────────────────────────
+install_claude_plugin() {
   step "Installing the live_docs skills plugin (Claude Code)"
-  command -v claude >/dev/null 2>&1 || { warn "the 'claude' CLI is not on PATH — skipping plugin install."; return; }
+  command -v claude >/dev/null 2>&1 || { warn "the 'claude' CLI is not on PATH — skipping Claude plugin."; return; }
 
   claude plugin validate "$REPO_ROOT" >/dev/null 2>&1 \
     && ok "manifests valid" \
@@ -97,6 +104,37 @@ install_plugin() {
   claude plugin install "${PLUGIN_NAME}@${MARKETPLACE_NAME}" --scope user \
     && ok "(re)installed '${PLUGIN_NAME}@${MARKETPLACE_NAME}' (user scope)"
   warn "restart any running Claude Code session to pick up the skills."
+}
+
+install_cursor_plugin() {
+  step "Installing the live_docs skills plugin (Cursor)"
+  # Cursor has no plugin CLI; the documented local path is a symlink under
+  # ~/.cursor/plugins/local/<name>. Only install when Cursor has already
+  # created ~/.cursor (opened at least once) — don't invent a Cursor home.
+  if [ ! -d "${HOME}/.cursor" ]; then
+    warn "~/.cursor not found — skipping Cursor plugin (open Cursor once, then re-run)."
+    return
+  fi
+  [ -f "$REPO_ROOT/.cursor-plugin/plugin.json" ] \
+    || die "missing $REPO_ROOT/.cursor-plugin/plugin.json"
+
+  mkdir -p "$CURSOR_LOCAL_DIR"
+
+  if [ -L "$CURSOR_LOCAL_LINK" ] && [ "$(readlink "$CURSOR_LOCAL_LINK")" = "$REPO_ROOT" ]; then
+    ok "already linked: $CURSOR_LOCAL_LINK -> $REPO_ROOT"
+  elif [ -e "$CURSOR_LOCAL_LINK" ] || [ -L "$CURSOR_LOCAL_LINK" ]; then
+    warn "$CURSOR_LOCAL_LINK already exists and points elsewhere; leaving it alone."
+    warn "remove it and re-run to point it at this checkout."
+  else
+    ln -s "$REPO_ROOT" "$CURSOR_LOCAL_LINK"
+    ok "linked $CURSOR_LOCAL_LINK -> $REPO_ROOT"
+  fi
+  warn "reload the Cursor window (Developer: Reload Window) to pick up the skills."
+}
+
+install_plugin() {
+  install_claude_plugin
+  install_cursor_plugin
 }
 
 # ── 3. user config bootstrap ───────────────────────────────────────────────
@@ -126,5 +164,5 @@ bootstrap_user_config() {
 
 step "Done."
 say "  ${DIM}CLI:${RST}    ldoc help"
-say "  ${DIM}skills:${RST} /${PLUGIN_NAME}:garden, /${PLUGIN_NAME}:ingest-reference, … (restart Claude Code first)"
+say "  ${DIM}skills:${RST} /garden, /ingest-reference, … (Claude: /${PLUGIN_NAME}:…; reload Cursor / restart Claude Code)"
 say "  ${DIM}store:${RST}  attach a repo to a store with a one-line .live_docs.toml (store = \"<name>\"); register stores with 'ldoc store register'"
