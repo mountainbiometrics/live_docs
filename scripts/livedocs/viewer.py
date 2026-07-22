@@ -25,6 +25,7 @@ from .toml_flat import parse_config
 
 AUTO_VIEWER_ENV = "LIVEDOCS_AUTO_VIEWER"
 AUTO_VIEWER_VERBOSE_ENV = "LIVEDOCS_AUTO_VIEWER_VERBOSE"
+DEFAULT_BUILD_PATH = "build/viewer.html"
 
 # Packaged assets ship with the tooling, not inside the store.
 _VIEWER_DIR = Path(__file__).resolve().parent.parent / "viewer"
@@ -210,6 +211,46 @@ def _load_viewer_config() -> dict:
     return out
 
 
+def _read_viewer_table() -> dict:
+    """Return the raw ``[viewer]`` table from the store config, or ``{}``."""
+    cfg_path = STORE_ROOT / CONFIG_FILENAME
+    if not cfg_path.is_file():
+        return {}
+    try:
+        data = parse_config(cfg_path.read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+    viewer = data.get("viewer") if isinstance(data, dict) else None
+    return viewer if isinstance(viewer, dict) else {}
+
+
+def resolve_viewer_build_path() -> Path:
+    """Resolve ``[viewer] build_path`` under ``STORE_ROOT``.
+
+    Default is ``build/viewer.html``. Absolute paths, ``~``-prefixed paths, and
+    any resolution that escapes ``STORE_ROOT`` raise ``ValueError`` (fail loud).
+    """
+    raw = DEFAULT_BUILD_PATH
+    val = _read_viewer_table().get("build_path")
+    if isinstance(val, str) and val.strip():
+        raw = val.strip()
+
+    if raw.startswith("~") or Path(raw).is_absolute():
+        raise ValueError(
+            f"[viewer] build_path must be relative to STORE_ROOT; got {raw!r}"
+        )
+
+    store = STORE_ROOT.resolve()
+    dest = (store / raw).resolve()
+    try:
+        dest.relative_to(store)
+    except ValueError as exc:
+        raise ValueError(
+            f"[viewer] build_path resolves outside STORE_ROOT: {raw!r} -> {dest}"
+        ) from exc
+    return dest
+
+
 def _load_lexicon() -> tuple[list[dict], dict[str, dict]]:
     """Export lexicon terms plus cheap usage stats over doc prose."""
     from .lexicon import LexiconStore, compute_term_stats
@@ -229,6 +270,10 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int, int]:
     """
     Generate viewer.html from the discovered store.
 
+    When ``out_path`` is omitted, writes to ``[viewer] build_path`` (default
+    ``build/viewer.html`` under ``STORE_ROOT``). ``out_path`` is a one-shot
+    override and is not constrained to the store.
+
     Returns (output_path, doc_count, review_count, term_count).
     """
     if not _TEMPLATE.is_file():
@@ -241,8 +286,7 @@ def build_viewer(*, out_path: Path | None = None) -> tuple[Path, int, int, int]:
     terms, _stats = _load_lexicon()
     viewer_config = _load_viewer_config()
 
-    dest = out_path or (STORE_ROOT / "build" / "viewer.html")
-    dest = dest.resolve()
+    dest = out_path.resolve() if out_path is not None else resolve_viewer_build_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     template = _TEMPLATE.read_text(encoding="utf-8")
@@ -287,7 +331,7 @@ def auto_rebuild_viewer(*, quiet: bool | None = None) -> Path | None:
 
     try:
         path, n_docs, n_reviews, n_terms = build_viewer()
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, ValueError):
         return None
 
     if not quiet:

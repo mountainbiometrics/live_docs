@@ -2025,6 +2025,9 @@ def cmd_viewer(kb: KB, args) -> int:
     except FileNotFoundError as e:
         _err(str(e))
         return 1
+    except ValueError as e:
+        _err(str(e))
+        return 1
     except OSError as e:
         _err(str(e))
         return 1
@@ -3175,13 +3178,15 @@ def build_parser() -> argparse.ArgumentParser:
     # --- viewer ---
     p = sub.add_parser(
         "viewer",
-        help="Build the self-contained read-only HTML viewer (default: build/viewer.html).",
+        help="Build the self-contained read-only HTML viewer "
+             "(default: [viewer] build_path or build/viewer.html).",
     )
     p.add_argument(
         "--out",
         default="",
         metavar="PATH",
-        help="Output HTML path (default: <store-root>/build/viewer.html).",
+        help="One-shot output HTML path (overrides [viewer] build_path; "
+             "default: <store-root>/build/viewer.html).",
     )
 
     # --- edges ---

@@ -477,13 +477,20 @@ def materialize_history(kb, wal: list[dict], session_id: str) -> int:
 
     One entry per touched doc — dominant change_type + best note + last-touch
     timestamp — appended at close. Deletions are skipped: the doc is gone and the
-    deletion lives in the review only. Returns the count of entries written.
+    deletion lives in the review only. Reference/archived snapshots are also
+    skipped — they are immutable, so history cannot be appended (the review still
+    records the addition). Returns the count of entries written.
     """
+    from .model import is_archived
+
     agg, order = collapse_wal_per_doc(wal)
     written = 0
     for ref in order:
         rec = agg[ref]
         if rec["deleted"] or not rec["dominant"]:
+            continue
+        doc = kb._docs.get(ref) or kb._docs.get(kb.resolve(ref))
+        if doc is not None and is_archived(doc):
             continue
         kb.add_history(
             ref,

@@ -39,7 +39,8 @@ _EXPORT_MAP = [
                    "malformed_body_wikilinks", "BODY_WIKILINK_RE"}),
     ("kb",        {"KB", "load_all"}),
     ("reviews",   {"ReviewLedger", "parse_review", "dump_review", "strip_wal_archive"}),
-    ("viewer",    {"build_viewer", "auto_rebuild_viewer", "auto_viewer_enabled"}),
+    ("viewer",    {"build_viewer", "auto_rebuild_viewer", "auto_viewer_enabled",
+                   "resolve_viewer_build_path", "DEFAULT_BUILD_PATH"}),
 ]
 
 # Derived from _EXPORT_MAP — single source of truth.
