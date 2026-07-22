@@ -475,11 +475,12 @@ def collapse_wal_per_doc(wal: list[dict]) -> tuple[dict, list]:
 def materialize_history(kb, wal: list[dict], session_id: str) -> int:
     """Write the session's collapsed per-doc history from the WAL (history-from-wal).
 
-    One entry per touched doc — dominant change_type + best note + last-touch
-    timestamp — appended at close. Deletions are skipped: the doc is gone and the
-    deletion lives in the review only. Reference/archived snapshots are also
-    skipped — they are immutable, so history cannot be appended (the review still
-    records the addition). Returns the count of entries written.
+    One entry per touched *non-archived* doc — dominant change_type + best note +
+    last-touch timestamp — appended at close. Deletions are skipped: the doc is
+    gone and the deletion lives in the review only. Reference/archived snapshots
+    are also skipped — they refuse history writes (even a leading creation
+    entry), so close must not attempt materialization; the review still records
+    the addition from the WAL. Returns the count of entries written.
     """
     from .model import is_archived
 
@@ -489,15 +490,28 @@ def materialize_history(kb, wal: list[dict], session_id: str) -> int:
         rec = agg[ref]
         if rec["deleted"] or not rec["dominant"]:
             continue
-        doc = kb._docs.get(ref) or kb._docs.get(kb.resolve(ref))
+        doc = kb._docs.get(ref)
+        if doc is None:
+            try:
+                resolved = kb.resolve(ref)
+            except Exception:
+                resolved = None
+            doc = kb._docs.get(resolved) if resolved else None
         if doc is not None and is_archived(doc):
             continue
-        kb.add_history(
-            ref,
-            rec["note"],
-            session=session_id,
-            change_type=[rec["dominant"]],
-            at=rec["at"] or None,
-        )
+        try:
+            kb.add_history(
+                ref,
+                rec["note"],
+                session=session_id,
+                change_type=[rec["dominant"]],
+                at=rec["at"] or None,
+            )
+        except ValueError as e:
+            # Belt-and-suspenders: if lookup missed an archived doc, refuse is
+            # still success for close — never block the session on a snapshot.
+            if "reference/archived" in str(e):
+                continue
+            raise
         written += 1
     return written
