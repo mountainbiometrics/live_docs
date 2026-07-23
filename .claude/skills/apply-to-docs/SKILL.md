@@ -3,7 +3,8 @@ name: apply-to-docs
 description: >
   Run a request or plan against the live_docs knowledge base before acting on
   it: extract key concepts, map them to existing docs, walk the full impact
-  graph to identify the blast radius, warn when that radius is large, then
+  graph to identify the blast radius, pause only for unresolved conflicts or
+  unintended side-effects (not merely because many docs will change), then
   batch-synthesize a coherent new state for all affected docs in one pass. Use
   whenever a user request or design plan should be durably recorded — the skill
   ensures live_docs converges to the new intent rather than silently drifting
@@ -23,7 +24,8 @@ byte.** Two passes, cleanly separated:
 This skill is a **thin orchestrator**. The shared phases live in four sub-skills
 it invokes in order — `identify-key-concepts`, `map-concepts-to-docs`,
 `assess-blast-radius`, `synthesize-doc-changes` — keeping only apply-to-docs's
-own request-archival and restate steps, and its pause-before-implementing gate.
+own request-archival and restate steps, and its pause-for-conflicts /
+unintended-side-effects gate.
 
 ---
 
@@ -148,42 +150,57 @@ rule applied. (Read-only.)
 
 ---
 
-## Step 5 — Pause gate: warn if blast radius is large
+## Step 5 — Pause gate: conflicts and unintended side-effects
 
-This pause is apply-to-docs's own discipline (see the **Apply-to-docs Must
-Pause** requirement doc). Evaluate the complete impact set from Steps 3–4.
+This pause is apply-to-docs's own discipline. The blast-radius survey (Steps 3–4)
+always runs — it informs a coherent synthesis. The pause is **not** a
+permission-slip for doing the work the user asked for.
 
-**Trigger this pause if ANY of the following are true:**
+**Pause when (and only when) either holds:**
 
-- `full-supersession` or `cascade-full` count combined ≥ 2, OR
-- All non-`compatible`/`inconsequential` verdicts combined ≥ 4, OR
-- Any `conflict-unresolved` docs are present.
+1. **Invariant — unresolved conflicts.** Any `conflict-unresolved` docs are
+   present (frozen/deprecated clash, or a contradiction the synthesis cannot
+   mechanically reconcile). The user must address something the conversation
+   has not settled yet.
+2. **Judgment — unintended side-effects.** The impact set reaches docs or
+   deprecations that look *outside* what the request implies — e.g. full
+   supersession of a living doc the request never touched, or cascade into an
+   unrelated cluster. Weigh: is this the coherent consequence of the stated
+   intent, or a surprise the user has not had a chance to catch? Large counts
+   of `partial-supersession` / `cascade-extend` on docs that clearly belong to
+   the request are **not** a pause reason by themselves.
 
-If triggered, **stop and present to the user before writing anything:**
+**Do not pause** solely because many docs will change, or because the impact
+set is "large." That rubber-stamps expected work and trains the user to type
+"yes" without reading.
+
+If pausing, **stop and present before writing anything:**
 
 ```
-⚠  apply-to-docs: large impact detected
+⚠  apply-to-docs: pause — <conflicts | unintended side-effects | both>
 
-Your request touches N existing docs:
-  full-supersession / cascade-full: N  — these docs will be deprecated entirely
-  partial-supersession / cascade-extend: N  — these docs will be revised
-  conflict-unresolved: N  — these docs conflict and need your input
+Why this is not just "proceeding with your request":
+  <one or two sentences: what is unresolved or surprising>
 
-Affected docs:
-  <id>  "<title>"  verdict: full-supersession
-  <id>  "<title>"  verdict: partial-supersession
-  <id>  "<title>"  verdict: conflict-unresolved
+conflict-unresolved (if any):
+  <id>  "<title>"
       Conflict: <one sentence describing the incompatibility>
 
-Continue with these changes? (yes / no / resolve conflicts first)
+Surprising / out-of-scope impact (if any):
+  <id>  "<title>"  verdict: <…>  — <why this looks unintended>
+
+Expected impact (informational, not a gate): N docs will be revised/created
+as the coherent consequence of the request.
+
+Continue? (yes / no / resolve conflicts first)
 ```
 
-Do not proceed until the user confirms. If the user says "resolve conflicts
-first", address the `conflict-unresolved` docs via clarifying questions before
-continuing. If the user says "no", exit cleanly with no writes.
+Do not proceed until the user confirms. If they say "resolve conflicts first",
+address those docs via clarifying questions before continuing. If "no", exit
+with no further writes (archival from Step 1b may already exist — leave it).
 
-If thresholds are not met and there are no unresolved conflicts, proceed
-directly to Step 6.
+If neither trigger holds, proceed directly to Step 6 — even when the expected
+impact set is large.
 
 ---
 
