@@ -75,16 +75,20 @@ analysis but skip all writes).
 
 ## Step 1b — Archive the request as a raw clipping
 
-The user's request is the authoritative provenance source for everything this
-skill creates. Archive it now, before any concept extraction, so all new docs
-can point back to it.
+Archive the input now, before any concept extraction, so all new docs can point
+back to an immutable provenance target. Prefer the **verbatim** user text when
+that is what arrived; if you are archiving an agent restatement or a mixed
+session digest, say so honestly in `--source`.
 
 ```bash
 ldoc ingest-raw \
   --body "<verbatim request text>" \
-  --source "user-request" \
+  --source "<accurate origin: user-request | working-session <date/desc> | agent restatement of …>" \
   --title "Clipping: <short description of the request>"
 ```
+
+Use `--source "user-request"` only when the body is the user's words (or a
+faithful paste). Ratification of an idea is not authorship of the wording.
 
 Note the returned id: call it **RAW_ID**. This goes to `raw/` — outside the
 graph — and is the immutable original.
@@ -115,7 +119,8 @@ Run — but do not stop after — **`/identify-key-concepts`** on the normalized
 restatement from Step 1, then carry its concept list into Step 3:
 
 > Extract every distinct durable concept the request asserts, labeled `Concept`.
-> (No splitting test.)
+> Root-over-decision applies (identify-key-concepts invariant): prefer
+> first-class why-roots over a decision inventory. (No splitting test.)
 
 It returns a typed concept list (`Concept / Type / Asserts`) in context — the
 input to Step 3.
@@ -233,6 +238,16 @@ Validation: <N docs scanned — clean | N errors, N warnings>
 
 ## Step 9 — Close the session (FINAL step)
 
+**Batch self-check (before close).** Spot-check the writes against the archived
+request — process smells, not a truth oracle:
+
+- **Type mix:** mostly `decision` docs restating outcomes, with why only in
+  body prose → revisit before closing.
+- **Labels:** new handles absent from the request's vocabulary → rename or flag.
+- **Levels:** unconfirmed agent articulations must not ship as
+  `level: requirement` merely because they carry `--provenance <REQ_ID>`.
+- **Source string:** agent-authored archive bodies must not claim `user-request`.
+
 apply-to-docs owns the episode: close the session, which mints the single review
 over everything the episode touched (the nested sub-skills never open or close
 one):
@@ -247,6 +262,7 @@ review id to the user:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)
+Self-check: <type-mix / labels / levels / source — ok or what you fixed>
 ```
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): this records

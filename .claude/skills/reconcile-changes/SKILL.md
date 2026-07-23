@@ -56,11 +56,13 @@ to yourself before starting:
 
 - **Priority is the abstract, non-recoverable knowledge.** Implementation-level
   facts (what a function now does, which field was added) can be re-derived later
-  from the code and existing docs. The conceptual *why* cannot: the principle
-  that motivated the change, the goal it serves, the use-case it unblocks, the
-  constraint it respects, and above all the **rationale behind each decision**.
-  Bias every phase toward capturing these. A doc that merely restates what the
-  code now does is low-value; a doc that captures *why we chose it* is the prize.
+  from the code and existing docs — and often so can the bare decision outcomes.
+  The conceptual *why* cannot: the principles, constraints, requirements, and
+  goals that motivated the change. Bias every phase toward capturing those roots
+  as first-class docs; keep decisions thin so their relations can be modeled.
+  A doc that merely restates what was chosen (or what the code now does) is
+  low-value; the why-web against which a future challenge can be re-weighed is
+  the prize.
 
 ---
 
@@ -124,14 +126,17 @@ Run — but do not stop after — **`/identify-key-concepts`** on the session di
 concept list into Step 3. Pass reconcile-changes's knobs:
 
 > Extract every distinct durable concept — a working session usually decided
-> several things at once. Label each `Concept`. **Bias strongly toward the
-> abstract, non-recoverable knowledge**: `principle`, `goal`, `use-case`,
-> `constraint`, and the **rationale/why** behind each `decision`. Do NOT stop at
-> `component`-type concepts that merely mirror what the code now does — those are
-> re-derivable; the *why* is not. For every change made, ask "what principle,
-> goal, or constraint motivated this, and what was the rationale?" and extract
-> that as its own concept. Apply the splitting test: "This doc changes when ___"
-> — if the blank covers more than one concern, split.
+> several things at once. Label each `Concept`. **Root-over-decision is
+> mandatory here** (see identify-key-concepts): prefer first-class `principle` /
+> `constraint` / `requirement` / `goal` / `use-case` concepts — the
+> non-recoverable why-web — over a flat inventory of `decision`s. When a
+> decision is worth recording, keep it thin: its Asserts names the choice; the
+> motivating root is a **separate** concept it will later `require`. Do **not**
+> treat "rationale behind the decision" as license to leave the root as
+> decision-body prose. Do NOT stop at `component`-type concepts that merely
+> mirror what the code now does — those are re-derivable; the *why* is not.
+> Apply the splitting test: "This doc changes when ___" — if the blank covers
+> more than one concern, split.
 
 It returns a typed concept list (`Concept / Type / Asserts`) in context. Keep it
 for Step 3.
@@ -219,6 +224,19 @@ NOT reindex here — leave that to the maintenance cadence / a later explicit pa
 
 ## Step 8 — Report and review summary (FINAL step)
 
+**Batch self-check (before close).** Spot-check the writes you just made against
+the source digest — these are process smells, not a truth oracle:
+
+- **Type mix:** if you claimed why-priority and nearly everything created is
+  `decision`, revisit extraction/synthesis before closing.
+- **Labels:** any new label absent from the digest/session vocabulary → rename
+  or flag; prefer the user's words.
+- **Levels:** a batch of new docs all at `level: requirement` with only a
+  session-digest provenance edge is almost certainly wrong — unconfirmed
+  articulations should be `incidental`.
+- **Source string:** if the digest was agent-authored, its `--source` must not
+  claim `user-request`.
+
 Print a concise summary:
 
 ```
@@ -240,6 +258,7 @@ Unchanged docs (compatible / inconsequential):
 
 Cascade summary: <N neighbors evaluated — list each id: verdict>
 Validation: <N docs scanned — clean | N errors, N warnings>
+Self-check: <type-mix / labels / levels / source — ok or what you fixed>
 ```
 
 Then close the session, minting the single review for the whole episode.
@@ -274,11 +293,13 @@ express that gap with `status: target` — the body need not say so.
 
 ## Checklist before finishing
 
-- [ ] Concept extraction biased toward principle/goal/use-case/constraint and the rationale/why — not just components mirroring code.
+- [ ] Concept extraction used root-over-decision: principles/constraints/requirements/goals first-class; decisions thin — not just components mirroring code.
 - [ ] map-concepts-to-docs ran with heavy dedup; existing docs revised in preference to near-duplicate new docs.
 - [ ] No pause gate was applied (this skill records reality, not a proposal).
 - [ ] New docs born `status: living` (only decided-but-unbuilt concepts take `target`).
+- [ ] Levels reflect claim authority (unconfirmed agent articulations → incidental), not "has provenance edge."
 - [ ] Every new doc has provenance (DIGEST_ID) or a genuine `requires`/`belongs_to` edge — no floating docs.
 - [ ] cascade-check ran from corrected/deprecated existing docs (not from fresh docs).
+- [ ] Batch self-check (type-mix / labels / levels / source) done.
 - [ ] Validate is 0 errors. No reindex (left to maintenance cadence).
 - [ ] Exactly one review summary emitted, owned by this orchestrator.

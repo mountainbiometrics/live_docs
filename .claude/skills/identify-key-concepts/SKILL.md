@@ -50,6 +50,25 @@ presupposed rather than stated outright — goals, principles, and requirements
 may be implied by the text rather than asserted explicitly. If you find very
 few, re-read through each type lens again.
 
+### Root-over-decision (invariant)
+
+Decisions and implementation choices are often recoverable later from code and
+chat; the principles, constraints, requirements, and goals that justified them
+usually are not. The store's job is that why-web — so a later challenge or
+better alternative can be re-weighed against the same roots — not an inventory
+of ADR-shaped outcomes.
+
+When the input asserts (or clearly depends on) such a root claim *and* a
+concrete choice that instantiates it, extract **both** as separate concepts:
+the root typed `principle` | `constraint` | `requirement` | `goal`, and the
+choice as a thinner `decision` | `component`. Do **not** collapse them into one
+decision concept whose `Asserts` buries the root as rationale prose. A concept
+list that is mostly `decision`s restating what was chosen, with the driving
+reasons only implied inside those Asserts, has failed this step.
+
+Do not invent a why-chain the input does not support. Implied roots are allowed
+only when the text's choices are unintelligible without them.
+
 ---
 
 ## Step 2 — Record each concept

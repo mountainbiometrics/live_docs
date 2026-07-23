@@ -26,6 +26,11 @@ output, and the compact name shown in displays.
 - **Ban meta-jargon suffixes** that name the store's own machinery rather than
   the domain — "Primitive," "Pattern," "Mechanism," a bare "Model." `Retry
   Backoff Mechanism` tells a reader nothing `Retry Backoff` didn't already.
+- **Prefer the source's vocabulary.** When the material (request, digest,
+  reference) already names the thing in the user's or project's words, those
+  words win over an agent-coined Title-Case handle. A coined label that does
+  not appear in the source is a proposal, not established usage — especially
+  when the user rejected one term and supplied another.
 - Title-Case, unique across the store (case-insensitive), letters/digits with
   single spaces or hyphens. Quote multi-word labels on the CLI.
 

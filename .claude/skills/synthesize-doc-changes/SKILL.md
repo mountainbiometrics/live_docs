@@ -181,12 +181,42 @@ other's removal, get `relates` (or just a shared `domain`/`scope` tag), never
 and `requires` it (existential dependency) — wire both when both hold, but never
 substitute one axis for the other.
 
-**Level classification**: a doc not grounded in something explicitly stated (no
-`requires`, `belongs_to`, `provenance`, or `source` tying it to a decision,
-parent, or reference) should be classified `level: incidental` — it is a
-legitimate part of the system, just reassessable without challenge. Reserve the
-stronger levels (`trial`, `preference`, `requirement`) for claims that DO rest on
-such an explicit anchor.
+**Level classification — claim authority, not "has a provenance edge".**
+`level` is the settledness/authority of the *claim*. Every new doc in this
+pass already gets `--provenance <anchor>`, so "has a provenance edge" must
+**not** be treated as grounds for `trial` / `preference` / `requirement` —
+that reading makes `incidental` unreachable and is the observed failure mode.
+
+- Default new claims to **`level: incidental`** when the provenance anchor does
+  not contain an explicit user utterance (or clear confirmation) of *this*
+  claim. Agent-articulated generalizations, mechanisms the user only saw in a
+  report, and "the user didn't contradict it" are incidental — silence is not
+  ratification.
+- Raise to `trial` / `preference` / `requirement` only when the source evidence
+  for *this claim* supports that settledness. Do not inflate because the claim
+  feels important, because `type: requirement` is nearby in the taxonomy, or
+  because the episode archived a request/digest.
+- `level: requirement` means high settledness of the claim, **not** "this doc's
+  type is requirement" and **not** "future agents must treat this as user law."
+
+**Vocabulary for labels/titles.** Prefer the source material's own words (user
+utterances, established project terms, lexicon hits). An agent-coined name that
+does not appear in the source is a proposal — do not canonize it as the durable
+handle when the source already named the thing differently. If the user rejected
+a term and supplied another, use theirs. (Apply `_shared/label-title-summary.md`
+as usual; this is an additional naming constraint.)
+
+**Attribution honesty.** Never write that the user stated or ratified a claim
+unless the provenance anchor contains that utterance (or an explicit
+confirmation). State the claim without false speaker attribution. Consumer
+stores may keep their own body conventions for attribution; when you follow
+one, evidence still binds — do not blanket-stamp a batch with identical
+attribution that the source does not support.
+
+**Thin decisions wire to roots.** When this batch creates both a why-root and a
+decision/component that instantiates it, the thin doc **`requires`** the root
+(and often `belongs_to` it when membership holds). Do not leave the root only
+as prose inside the decision body.
 
 **Dedup shortcut**: if a concept merely DUPLICATES or STRENGTHENS an existing
 living doc, do NOT create a new doc — instead link the anchor to that doc's

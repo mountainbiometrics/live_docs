@@ -47,8 +47,14 @@ Before typing anything `decision`, walk these in order and stop at the first yes
    alternatives, with a rationale**, that should not be re-litigated? →
    **`decision`** — and then scope it (see below).
 
-Prefer `decision` over `principle` when you're describing **how the system
-behaves** (a behavioral choice); reserve `principle` for bedrock values.
+Prefer `decision` over `principle` when you're typing **one** claim about how
+the system behaves (a behavioral choice); reserve `principle` for bedrock
+values. That preference is a *typing* rule for a single claim — it is not
+permission to skip extracting separable root principles/constraints/
+requirements/goals when the input also carries a concrete choice. When both
+are present, extract both (see identify-key-concepts's root-over-decision
+invariant): the why-roots are the prize; the decision is the thin modeling
+node.
 
 ## Two rules that apply to a `decision` once you've confirmed it
 

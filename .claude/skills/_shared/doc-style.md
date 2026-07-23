@@ -57,10 +57,10 @@ be addressed — "deferred," "not yet designed," "currently out of scope,"
 
 Sometimes the right move today is a placeholder — good enough to unblock work,
 known not to be the durable design. Record it as a `decision` at
-`level: incidental` (the tier `synthesize-doc-changes`' level-classification
-guidance reserves for content not yet grounded in an explicit anchor — a
-stop-gap is exactly that: a legitimate part of the system, reassessable
-without challenge), and say plainly in the body that it's a stop-gap:
+`level: incidental` (claim authority is low / provisional — see
+`synthesize-doc-changes` level classification: incidental is the default for
+unconfirmed agent articulations and stop-gaps, not a synonym for "missing
+provenance edge"), and say plainly in the body that it's a stop-gap:
 
 - Name the actual need the stop-gap satisfies ("a worker's deployment region
   must be stored somewhere and handed to the monitoring dashboard").
