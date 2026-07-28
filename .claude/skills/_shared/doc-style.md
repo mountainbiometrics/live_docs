@@ -71,6 +71,17 @@ provenance edge"), and say plainly in the body that it's a stop-gap:
   doc using deferral language to say so (the honesty comes from calling it a
   stop-gap once, not from hedging every sentence).
 
+## Owned claims are linked, not restated
+
+When another doc already owns a claim — especially a membership set, catalog,
+or enumeration — dependents MUST reference it via `[[id]]` (and edges), not
+restate the list or claim in their own summary or body. Reason: restated
+ownership is how one atomic edit becomes an N-doc prose sync; cascade then
+"fixes" copies instead of edges. If you catch yourself updating the same
+enumerated set in more than one doc, stop — collapse the copies to links and
+leave one owner. The owner's body (not every dependent's summary) is where
+membership detail lives.
+
 ## New principles and decisions are never born isolated
 
 Before minting a new `principle` or `decision`, search the store for existing

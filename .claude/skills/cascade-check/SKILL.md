@@ -198,6 +198,12 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
    coexisting. Make the minimum change that restores consistency, but do not
    mistake "minimum" for "least text" when the prior text was wrong.
 
+   **Restated-ownership repair:** When staleness is only a restated owned
+   claim (`_shared/doc-style.md`), collapse to a `[[owner]]` link (+ edges
+   if missing) — do not sync the copy. After collapse, prefer further
+   list-only churn on that neighbor as `inconsequential` if nothing else
+   depended on the change.
+
    Use `ldoc set` for scalar frontmatter fields, `ldoc link`/`ldoc unlink` for
    edge changes, and direct file editing only for body-text changes:
    ```bash
@@ -270,10 +276,12 @@ its "Cascade Behavior" section is updated to say cascade should also examine
    Upstream empty, one downstream via `requires`: 20260615100010.
 3. Read 20260615100010. Check is_living: `status: living` → eligible.
    - Evaluate: does the "cascade examines `goal` docs" change affect
-     20260615100010's content? If 20260615100010 enumerates cascade targets
-     → `cascade`. If it just cites the doc as context → `inconsequential`.
-   - Suppose: **cascade**. Record in verdicts. Enqueue 20260615100010 for
-     neighbor collection (do NOT write yet).
+     20260615100010's content? If 20260615100010 **restates/enumerates** the
+     cascade-target set owned by 20260615090003 → `cascade` (repair = collapse
+     to a link, not sync the list). If it already cites `[[20260615090003]]`
+     without copying the set → `inconsequential`.
+   - Suppose: **cascade** (it had a shadow enumeration). Record in verdicts.
+     Enqueue 20260615100010 for neighbor collection (do NOT write yet).
 4. Pop 20260615100010. Collect its neighbors. Suppose no new unvisited
      neighbors with cascade verdicts.
 5. Queue empty. Pass 1 complete.
@@ -281,8 +289,9 @@ its "Cascade Behavior" section is updated to say cascade should also examine
 
 **Pass 2 — Batch write:**
 6. No `incompatible` cases. Proceed.
-7. Apply cascade update to 20260615100010: load it, write the correct current
-   state (the cascade-target list now includes `goal`) with an inline
+7. Apply cascade update to 20260615100010: load it, **replace the restated
+   target list with a `[[20260615090003]]` link** (add `requires`/`relates` if
+   missing) — do not rewrite the list to include `goal`. Inline
    `--note "cascade-check: updated because 20260615090003 changed — …"`.
 8. Surface table. Total cascaded: 1 — no wide-cascade warning.
 
@@ -291,6 +300,7 @@ fails → verdict is `incompatible` (not `cascade`). Surface to user: "downstrea
 doc 20260615100010 is deprecated but conflicts with the updated claim — check its
 Correction section." Do not rewrite the deprecated doc in Pass 2.
 
-**Same scenario but 5 living dependents all reference the cascade list**: collect
-all 5 verdicts in Pass 1, then write all 5 in Pass 2. Wide-cascade warning fires
-(N=5 > 3) suggesting a `garden` run.
+**Same scenario but 5 living dependents all restate the cascade list**: that is
+a singular-ownership smell. Cascade may collapse each copy to a link once;
+wide-cascade warning fires (N=5 > 3) and should prompt a `garden` pass so
+future membership edits touch the owner only.

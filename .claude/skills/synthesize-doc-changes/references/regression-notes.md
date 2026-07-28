@@ -40,3 +40,10 @@ provenance edge," which never happens when every new doc gets `--provenance`.
    signed): labels must name the subject; thin summaries/bodies rewritten to
    say what the thing is and why it matters; delete implementation-recoverable
    docs — these are positive naming/shape examples, not a provenance-tier spec.
+
+## Newly discovered good-output properties (2026-07-28)
+
+10. **Owned claims linked, not restated.** Dependents cite catalogs/membership
+    sets via `[[owner]]` (+ edges); they do not re-enumerate the owner's list
+    in summary or body. Soft-atomic cleanup in sinai (`20260625215253`,
+    `20260622220247` → link `20260622220218`) is the positive example.

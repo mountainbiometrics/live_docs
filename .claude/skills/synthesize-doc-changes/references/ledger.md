@@ -2,6 +2,34 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-07-28 — Owned claims linked, not restated (Class B)
+
+**Failure:** Removing one catalog member (coverage audit) cascaded body/summary
+rewrites across dependents that each restated the full capability enumeration.
+Ideal change shape was edit the owning catalog (+ edges), not sync prose lists.
+
+**Class:** B — "coherent state, not minimal patches" plus cascade list-sync
+examples supported rewriting every shadow copy. Singular ownership existed in
+the KB but write skills did not operationalize "link the owner."
+
+**Diff:** Body-content rule applies `_shared/doc-style.md` for writing
+discipline. Paired with cascade-check's collapse-not-sync repair and the
+owned-claims section added to doc-style.
+
+**Declined:** Promoting "every catalog member must be its own component" (hard
+atomicity) — soft ownership (one catalog owner; dependents link) is enough for
+this failure class.
+
+**Regression answers:**
+1. Coherent state not patches — yes; coherence means link-to-owner when the
+   stale bit is a restated owned claim, not a synchronized copy.
+2. Provenance edge — unchanged.
+3. Incidental for ungrounded — unchanged.
+4. Labels name subject — unchanged.
+5. belongs_to ≠ requires — unchanged.
+6. Body states claim and why — yes; plus must not restate another doc's owned set.
+7–9. Incidental reachable / source vocabulary / panelists anchor — unchanged.
+
 ## 2026-07-23 — Level authority + vocabulary + attribution honesty (Class B + A)
 
 **Failure:** (1) Unconfirmed agent articulations stamped as strong authority /
