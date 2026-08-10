@@ -133,8 +133,11 @@ concept list into Step 3. Pass reconcile-changes's knobs:
 > decision is worth recording, keep it thin: its Asserts names the choice; the
 > motivating root is a **separate** concept it will later `require`. Do **not**
 > treat "rationale behind the decision" as license to leave the root as
-> decision-body prose. Do NOT stop at `component`-type concepts that merely
-> mirror what the code now does — those are re-derivable; the *why* is not.
+> decision-body prose. Do NOT extract a concept of **any** type that merely
+> restates what the code now does — a `constraint` or `requirement` that
+> paraphrases a module's own comments is exactly as re-derivable as a
+> `component`, and carrying a why-shaped type does not make it a why. Ask of
+> each: would this still be knowable if the implementation were rewritten?
 > Apply the splitting test: "This doc changes when ___" — if the blank covers
 > more than one concern, split.
 
@@ -181,7 +184,7 @@ writing them, but do not gate the rest of the batch on a size threshold.
 
 ## Step 5 — Batch-synthesize all changes (invoke `synthesize-doc-changes`)
 
-Run **`/synthesize-doc-changes`**, handing it:
+Run — but do not stop after — **`/synthesize-doc-changes`**, handing it:
 
 - the complete impact set from Step 4 (each affected doc with its verdict),
 - the concept list from Step 2 (for new-doc creation),
@@ -195,7 +198,16 @@ Run **`/synthesize-doc-changes`**, handing it:
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
 downstream, and returns the list of writes performed in context for the report.
-(This phase runs inline — it needs the whole impact set in view.)
+It needs the whole impact set in view, which is why it comes after Step 4.
+
+**Do not write with raw `ldoc new`/`set` in its place.** This phase is the only
+place the store's write-time discipline is reachable: label shape
+(`_shared/label-title-summary.md`), `domain` vs `scope`
+(`_shared/domain-tagging.md`), body style and no-coupling
+(`_shared/doc-style.md`), and placement (`_shared/belongs-to-placement.md`).
+An agent that hands the batch to `ldoc` directly will produce docs that
+validate cleanly and still break every one of those rules, because nothing
+downstream checks them.
 
 ---
 
@@ -229,8 +241,15 @@ the source digest — these are process smells, not a truth oracle:
 
 - **Type mix:** if you claimed why-priority and nearly everything created is
   `decision`, revisit extraction/synthesis before closing.
-- **Labels:** any new label absent from the digest/session vocabulary → rename
-  or flag; prefer the user's words.
+- **Labels:** two separate tests, and passing one does not pass the other.
+  *Vocabulary* — a label absent from the digest/session vocabulary → rename;
+  prefer the user's words. *Shape* — read each label alone and ask what a
+  reader would expect to learn by opening it. A label that already states the
+  conclusion ("Presence Is The Ceiling", "Worth Is What Is Lost") answers
+  instead of naming, and is wrong even when every word came from the session.
+- **Domain vs scope:** if the batch shares one domain that names the subsystem
+  the docs live in, that is a `scope` mis-tagged as a `domain` — put `scope` on
+  the anchor and let the members inherit.
 - **Levels:** a batch of new docs all at `level: requirement` with only a
   session-digest provenance edge is almost certainly wrong — unconfirmed
   articulations should be `incidental`.

@@ -16,6 +16,13 @@ the same for both.
   would filter by. Not a scope-count; weight (see `20260624185845`).
 - Scope/domain *value* overlap is **expected and fine** — most `viewer`-scope
   docs sharing a `ui` domain is not noise; the axes answer different questions.
+- **Scope first: a concern living entirely inside one subsystem is already
+  captured by that subsystem's `scope`.** Tag `domain` only when the concern
+  spans two or more scopes. The tell that this was missed: a whole batch of new
+  docs sharing one domain that names their own subsystem — that string is a
+  scope wearing a domain's clothes, and the docs should carry `scope` on their
+  anchor and inherit it instead. (Liberal origination below applies *within*
+  genuinely cross-scope concerns; it is not licence to skip this test.)
 
 ## The registry — reuse over coin
 

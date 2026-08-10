@@ -206,7 +206,9 @@ impact set is large.
 
 ## Step 6 — Batch-synthesize all changes (run `/synthesize-doc-changes`)
 
-Run **`/synthesize-doc-changes`**, handing it:
+Run **`/synthesize-doc-changes`** — never raw `ldoc new`/`set` in its place, as
+it is the only place the store's write-time discipline is reachable (label
+shape, `domain` vs `scope`, body style, placement). Hand it:
 
 - the complete impact set from Step 4 (each affected doc with its verdict),
 - the concept list from Step 2 (for new-doc creation),

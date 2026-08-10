@@ -261,7 +261,9 @@ the canonical anchor rather than creating a second one beside it.
 
 ### Step 5b — Write (run `/synthesize-doc-changes`)
 
-Run **`/synthesize-doc-changes`**, handing it:
+Run **`/synthesize-doc-changes`** — never raw `ldoc new`/`set` in its place, as
+it is the only place the store's write-time discipline is reachable (label
+shape, `domain` vs `scope`, body style, placement). Hand it:
 
 - the conflict map from Step 5a (each existing doc with its verdict / planned
   action — revise, deprecate, link-provenance),

@@ -34,3 +34,26 @@ level smells.
 8. **Born-living + shared deferral test.** `target` only when
    `_shared/status-living-vs-target.md` passes; session timing alone never
    flips status.
+
+## Known failure (2026-08-10)
+
+An agent ran the orchestrator end to end but performed Steps 3–5 inline instead
+of invoking them, writing the batch with raw `ldoc new`. The four shared files
+that govern writing — labels, domain/scope, body style, placement — are
+referenced only from `synthesize-doc-changes`, so skipping that phase means
+never reading any of them. `ldoc validate` passed the whole time.
+
+## Newly discovered good-output properties (2026-08-10)
+
+9. **Write-time discipline is actually reached.** A successful run's docs show
+   evidence of `_shared/label-title-summary.md`, `domain-tagging.md`,
+   `doc-style.md`, and `belongs-to-placement.md` having been applied — which in
+   practice means the batch went through `synthesize-doc-changes` rather than
+   straight to `ldoc`.
+10. **`domain` only for cross-scope concerns.** A batch whose docs all live in
+    one subsystem carries `scope` on its anchor and inherits it; it does not
+    coin a domain named after that subsystem.
+11. **Labels name, they do not answer.** Each new label reads as a handle for a
+    topic a reader would open the doc to learn about, not as the doc's
+    conclusion restated. Drawing every word from the session's own vocabulary
+    does not make a label correct on this axis.
