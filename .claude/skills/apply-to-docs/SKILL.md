@@ -264,6 +264,10 @@ request — process smells, not a truth oracle:
 - **Levels:** unconfirmed agent articulations must not ship as
   `level: requirement` merely because they carry `--provenance <REQ_ID>`.
 - **Source string:** agent-authored archive bodies must not claim `user-request`.
+- **Status:** any new `status: target` without explicit deferral (weeks+/migration/
+  external deps) in the request → flip to `living` or justify per
+  `.claude/skills/_shared/status-living-vs-target.md`. Principles/constraints/goals/requirements
+  born `target` are almost always wrong.
 
 apply-to-docs owns the episode: close the session, which mints the single review
 over everything the episode touched (the nested sub-skills never open or close
@@ -279,7 +283,7 @@ review id to the user:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)
-Self-check: <type-mix / labels / levels / source — ok or what you fixed>
+Self-check: <type-mix / labels / levels / source / status — ok or what you fixed>
 ```
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): this records
@@ -290,8 +294,11 @@ the episode for later signoff and never blocks the apply.
 ## Body-content rule (store-wide convention)
 
 Doc bodies describe the decision or mental model — what is true (or intended)
-and why. They do NOT narrate implementation state, absence, or history. If
-implementation lags the model, express the gap with `status: target` — the
-body need not say so. This also means applying `_shared/cruft-verdicts.md`'s
-detection lens proactively. (Enforced by `synthesize-doc-changes`, restated
-here as the store-wide convention.)
+and why. They do NOT narrate implementation state, absence, or history. Status
+assignment (`living` vs `target`) follows
+`.claude/skills/_shared/status-living-vs-target.md` — default `living`;
+`target` only for explicitly deferred realization, not because this skill runs
+before current-work implementation. Also apply
+`.claude/skills/_shared/cruft-verdicts.md`'s detection lens proactively.
+(Enforced by `synthesize-doc-changes`, restated here as the store-wide
+convention.)

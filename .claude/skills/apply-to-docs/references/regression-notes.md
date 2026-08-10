@@ -28,3 +28,10 @@ root-over-decision (reconcile had a soft bias that still failed).
 7. **Pause ≠ rubber-stamp.** A coherent multi-doc update the user asked for
    (e.g. 9 cascade-extends, 0 conflicts) proceeds without a yes/no gate. Pause
    reserves human attention for conflicts and surprises.
+
+## Newly discovered good-output properties (2026-08-04)
+
+8. **Current-work → `living`.** Concepts from apply-to-docs for work about to
+   be implemented land `status: living`. `target` requires explicit deferral
+   (weeks+/migration/external deps), mainly on decision/component — not
+   principle/constraint/goal/requirement. See `_shared/status-living-vs-target.md`.

@@ -189,9 +189,9 @@ Run **`/synthesize-doc-changes`**, handing it:
   `--provenance <DIGEST_ID>`; duplicated/strengthened concepts link DIGEST_ID
   into an existing doc's `provenance` instead of creating a new doc),
 - the **born-`living` knob**: new docs describe reality that already exists, so
-  they are created with **`--status living`**, never `target` and never a
-  proposal. (A concept describing something decided-but-explicitly-not-yet-built
-  is the only exception and takes `target`; the default here is `living`.)
+  they are created with **`--status living`**, never a proposal. The only
+  exception is decided-but-explicitly-unbuilt under
+  `.claude/skills/_shared/status-living-vs-target.md` (narrow `target` test).
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
 downstream, and returns the list of writes performed in context for the report.
@@ -286,8 +286,9 @@ Doc bodies describe the decision or mental model — what is true and **why**. T
 do NOT narrate implementation state, absence, or history. Because reconcile-changes
 records reality that already exists, born-`living` is the norm and the body
 simply states the current truth and its rationale; it does not say "this was just
-built" or narrate the session. If a concept is decided-but-explicitly-unbuilt,
-express that gap with `status: target` — the body need not say so.
+built" or narrate the session. Status exceptions follow
+`.claude/skills/_shared/status-living-vs-target.md` — decided-but-explicitly-
+unbuilt may take `target`; mere session timing does not.
 
 ---
 
@@ -296,7 +297,7 @@ express that gap with `status: target` — the body need not say so.
 - [ ] Concept extraction used root-over-decision: principles/constraints/requirements/goals first-class; decisions thin — not just components mirroring code.
 - [ ] map-concepts-to-docs ran with heavy dedup; existing docs revised in preference to near-duplicate new docs.
 - [ ] No pause gate was applied (this skill records reality, not a proposal).
-- [ ] New docs born `status: living` (only decided-but-unbuilt concepts take `target`).
+- [ ] New docs born `status: living` (only explicit-deferral concepts take `target` per `.claude/skills/_shared/status-living-vs-target.md`).
 - [ ] Levels reflect claim authority (unconfirmed agent articulations → incidental), not "has provenance edge."
 - [ ] Every new doc has provenance (DIGEST_ID) or a genuine `requires`/`belongs_to` edge — no floating docs.
 - [ ] cascade-check ran from corrected/deprecated existing docs (not from fresh docs).

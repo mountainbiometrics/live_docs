@@ -126,7 +126,7 @@ The `belongs_to` hierarchy is the **system's mental model** — generally mirror
 code but a hybrid; placement carries scope; kept roughly balanced. The *what/why*
 of good vs bad placement (group by what docs are about not where they came from;
 shared concepts belong at a shared parent; one label spanning scopes is
-mis-scoped) lives in `_shared/belongs-to-placement.md`, "What groups well, what
+mis-scoped) lives in `.claude/skills/_shared/belongs-to-placement.md`, "What groups well, what
 doesn't" — read it; this part does not re-explain it. Parts A–C keep the tree
 *navigable*; Part D corrects branches that are navigable yet *wrong about the
 system*. Each signal below names the shared definition it detects, then gives the

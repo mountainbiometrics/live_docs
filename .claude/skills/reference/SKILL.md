@@ -108,7 +108,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc validate [--include-reference]` | Structural integrity on the non-reference corpus by default; `--include-reference` opts into archive checks (not a requirement) |
 | `ldoc reindex` | Rebuild `<docs>/.index/` derived caches |
 | `ldoc viewer [--out PATH]` | Build the read-only HTML viewer (default path: `[viewer] build_path`, else `build/viewer.html`) |
-| `ldoc session start\|close\|list\|summary\|resume\|merge ...` | Editing-session lifecycle; every mutation runs in a session, `close` mints one review (see `_shared/session-lifecycle.md`) |
+| `ldoc session start\|close\|list\|summary\|resume\|merge ...` | Editing-session lifecycle; every mutation runs in a session, `close` mints one review (see `.claude/skills/_shared/session-lifecycle.md`) |
 | `ldoc review new\|list\|show\|sign ...` | Post-hoc review ledger (a review is minted at `session close`) |
 
 ---

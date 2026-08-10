@@ -2,6 +2,29 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-08-04 — status:living default; deferral test for target (Class B)
+
+**Failure:** Body-content rule "implementation lags → `status: target`" made
+the write pass stamp current-work docs `target` whenever callers were
+pre-implement (apply-to-docs).
+
+**Class:** B — quoted rule permitted the bad reading. Shared definition
+owns the fix (`_shared/status-living-vs-target.md`).
+
+**Diff:** Step 3 status pointer + body-content rewrite to shared file;
+default `living`; `target` only under shared deferral test.
+
+**Regression answers:**
+1. Coherent state not patches — yes; unchanged.
+2. Provenance edge — yes; unchanged.
+3. Incidental for ungrounded — yes; unchanged.
+4. Labels name subject — yes; unchanged.
+5. belongs_to ≠ requires — yes; unchanged.
+6. Body states claim and why — yes; gap via status only when deferral test passes.
+7–10. Incidental reachable / source vocabulary / panelists / owned claims — yes.
+
+---
+
 ## 2026-07-28 — Owned claims linked, not restated (Class B)
 
 **Failure:** Removing one catalog member (coverage audit) cascaded body/summary

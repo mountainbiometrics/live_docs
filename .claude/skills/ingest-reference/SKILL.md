@@ -273,31 +273,21 @@ Run **`/synthesize-doc-changes`**, handing it:
 It applies all changes in one batch: revise/deprecate stale existing docs, create
 new atomic docs for unmatched concepts. It returns the list of writes performed.
 
-### Status inference — classify by INTENT, never inherit it from source prose
+### Status inference — read and apply `.claude/skills/_shared/status-living-vs-target.md`
 
-As `synthesize-doc-changes` assigns each *new* extracted doc its `status`, do not
-let it default everything to `living`, and do **not** inherit status from
-celebratory source language. A plan that says "done / all todos complete!" is
-recording intent at the moment it was written, not the current state of the
-system — cheap-model ingestion that stamped plan/design docs `living` wholesale
-off such prose is the root cause of stale-cluster drift. Classify each concept's
-status by what the material **is**:
+As `synthesize-doc-changes` assigns each *new* extracted doc its `status`,
+**read and apply** `.claude/skills/_shared/status-living-vs-target.md`. Do
+**not** inherit status from celebratory source language ("done / all todos
+complete!") — that prose records intent at authoring time, not whether the
+claim is the system's current paradigm. Classify **per concept**, not per source
+document: a single plan/RFC often mixes in-force design (`living`) with
+explicitly deferred future work (`target` on `decision`/`component` only).
 
-- A **plan of future work**, an aspiration, or something proposed-but-not-yet-in-
-  force → `status: target` (intended, not yet in force).
-- A **statement of in-force design / current reality** — the architecture or
-  decision the system is currently built around (or currently intends to be built
-  around) → `status: living`.
-
-The discriminator is **intent: plan-of-work vs in-force-design — NOT whether code
-corroborates the claim.** Docs capture the *why* (decisions, rationale,
-constraints, use-cases), not the *what* the code already encodes — docs lead,
-code aligns: an in-force design doc is `living` even when the code
-hasn't caught up yet — implementation lag is the only thing separating it from a
-fully realized doc. So do not gate `living` on code-presence; doing so would
-wrongly pin every brand-new design doc at `target`. When intent is genuinely
-ambiguous, prefer `target` and surface the doc for human confirmation rather than
-defaulting to `living`.
+Default `living`. Ambiguity → `living` (surface for confirmation if the
+deferral horizon is unclear) — do **not** prefer `target` on ambiguity. The
+old failure mode (stamping everything `living` off plan tone) is fixed by
+per-concept classification + the shared deferral test, not by an
+ambiguity-defaults-to-`target` bias.
 
 ---
 
@@ -399,6 +389,6 @@ signoff and never blocks the change. Reviewers inspect it via
 - [ ] `map-concepts-to-docs` conflict scan (Step 5a) ran before any write.
 - [ ] Any corrected or deprecated existing docs have a `## Correction` section and, if deprecated, a `superseded_by` edge.
 - [ ] cascade-check was run from CORRECTED EXISTING docs (not from freshly created docs).
-- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Gap between model and reality is expressed via `status: target`, not body text. Apply `_shared/cruft-verdicts.md`'s detection lens proactively, including its incidental-vs-subject test.
+- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Status follows `.claude/skills/_shared/status-living-vs-target.md` (default `living`; `target` only for explicit deferral). Apply `.claude/skills/_shared/cruft-verdicts.md`'s detection lens proactively, including its incidental-vs-subject test.
 - [ ] No extracted doc duplicates an existing doc.
 - [ ] No `requires` edge points at RAW_ID — raw files are not graph nodes.

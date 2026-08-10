@@ -6,7 +6,7 @@ description: >
   — and emit a typed list of the durable concepts it asserts. Owns
   the single shared concept-extraction protocol: how to read an input and emit
   the Concept/Type/Asserts record shape. The type taxonomy it assigns from lives
-  in _shared/doc-types.md. This is a phase sub-skill invoked by apply-to-docs,
+  in .claude/skills/_shared/doc-types.md. This is a phase sub-skill invoked by apply-to-docs,
   ingest-reference, and revise-doc; it is not meant to be run directly by a user.
 ---
 

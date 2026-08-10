@@ -2,6 +2,24 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-08-04 — Point born-living knob at shared status definition (Class B)
+
+**Failure:** Sibling skills over-used `status: target`; reconcile already
+defaulted born-`living` but body-content still said "unbuilt → target" without
+the shared deferral horizon.
+
+**Class:** B (suite-wide) — tighten exception language to
+`_shared/status-living-vs-target.md`.
+
+**Diff:** Born-living knob + body-content + checklist cite the shared file;
+exception remains decided-but-explicitly-unbuilt under that test.
+
+**Regression answers:**
+1. Born-living, no pause — yes; strengthened by shared deferral test.
+2–7. Why-priority / dedup / digest / review / validate / root-over-decision — yes.
+
+---
+
 ## 2026-07-23 — Disambiguate why-priority + batch self-check (Class B + A)
 
 **Failure:** Despite existing "abstract/why" bias, reconcile produced

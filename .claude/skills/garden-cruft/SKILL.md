@@ -33,7 +33,8 @@ the *orchestration* of a sweep and the contract for *reporting* what it changed.
 1. Load the candidate set (a cluster, a `scope`, or `ldoc ls --json` + `ldoc
    show <id>` for the full store).
 2. Apply the shared file's detection lens and refactor-plan pre-filter, then
-   assign each doc exactly one verdict from `_shared/cruft-verdicts.md`.
+   assign each doc exactly one verdict from
+   `.claude/skills/_shared/cruft-verdicts.md`.
 3. Apply each verdict per that file's action guidance. When re-parenting or
    rewiring, read and apply `.claude/skills/_shared/belongs-to-placement.md`.
 4. Report changed ids. Do **not** cascade, summarize, or review.

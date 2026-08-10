@@ -2,6 +2,41 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-08-04 — status:target default misuse (Class B + C)
+
+**Failure:** apply-to-docs (and sibling writers) stamped nearly every
+pre-implementation concept `status: target` because body-content rules said
+"if implementation lags the model → target," and this skill runs minutes
+before current work.
+
+**Class:** B — quoted skill text permitted the bad reading. C promotion
+(user-confirmed) — type fitness: principle/constraint/goal/requirement almost
+never `target`; `target` is mainly for decision/component with explicit
+weeks+/migration deferral. Default and ambiguity → `living`.
+
+**Diff:** Added `_shared/status-living-vs-target.md`; rewrote body-content
+pointers in apply-to-docs / synthesize / revise / ingest / reconcile; dropped
+ingest's "prefer target when ambiguous"; added Step 9 status self-check.
+
+**Ping-pong note:** ingest previously biased ambiguity → `target` against
+stale-cluster drift from plan tone. Replaced that bias with per-concept
+classification + shared deferral test (user-approved scope change).
+
+**Declined this pass:** revising KB status-enum doc (`20260617212538`) —
+separate docs episode.
+
+**Regression answers:**
+1. Identify then synthesize — yes; unchanged.
+2. Archive then extract — yes; unchanged.
+3. Pause gate — yes; unchanged.
+4. Verbatim request body — yes; unchanged.
+5. One episode review — yes; unchanged.
+6. Honest `--source` — yes; unchanged.
+7. Large coherent updates proceed — yes; unchanged.
+8. New: current-work concepts born `living`; `target` only with explicit deferral.
+
+---
+
 ## 2026-07-23 — Pause gate: conflicts / side-effects, not size (Class B + C)
 
 **Failure:** After archival, apply-to-docs paused on 9 partial/cascade-extend

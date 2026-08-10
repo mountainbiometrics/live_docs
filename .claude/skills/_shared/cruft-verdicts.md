@@ -74,12 +74,12 @@ Assign each doc exactly one verdict (the compounds below are the only stacks).
 | **KEEP** | Current, well-typed, carries its why. | Nothing. |
 | **EXCAVATE** | The architectural decision is **still current** but the doc is buried under removed/renamed implementation detail. | Strip the dead *what*; keep the *why*. **Status was never wrong** — do not deprecate. |
 | **EXCAVATE(rename)** | Sub-case of EXCAVATE: the doc's subject is named after a class / function / module that was renamed or never built. | Strip the dead symbol noun-phrase; keep the decision. Status was never wrong. |
-| **RECLASSIFY→type** | The doc is the wrong type (e.g. a "have a module that does X" decision is really a `component` named "module for X"). | Re-type per `_shared/doc-types.md` and its "is this really a decision?" ladder. |
+| **RECLASSIFY→type** | The doc is the wrong type (e.g. a "have a module that does X" decision is really a `component` named "module for X"). | Re-type per `doc-types.md` and its "is this really a decision?" ladder. |
 | **ADD-WHY** | A **non-signpost** doc states a *what* with no *why*. | Add the why (may cite its provenance doc); every non-signpost doc must carry its why. Signposts are the allowed exception. |
 | **REMOVE** | No durable content not already captured elsewhere. | `ldoc rm` — deletion is the default retirement path when content is fully captured elsewhere. **Especially:** a doc that is a step in a *completed* refactor plan whose durable why already lives in the plan's `reference` doc → default REMOVE. |
 | **MERGE→id** | Folds wholly into a sibling/target. | Port unique content into the target, deprecate or `ldoc rm` the loser. |
 | **EXCAVATE→MERGE→id** | A doc that is *both* an excavate target *and* redundant with a sibling. | Distill the durable clause first, **then** fold it into the target and delete. |
-| **RE-PARENT→signpost** | The survivor belongs under a different parent than its current (cruft-driven) cluster. | Re-home per `_shared/belongs-to-placement.md`. |
+| **RE-PARENT→signpost** | The survivor belongs under a different parent than its current (cruft-driven) cluster. | Re-home per `belongs-to-placement.md`. |
 
 **EXCAVATE is the single most common shape** — the durable why survives while
 the implementation cruft is stripped. It operationalizes docs-lead-code-aligns:

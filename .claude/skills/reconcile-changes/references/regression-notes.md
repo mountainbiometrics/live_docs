@@ -28,3 +28,9 @@ level smells.
 7. **Root-over-decision shape.** A successful reconcile concept list / write set
    is dominated by principles/constraints/requirements/goals; decisions exist as
    thin `requires`-linked nodes, not as the primary inventory.
+
+## Newly discovered good-output property (2026-08-04)
+
+8. **Born-living + shared deferral test.** `target` only when
+   `_shared/status-living-vs-target.md` passes; session timing alone never
+   flips status.

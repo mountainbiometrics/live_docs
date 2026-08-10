@@ -128,6 +128,11 @@ ldoc new \
   --body "<the claim>"
 ```
 
+**Status** — read and apply `.claude/skills/_shared/status-living-vs-target.md`.
+Default `--status living`. Use `target` only when the deferral test in that
+file passes (explicit weeks+/migration deferral on a `decision`/`component`);
+never because code has not caught up yet or because the caller is pre-implement.
+
 Use `--belongs-to` per the shared placement policy whenever a visible coherent
 signpost exists in the concepts/edges already in hand. Omit only when no good
 parent is visible (defer to gardening rather than force a bad home).
@@ -203,8 +208,9 @@ that reading makes `incidental` unreachable and is the observed failure mode.
 utterances, established project terms, lexicon hits). An agent-coined name that
 does not appear in the source is a proposal — do not canonize it as the durable
 handle when the source already named the thing differently. If the user rejected
-a term and supplied another, use theirs. (Apply `_shared/label-title-summary.md`
-as usual; this is an additional naming constraint.)
+a term and supplied another, use theirs. (Apply
+`.claude/skills/_shared/label-title-summary.md` as usual; this is an
+additional naming constraint.)
 
 **Attribution honesty.** Never write that the user stated or ratified a claim
 unless the provenance anchor contains that utterance (or an explicit
@@ -230,15 +236,18 @@ ldoc link <existing-id> --provenance <anchor id>
 ## Body-content rule (store-wide convention)
 
 Doc bodies describe the decision or mental model — what is true (or intended)
-and why. They do NOT narrate implementation state, absence, or history. If
-implementation lags the model, express the gap with `status: target` — the body
-need not say so. Strip "extension"/addendum notes that are really migration
-plans; if a doc's own claim is wrong, deprecate it with a `## Correction`
-section (Step 1) rather than qualifying it.
+and why. They do NOT narrate implementation state, absence, or history. When
+realization is deferred, express that with `status` per
+`.claude/skills/_shared/status-living-vs-target.md` (default `living`; not
+"code lags → target") — the body need not narrate the gap. Strip
+"extension"/addendum notes that are really migration plans; if a doc's own
+claim is wrong, deprecate it with a `## Correction` section (Step 1) rather
+than qualifying it.
 
-Apply `_shared/doc-style.md` for writing discipline. Apply
-`_shared/cruft-verdicts.md`'s detection lens here too, including its
-incidental-detail-vs-the-decision's-subject test, not only during gardening.
+Apply `.claude/skills/_shared/doc-style.md` for writing discipline. Apply
+`.claude/skills/_shared/cruft-verdicts.md`'s detection lens here too,
+including its incidental-detail-vs-the-decision's-subject test, not only
+during gardening.
 
 ---
 

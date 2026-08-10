@@ -340,18 +340,21 @@ about how things should be. They do NOT narrate implementation state, history, o
 absence. Common anti-patterns to reject or correct before writing:
 
 - Writing about absence ("X was never built", "summaries do not yet exist"):
-  replace with the positive model ("summaries should exist") and let `status`
-  (living vs target) carry the build gap.
+  replace with the positive model ("summaries should exist"). Assign `status`
+  per `.claude/skills/_shared/status-living-vs-target.md` — default `living`;
+  `target` only for explicitly deferred realization, not mere code lag.
 - Migration plans or implementation details in the body ("a migration will
   happen", "this will be refactored"): these belong in a separate plan doc, not
   in the body of a living principle or decision.
 - "Extension" or addendum notes that are really migration plans rather than
   corrections to the doc's own claim: strip them. If the doc's claim is itself
   wrong, write a `## Correction` section and deprecate the doc; if the claim is
-  right but implementation lags, `status: target` is sufficient.
+  right and realization is explicitly deferred, `status: target` may apply
+  (see the shared status file) — otherwise keep `living`.
 - Implementation-shaped detail used as incidental illustration rather than the
-  doc's actual subject: strip it — apply `_shared/cruft-verdicts.md`'s
-  detection lens (including its incidental-vs-subject test).
+  doc's actual subject: strip it — apply
+  `.claude/skills/_shared/cruft-verdicts.md`'s detection lens (including its
+  incidental-vs-subject test).
 
-**Rule**: if implementation doesn't match the model, express the gap with
-`status: target` — the body need not narrate it.
+**Rule**: body states the claim; deferred realization (when the shared status
+test passes) is carried by `status: target`, not by body narration.

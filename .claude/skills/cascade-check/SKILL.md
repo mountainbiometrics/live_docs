@@ -199,7 +199,7 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
    mistake "minimum" for "least text" when the prior text was wrong.
 
    **Restated-ownership repair:** When staleness is only a restated owned
-   claim (`_shared/doc-style.md`), collapse to a `[[owner]]` link (+ edges
+   claim (`.claude/skills/_shared/doc-style.md`), collapse to a `[[owner]]` link (+ edges
    if missing) — do not sync the copy. After collapse, prefer further
    list-only churn on that neighbor as `inconsequential` if nothing else
    depended on the change.
