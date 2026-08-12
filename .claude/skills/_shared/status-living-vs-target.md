@@ -3,7 +3,10 @@
 Single source of truth for assigning `status: living` vs `status: target` when
 creating or revising truth-claim docs. Read and apply this; do not paraphrase
 from memory. (`status: deprecated` / `status: reference` are separate lifecycle
-values — this file does not govern them.)
+values — this file does not govern them.) This file governs `status` alone —
+settledness. It says nothing about `level` — claim authority, who decided this
+and how deliberately — which is a separate axis and does not follow from
+anything here.
 
 ## The most common failure mode this prevents
 

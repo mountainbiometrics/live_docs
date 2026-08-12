@@ -21,6 +21,18 @@ session decided things and built them; the store never heard about it. This skil
 walks that gap closed — the resulting docs are born `status: living`, not
 `target`, because they describe reality as it now stands.
 
+**Born-`living` governs `status` only — it has no bearing on `level`.** `status`
+answers "is this settled?"; `level` answers "who decided this, and how
+deliberately?" That code got built, tested, and committed is evidence for the
+former, never for the latter — an implementer's own convenience choice is
+`incidental` no matter how solid the code behind it is. This distinction
+matters because a claim recorded above its real authority does not sit inert:
+it acquires inertia that future work has to argue against. The worst case is a
+convenience nobody asked for, sitting at `preference` or `requirement`,
+quietly obstructing a direction the user has actually asked for. Read every
+"already real" instinct in this file as scoped to `status`; carrying it into
+`level` is this skill's most common failure.
+
 This skill is a **thin orchestrator**. The shared phases live in sub-skills it
 invokes in order — `identify-key-concepts`, `map-concepts-to-docs`,
 `assess-blast-radius`, `synthesize-doc-changes`, then `cascade-check` — keeping
@@ -195,6 +207,24 @@ Run — but do not stop after — **`/synthesize-doc-changes`**, handing it:
   they are created with **`--status living`**, never a proposal. The only
   exception is decided-but-explicitly-unbuilt under
   `.claude/skills/_shared/status-living-vs-target.md` (narrow `target` test).
+- the **level-authority test**, applied per claim, not per batch: ask *who
+  decided this*. An implementer's own convenience choice — never raised,
+  requested, or reviewed by the user — is `incidental`, however well-tested;
+  built-and-committed is not the same as authorized. A claim whose force is
+  inherited from a standing user requirement takes whatever level that
+  requirement supports. Something the user stated in their own words is
+  weighted accordingly, and stays weighted accordingly even when the code for
+  it doesn't exist yet — that gap belongs to `status`, not `level`. Watch for
+  the inverse too: a user-stated claim landing weak and agent-attributed while
+  the convenience built in its place lands strong and settled inverts the
+  record, which this test exists to catch.
+
+Before any new doc is written, check its claim against the impact set from
+Step 4 for a **level collision**: does it contradict an existing doc at a
+higher `level`? A lower rung cannot overturn a higher one by being newer or
+freshly implemented. If a collision exists, do not record the new claim as if
+it won — surface the collision to the user, the same way Step 4 surfaces
+`conflict-unresolved` docs.
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
 downstream, and returns the list of writes performed in context for the report.
@@ -253,6 +283,13 @@ the source digest — these are process smells, not a truth oracle:
 - **Levels:** a batch of new docs all at `level: requirement` with only a
   session-digest provenance edge is almost certainly wrong — unconfirmed
   articulations should be `incidental`.
+- **Levels vs. build status:** if levels track what got implemented more than
+  who asked for it — everything shipped sits at `preference`+, everything
+  unbuilt sits at `incidental` — that correlation is itself the smell; re-run
+  the level-authority test (Step 5) per claim, not per batch.
+- **Level collisions:** if a new doc's claim was never checked against
+  existing higher-level docs for contradiction, do that now, before closing —
+  a `preference` does not get to silently overrule a `requirement`.
 - **Source string:** if the digest was agent-authored, its `--source` must not
   claim `user-request`.
 
@@ -317,7 +354,7 @@ unbuilt may take `target`; mere session timing does not.
 - [ ] map-concepts-to-docs ran with heavy dedup; existing docs revised in preference to near-duplicate new docs.
 - [ ] No pause gate was applied (this skill records reality, not a proposal).
 - [ ] New docs born `status: living` (only explicit-deferral concepts take `target` per `.claude/skills/_shared/status-living-vs-target.md`).
-- [ ] Levels reflect claim authority (unconfirmed agent articulations → incidental), not "has provenance edge."
+- [ ] Levels reflect claim authority — apply the level-authority test (Step 5): who decided, not whether it's built or has a provenance edge.
 - [ ] Every new doc has provenance (DIGEST_ID) or a genuine `requires`/`belongs_to` edge — no floating docs.
 - [ ] cascade-check ran from corrected/deprecated existing docs (not from fresh docs).
 - [ ] Batch self-check (type-mix / labels / levels / source) done.

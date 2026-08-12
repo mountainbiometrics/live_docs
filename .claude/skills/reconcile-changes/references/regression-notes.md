@@ -57,3 +57,39 @@ never reading any of them. `ldoc validate` passed the whole time.
     topic a reader would open the doc to learn about, not as the doc's
     conclusion restated. Drawing every word from the session's own vocabulary
     does not make a label correct on this axis.
+
+## Known failure (2026-08-12 panelists)
+
+A 19-doc reconcile run let born-`living` (status) leak into `level`: ten docs
+landed at `preference`/`requirement` because the code implementing them was
+built, tested, and committed — though the choices were an implementer's own
+convenience, never raised or reviewed by the user. User's verdict on the one
+cited by id: "not something that I brought up in any way at all... which is
+*incidental* in both literal definition and our guidelines." Two secondary
+failures in the same run: a new `level: preference` doc silently contradicted
+an existing `level: requirement` doc (nothing in the workflow checked for
+this); and two claims the user stated in their own words were recorded weak
+and agent-attributed while the convenience built *instead of* one of them was
+recorded strong and settled — inverting the record. Root cause: the skill's
+own "already-real" rhetoric (justified for `status`) was read as applying to
+`level` too, even though the correct level-authority rule already existed
+(checklist line, and `synthesize-doc-changes` §level classification).
+
+## Newly discovered good-output properties (2026-08-12)
+
+12. **Differentiated levels, not blanket caution.** In the same failing run,
+    five of the nineteen new docs correctly landed at `level: incidental` on
+    their own — the level-authority fix must sharpen this discrimination, not
+    flatten every new doc to `incidental` regardless of merit. A fix that
+    makes `preference`/`requirement` unreachable is as wrong as the failure it
+    corrects.
+13. **Unprompted correction of a stale claim.** The same pass noticed an
+    existing constraint (`Loudly Partial Measurement`) had been recorded
+    path-wise so a new mechanism did not actually discharge it, and corrected
+    it without being asked. Nobody prompted this; preserve whatever in Step 3
+    ("correcting stale existing docs is the highest-value output") lets it
+    happen.
+14. **Honest self-reporting of uncertainty.** The same pass flagged its own
+    open issues — terminology drift it declined to fix, a raw-tier
+    linkability gap, a doc left incomplete — rather than presenting the batch
+    as fully resolved. Keep whatever in the Step 8 self-check produces this.
