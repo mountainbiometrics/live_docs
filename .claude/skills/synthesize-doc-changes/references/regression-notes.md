@@ -53,3 +53,18 @@ provenance edge," which never happens when every new doc gets `--provenance`.
 11. **Status default `living`.** New docs use `target` only under
     `_shared/status-living-vs-target.md` (explicit deferral; mainly
     decision/component). Code lag or pre-implement timing is not enough.
+
+## Newly discovered good-output properties (2026-08-24)
+
+12. **Plain register — description stance.** Docs describe: who does what
+    and what it is for, actors named, why after what, summaries distilled by
+    selection (claims dropped to the body) never compaction. Acceptance
+    test: a reader who was not in the design session can repeat the
+    mechanism back after one read. Shape mechanics (no epigrams, punchlines,
+    antithesis cadence, maxim headings, new metaphor, synonym rotation) are
+    secondary — enforcing them without the stance produced "polished
+    pomposity," the observed second-order failure. Positive anchor: the
+    three-way worked example in doc-style.md (argument / polished argument /
+    description). Watch for: role-jargon and epistemic vocabulary replacing
+    mechanism, and abstract claims that cannot be checked against neighbor
+    docs — the argument register concealed a real content error once.

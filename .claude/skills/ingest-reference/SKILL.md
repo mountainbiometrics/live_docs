@@ -177,7 +177,9 @@ Determine `kind`:
 - `external` — if it's an external spec, RFC, article, or third-party source.
 - `clipping` — only if none of the above fit.
 
-Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
+Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional. The
+normalized body is prose you author: apply `.claude/skills/_shared/doc-style.md`'s
+plain-register rule to it.
 
 ```bash
 ldoc new \

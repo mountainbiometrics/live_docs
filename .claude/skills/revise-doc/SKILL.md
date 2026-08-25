@@ -337,7 +337,9 @@ edits first, then run `validate` once at the end. No per-doc cascade needed.
 
 Doc bodies describe the **decision or mental model** — the claim the doc makes
 about how things should be. They do NOT narrate implementation state, history, or
-absence. Common anti-patterns to reject or correct before writing:
+absence. Apply `.claude/skills/_shared/doc-style.md` to any prose you write or
+rewrite — its plain-register rule included. Common anti-patterns to reject or
+correct before writing:
 
 - Writing about absence ("X was never built", "summaries do not yet exist"):
   replace with the positive model ("summaries should exist"). Assign `status`

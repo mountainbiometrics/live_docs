@@ -39,7 +39,10 @@ concentrate every pass on the same well-worn center of the store.
    catch ("ddl entities are", "State Policy is"). Rewrite via
    `ldoc set --title/--label` when not a complete noun phrase.
 2. **Summary presence & quality** — real 1–3 sentence signpost, not a fragment or
-   body first-line copy. `ldoc set --summary`.
+   body first-line copy, and in the plain register per
+   `.claude/skills/_shared/doc-style.md` (no metaphor, no synonym rotation for
+   established terms; the same check applies to sampled body prose).
+   `ldoc set --summary`.
 3. **Body-shape consistency** — lightly normalize clearly lazy shapes (e.g.
    `decision` with no context/decision structure). Don't impose rigid templates.
 4. **Schema normalization** — fold legacy fields/enums to canonical per schema +

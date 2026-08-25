@@ -38,7 +38,9 @@ body. Do not pack everything into one run-on sentence (that is not "fewer
 sentences"). When the doc's opening is already tight, the summary can be that
 opening, lightly condensed. The summary is surfaced verbatim in review snapshots,
 search results, and index maps, so it must stay scannable. `ldoc validate` warns
-when a summary exceeds ~60 words.
+when a summary exceeds ~60 words. Write it in the plain register per
+`.claude/skills/_shared/doc-style.md`: established terms, literal statements —
+no metaphor, no synonym rotation.
 
 ---
 

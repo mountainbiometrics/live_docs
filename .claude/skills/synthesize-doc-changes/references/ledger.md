@@ -2,6 +2,121 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-08-24 (third iteration) — Argument stance, not shape (Class A, continued)
+
+**Failure:** After the shape-level fix (below), the batch still read as
+pompous. The user supplied the diagnosis by writing a usable summary
+themselves ("an LLM drafts the expectations for a given case, that is an
+initial baseline, and human refinement on top of that baseline gives an
+evolving target"): the docs were written as *arguments* — justifications of a
+conclusion, conducted between abstractions, actors and mechanism missing —
+where documentation should *describe* who does what and what it is for.
+Summaries compacted every claim into fewer clauses and called it
+distillation; real distillation is selection. The argument register also
+concealed a factual error in 20260824202006 ("correction is the only point
+where privileged knowledge enters") through synthesis, two style passes, and
+two close readings — refinement actually stays inside the premise.
+
+**Class:** A still — the missing information was the stance: describe, don't
+argue.
+
+**Diff:** Plain-register section rewritten wholesale: describe-don't-argue
+leads (first sentence says what happens, named actors; why follows in the
+body; summaries select rather than compact; given→new sentence construction;
+plain nouns for actors, no role-jargon or epistemic vocabulary in place of
+mechanism; repeat-back acceptance test; note that argument register hides
+content errors). Round-two shape rules demoted to secondary mechanics.
+Worked example replaced with the same summary in argument / polished-argument
+/ description form — the middle one showing that a style pass without the
+stance produces polished pomposity.
+
+**Test:** uncoached executors re-run over the failing batch on skill text
+alone, with content-contradiction flagging expected now that plain
+description makes claims checkable.
+
+**Amended same day (user-flagged over-anchoring):** the section as first
+written narrated this store's failure history into the shared artifact —
+"every register failure this store has recorded," a three-quote
+store-specific worked example with the content-error anecdote, and a hard
+"at most one contrast per doc" count. doc-style.md is shared across stores;
+authoring-process material belongs here in the ledger, not the skill text.
+Generalized: history narration removed, example cut to one compact
+illustrative pair, the count softened to "a contrast earns its place only
+when it is the decision itself." The rules themselves are unchanged.
+
+---
+
+## 2026-08-24 (second iteration) — Plain register is form, not diction (Class A, continued)
+
+**Failure:** The first Plain-register fix (below) under-scoped the failure as
+lexical — metaphor and synonym rotation. A rewrite pass under those rules
+removed the flagged words and left the docs manifesto-shaped: concept-as-
+subject epigrams, antithesis cadence ("X, not Y" throughout), closing
+punchlines, thesis titles, slogan labels, maxim headings. A sentence can pass
+the literal-reading test and still be a maxim. User supplied the diagnostic
+("oracular: every decision dressed as an axiom") and the target register (the
+across-a-desk engineer sentence).
+
+**Class:** A still — the missing information was the *unit* of the rule:
+sentence/document shape, not word choice.
+
+**Diff:** Rewrote doc-style.md "Plain register" around shapes-to-refuse, each
+with a mechanical tell (epigram → pull-quote test; antithesis → at most one
+contrast per doc, where the contrast is the content; punchline → final
+sentence must carry a fact; thesis titles/maxim headings → topic nouns and
+working titles), shapes-to-write-in anchored to the store's older dry docs
+(lists, tables, SVO sentences, named actors), and the real before/after
+worked example (small-cases doc, manifesto vs working register). Kept v1's
+metaphor, one-name-per-concept, established-term carve-out, and density
+rules. label-title-summary.md: slogan/imperative labels named as
+answer-shaped (with observed examples), and titles bound to working-title
+register.
+
+**Test protocol (new):** executors are given ONLY the skill files — no
+failure examples or coaching in the prompt, which contaminated the v1 test —
+and their rewrite of the failing batch is compared against the target
+register. The skill text must carry the register on its own.
+
+**Regression answers:** unchanged from the first-iteration entry — the edit
+tightens prose form only; all 11 content/metadata properties untouched, the
+naming properties (4, 8) further reinforced by the slogan-label rule.
+
+---
+
+## 2026-08-24 — Plain register (Class A, pattern-confirmed)
+
+**Failure:** Doc prose — summaries worst — written in a figurative, aphoristic
+register ("gold that guesses permanently mislays the finish line", "where
+calibration gets its sharpest instruments"). User: it's technical
+documentation, not storytelling; use existing terms; no synonym rotation.
+Pattern: the 2026-08-21 sinai batch needed a full manual rewrite pass
+("oracular"), then the 2026-08-24 batch reproduced the register.
+
+**Class:** A — no skill text addressed prose register at all; doc-style.md
+covered content discipline only. Pattern (two consecutive batches) justifies a
+shared-file section. By the register test this is an invariant: figurative vs.
+literal diction differing between executors is itself the bug.
+
+**Diff:** New "Plain register" section in `_shared/doc-style.md` (one name per
+concept; no new metaphor with a literal-reading test; aphorism ≠ compression;
+density stays — with a carve-out keeping established metaphor-origin terms like
+cascade/signpost/blast radius). Register line added to
+`_shared/label-title-summary.md`. Pointer lines added where writers didn't
+already read doc-style: revise-doc, garden-summarize, garden-refine (sampled
+defect class), ingest-reference (normalized body), cascade-check (rewritten
+text), and this skill's summary convention.
+
+**Regression answers (all 11 properties):** 1 coherent-state, 2 provenance
+edge, 3 incidental-for-ungrounded, 5 belongs_to≠requires, 7 incidental
+reachable, 10 owned-claims-linked, 11 status-living — untouched (register is
+diction, not content or metadata). 4 labels-name-subject, 6 claim-and-why,
+8 source-vocabulary, 9 panelists naming/shape anchor — reinforced: the
+one-name rule generalizes source-vocabulary from handles to prose. The
+carve-out for established terms prevents the one foreseeable over-read
+(stripping store vocabulary as "metaphor").
+
+---
+
 ## 2026-08-04 — status:living default; deferral test for target (Class B)
 
 **Failure:** Body-content rule "implementation lags → `status: target`" made

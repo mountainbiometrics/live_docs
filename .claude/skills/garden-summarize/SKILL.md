@@ -42,7 +42,9 @@ Applies to **any descendant-bearing doc** (target of `belongs_to` edges), any
 2. Read each live member (`ldoc show <member-id>`); skip `deprecated` from the
    live guide.
 3. Write body prose only (orientation, contributions, tensions, where to start).
-   Reference members via `[[<member-id>]]` wiki-links.
+   Reference members via `[[<member-id>]]` wiki-links. An orientation guide is
+   still technical documentation — apply `.claude/skills/_shared/doc-style.md`'s
+   plain-register rule to body and summary alike.
 4. Apply:
    ```bash
    ldoc set <parent-id> --body - --note "garden-summarize: synthesized overview over <N> members"

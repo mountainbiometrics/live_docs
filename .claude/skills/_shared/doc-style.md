@@ -7,6 +7,70 @@ implementation detail from a body — applied proactively at write time by
 not only during gardening) already own. Read and apply this alongside those
 two; do not paraphrase from memory.
 
+## Plain register
+
+Write the way you would explain the system to a colleague: say what the
+thing is, who does what, and what it is for. The recurring failure mode is
+docs written as *arguments* — justifications of a design conclusion,
+conducted between abstractions — instead of *descriptions* of the thing
+decided. An argument can only be parsed by a reader who already knows the
+design; a description is what the reader came for.
+
+**Describe; don't argue.**
+
+- Open with what the thing is or what happens: named actors doing things,
+  not properties of abstractions. The why follows the what, in the body.
+- A summary states the concept's role and what the doc covers — never the
+  body's argument compressed. Distill by selection (drop claims from the
+  summary; the body owns them), not compaction (every claim squeezed into
+  fewer clauses — it reads as density, but the information is
+  unrecoverable). Summaries are surfaced verbatim in reviews, search, and
+  indexes, so they are held to this hardest.
+- Build each sentence from what a reader with project context — but without
+  the design conversation — already holds, adding one new idea at a time.
+  The acceptance test: that reader can repeat the mechanism back after one
+  read.
+- Actors get plain nouns. Don't promote people into role-jargon a sentence
+  doesn't need, and don't substitute epistemic vocabulary ("authoritative",
+  "privileged") for showing the mechanism.
+- The argument register also resists checking: a claim stated abstractly
+  can contradict a neighboring doc with nothing concrete to check it
+  against. If a plain rewrite exposes a possible contradiction, report it
+  as a finding rather than wording around it.
+
+**Mechanics** — necessary but secondary; enforcing these without the stance
+produces polished pomposity:
+
+- One name per concept: reuse the established term (lexicon, source, or
+  owning doc) every time the concept appears; never rotate synonyms —
+  search, wikilinks, and cascade key on terms. An established term whose
+  origin is a metaphor is a name; keep it.
+- No new metaphor or imagery: a sentence read literally, word by word, must
+  state its claim.
+- Watch for aphorism shapes: epigrams (a nominalized abstraction as
+  subject, the actor deleted, quotable), closing punchlines that restate
+  the paragraph, antithesis cadence ("X, not Y" stacked through a doc — a
+  contrast earns its place only when it is the decision itself), and maxim
+  headings or thesis titles (headings and titles name topics; the claim
+  lives in the body, once).
+
+**Example** (illustrative, from one consumer store's cleanup — the same
+claim, two stances):
+
+Argument register:
+> The drafter sees exactly what the capability sees, so its answer is
+> peer-level at best, and a draft accepted without correction sets the
+> target at today's level.
+
+Description:
+> An LLM drafts a case's expectations from the premise; that draft is the
+> initial baseline. Human refinement on top of it is what makes the
+> expectation a target that can evolve.
+
+The first justifies a conclusion between abstractions; the second says who
+does what and what it is for. When in doubt, write the sentence you would
+say out loud — speech forces the referents and the purpose to be stated.
+
 ## No negative-space documentation
 
 **We don't document what things are not.** A doc states positively what a

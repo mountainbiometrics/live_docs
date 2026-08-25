@@ -196,7 +196,9 @@ For each doc in `session["verdicts"]` with verdict `cascade` (only valid for
    changed across the full impact set. If prior text would now be misleading,
    rewrite it — do not add qualifiers that leave contradictory statements
    coexisting. Make the minimum change that restores consistency, but do not
-   mistake "minimum" for "least text" when the prior text was wrong.
+   mistake "minimum" for "least text" when the prior text was wrong. Text you
+   rewrite follows `.claude/skills/_shared/doc-style.md`, plain register
+   included.
 
    **Restated-ownership repair:** When staleness is only a restated owned
    claim (`.claude/skills/_shared/doc-style.md`), collapse to a `[[owner]]` link (+ edges

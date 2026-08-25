@@ -2,7 +2,9 @@
 
 Single source of truth for naming a doc. Every actor that creates or renames a
 doc reads and applies this. The three descriptors are NOT interchangeable; each
-has one job (see decision `20260615230659`).
+has one job (see decision `20260615230659`). All three follow `doc-style.md`'s
+plain-register rule: established terms, literal statements, no metaphor — the
+summary especially, since it is quoted verbatim wherever the doc is surfaced.
 
 ## `label` — REQUIRED, the primary handle
 
@@ -22,7 +24,10 @@ output, and the compact name shown in displays.
   not the resolved conclusion stated as a claim. `Retry Backoff` names the
   topic (you'd learn about how retries back off); `Retries Wait Exponentially
   Longer Between Attempts` states the answer outright and reads as a fragment
-  pulled from the doc's body, not a handle for it.
+  pulled from the doc's body, not a handle for it. The same goes for slogan
+  and imperative labels — `Derive Nothing`, `Duplicate Over Share`, `Unset
+  Binds The Author` are compressed verdicts, not handles; name the topic
+  instead: `Stated Premise`, `Case Duplication`, `Unset Values`.
 - **Ban meta-jargon suffixes** that name the store's own machinery rather than
   the domain — "Primitive," "Pattern," "Mechanism," a bare "Model." `Retry
   Backoff Mechanism` tells a reader nothing `Retry Backoff` didn't already.
@@ -45,7 +50,12 @@ say than the label already does.
   face of single responsibility`.
 - If the title would just restate the label, omit it and let it fall back.
 - A provided title should be a complete, informative statement — not itself a
-  fragment.
+  fragment — in working-title register: the line an engineer would type, not
+  the body's thesis compressed into a carved sentence (see `doc-style.md`'s
+  plain-register rule). `Evaluate at capability grain` — yes; `A
+  capability's competence is measured at its own grain, with no pipeline
+  awareness and no whole schema` — that is the body's opening claim doing
+  double duty as a name.
 
 ## `summary` — the signpost
 
