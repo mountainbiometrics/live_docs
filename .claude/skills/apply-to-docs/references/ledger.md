@@ -2,6 +2,50 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-08-25 — Settled-authority contradictions punted to owner (Class B)
+
+**Failure:** During an apply-to-docs episode, the survey turned up a June doc
+(pipeline tool contract: `create_*` on an existing entity is a hard error)
+contradicted since 2026-08-11 by in-force create-always-creates
+(20260811184912), which the request explicitly reaffirmed. The executor scoped
+it out ("the owner spoke about hub create semantics, not the pipeline's tool
+handler"), left it unresolved, and reported it as "out of scope, worth a
+separate look." Owner: the system mandates purging such docs; nobody should
+have needed to ask.
+
+**Class:** B — two texts permitted the reading: Step 5 trigger 1 framed every
+contradiction as something "the user must address," with no carve-out for
+contradictions with *settled* authority; and the cruft-verdicts pointer
+appeared only as a "detection lens" parenthetical under the body-content rule.
+(Small C promotion, owner-confirmed: in-pass cleanup of settled-authority
+cruft is an invariant, not acceptable variance.)
+
+**Diff:** One paragraph inserted into Step 5 trigger 1: *unresolved* means
+genuinely contested authority; a doc contradicted by settled authority (the
+request's intent, or an in-force doc it reaffirms) is neither a trigger-1
+conflict nor a trigger-2 side-effect — it joins the impact set and is resolved
+in-pass per `_shared/cruft-verdicts.md` (deprecate with Correction +
+`superseded_by`, or REMOVE); never handed back as "out of scope" / "worth a
+separate look"; the episode review records it post-hoc.
+
+**Declined this pass:** editing map-concepts-to-docs' `conflict-unresolved`
+definition ("need human judgment" is already correct — settled contradictions
+don't) and cruft-verdicts' elective framing ("wants to apply"). Single
+failure, one edit; revisit only if the punt recurs through a sibling skill.
+
+**Regression answers:**
+1. Identify then synthesize — yes; survey stays read-only, cleanup lands in
+   the Step 6 batch.
+2. Archive then extract — yes; unchanged.
+3. Pause gate — yes, sharpened: contested conflicts and genuinely unintended
+   impact still pause; settled cruft no longer masquerades as either.
+4. Verbatim request body — yes; unchanged.
+5. One episode review — yes; the edit explicitly leans on it (post-hoc
+   signoff instead of pre-clearance).
+6. Honest `--source` — yes; unchanged.
+7. Large coherent updates proceed — yes; reinforced.
+8. Current-work → `living` — yes; unchanged.
+
 ## 2026-08-04 — status:target default misuse (Class B + C)
 
 **Failure:** apply-to-docs (and sibling writers) stamped nearly every

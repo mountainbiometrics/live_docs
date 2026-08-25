@@ -29,6 +29,13 @@ root-over-decision (reconcile had a soft bias that still failed).
    (e.g. 9 cascade-extends, 0 conflicts) proceeds without a yes/no gate. Pause
    reserves human attention for conflicts and surprises.
 
+## Newly discovered good-output properties (2026-08-25)
+
+9. **Settled-authority cruft cleaned in-pass.** A surveyed doc contradicted by
+   settled authority (the request's intent or an in-force doc it reaffirms) is
+   deprecated/removed in the same episode per `_shared/cruft-verdicts.md` —
+   never punted to the owner as "out of scope" / "worth a separate look."
+
 ## Newly discovered good-output properties (2026-08-04)
 
 8. **Current-work → `living`.** Concepts from apply-to-docs for work about to

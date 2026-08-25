@@ -162,6 +162,17 @@ permission-slip for doing the work the user asked for.
    present (frozen/deprecated clash, or a contradiction the synthesis cannot
    mechanically reconcile). The user must address something the conversation
    has not settled yet.
+   *Unresolved* means authority is genuinely contested. A doc the survey
+   turns up that is contradicted by **settled** authority — the request's
+   stated intent, or an in-force doc that intent reaffirms — is not a
+   conflict, and not a side-effect to weigh under trigger 2: it is cruft
+   found in the blast radius, whatever subsystem it lives in. It joins the
+   impact set and is resolved in this same pass per
+   `_shared/cruft-verdicts.md` (deprecate with `## Correction` +
+   `superseded_by` for overturned history; REMOVE when nothing durable
+   remains). Never hand it back as "out of scope" or "worth a separate
+   look": deferring settled cleanup re-opens what is already decided — the
+   episode review records it for post-hoc signoff like every other write.
 2. **Judgment — unintended side-effects.** The impact set reaches docs or
    deprecations that look *outside* what the request implies — e.g. full
    supersession of a living doc the request never touched, or cascade into an
