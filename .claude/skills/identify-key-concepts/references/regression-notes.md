@@ -18,7 +18,7 @@ principles; replace with cited happy-path outputs when available.
    owns mapping and synthesis.
 5. **Splitting test is opt-in.** Only when the calling flow asks for it.
 
-## Known failure (2026-07-23 panelists reconcile / apply)
+## Known failure (2026-07-23 consumer-store reconcile / apply)
 
 Given a working-session full of built decisions, extraction inventoried
 *decisions* as first-class concepts and left the motivating principles /

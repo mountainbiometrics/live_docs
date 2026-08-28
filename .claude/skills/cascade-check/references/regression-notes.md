@@ -13,7 +13,7 @@ Anchors for refinement. Created 2026-07-28 with the restated-ownership repair.
    via `garden-summarize`, not hand-patched member lists in the parent body.
 5. **Restated-ownership repair.** If a neighbor is stale only because it
    restates an owned claim/enumeration, collapse to `[[owner]]` (+ edges) —
-   do not synchronize the shadow list. (sinai soft-atomic cleanup 2026-07-28;
+   do not synchronize the shadow list. (consumer-store soft-atomic cleanup 2026-07-28;
    failure mode was N-doc list-sync on catalog membership change.)
 
 ## Known failure (2026-07-28)

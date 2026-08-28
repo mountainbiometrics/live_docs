@@ -5,7 +5,7 @@ Edit history for skill refinements. Newest first.
 ## 2026-07-28 — Restated-ownership repair (Class B)
 
 **Failure:** Catalog membership edits cascaded by syncing restated capability
-lists into dependents' bodies/summaries (sinai coverage-audit removal).
+lists into dependents' bodies/summaries (a consumer store's coverage-audit removal).
 
 **Class:** B — Step 5 + worked example explicitly endorsed updating restated
 enumerations to the new list.

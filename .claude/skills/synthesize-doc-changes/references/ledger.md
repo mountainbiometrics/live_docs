@@ -89,7 +89,7 @@ naming properties (4, 8) further reinforced by the slogan-label rule.
 register ("gold that guesses permanently mislays the finish line", "where
 calibration gets its sharpest instruments"). User: it's technical
 documentation, not storytelling; use existing terms; no synonym rotation.
-Pattern: the 2026-08-21 sinai batch needed a full manual rewrite pass
+Pattern: a 2026-08-21 consumer-store batch needed a full manual rewrite pass
 ("oracular"), then the 2026-08-24 batch reproduced the register.
 
 **Class:** A — no skill text addressed prose register at all; doc-style.md
@@ -110,7 +110,7 @@ text), and this skill's summary convention.
 edge, 3 incidental-for-ungrounded, 5 belongs_to≠requires, 7 incidental
 reachable, 10 owned-claims-linked, 11 status-living — untouched (register is
 diction, not content or metadata). 4 labels-name-subject, 6 claim-and-why,
-8 source-vocabulary, 9 panelists naming/shape anchor — reinforced: the
+8 source-vocabulary, 9 consumer-store QA naming/shape anchor — reinforced: the
 one-name rule generalizes source-vocabulary from handles to prose. The
 carve-out for established terms prevents the one foreseeable over-read
 (stripping store vocabulary as "metaphor").
@@ -136,7 +136,7 @@ default `living`; `target` only under shared deferral test.
 4. Labels name subject — yes; unchanged.
 5. belongs_to ≠ requires — yes; unchanged.
 6. Body states claim and why — yes; gap via status only when deferral test passes.
-7–10. Incidental reachable / source vocabulary / panelists / owned claims — yes.
+7–10. Incidental reachable / source vocabulary / consumer-store QA anchor / owned claims — yes.
 
 ---
 
@@ -166,7 +166,7 @@ this failure class.
 4. Labels name subject — unchanged.
 5. belongs_to ≠ requires — unchanged.
 6. Body states claim and why — yes; plus must not restate another doc's owned set.
-7–9. Incidental reachable / source vocabulary / panelists anchor — unchanged.
+7–9. Incidental reachable / source vocabulary / consumer-store QA anchor — unchanged.
 
 ## 2026-07-23 — Level authority + vocabulary + attribution honesty (Class B + A)
 

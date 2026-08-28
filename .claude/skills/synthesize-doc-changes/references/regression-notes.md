@@ -20,7 +20,7 @@ outputs when available.
 6. **Body states the claim and why** — not implementation narration, session
    play-by-play, or absence/history.
 
-## Known failure (2026-07-23 panelists)
+## Known failure (2026-07-23, consumer store)
 
 Synthesis canonized agent-coined labels ("Token Quantum Turns", "Harm Ledger",
 "Per-Pair Panelist Servers", "Thesis Test") over session/user vocabulary
@@ -36,7 +36,7 @@ provenance edge," which never happens when every new doc gets `--provenance`.
    `level: incidental` even when they carry a provenance edge to a digest/request.
 8. **Source vocabulary for handles.** Labels/titles prefer words from the
    provenance material over agent coinages.
-9. **Anchor from panelists QA** (`~/projects/panelists` review `20260722230917`,
+9. **Anchor from consumer-store QA** (review `20260722230917`,
    signed): labels must name the subject; thin summaries/bodies rewritten to
    say what the thing is and why it matters; delete implementation-recoverable
    docs — these are positive naming/shape examples, not a provenance-tier spec.
@@ -45,7 +45,7 @@ provenance edge," which never happens when every new doc gets `--provenance`.
 
 10. **Owned claims linked, not restated.** Dependents cite catalogs/membership
    sets via `[[owner]]` (+ edges); they do not re-enumerate the owner's list
-   in summary or body. Soft-atomic cleanup in sinai (`20260625215253`,
+   in summary or body. Soft-atomic cleanup in a consumer store (`20260625215253`,
    `20260622220247` → link `20260622220218`) is the positive example.
 
 ## Newly discovered good-output properties (2026-08-04)

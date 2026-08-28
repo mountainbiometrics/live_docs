@@ -16,7 +16,7 @@ outputs when available.
 5. **One episode review**, owned by this orchestrator; nested phases emit none.
 6. **Validate after writes**; no reindex in-episode.
 
-## Known failure (2026-07-23 panelists)
+## Known failure (2026-07-23, consumer store)
 
 Despite the why-priority knob, a large reconcile still produced a
 decision-inventory first pass; user correction was required to elevate root
@@ -58,7 +58,7 @@ never reading any of them. `ldoc validate` passed the whole time.
     conclusion restated. Drawing every word from the session's own vocabulary
     does not make a label correct on this axis.
 
-## Known failure (2026-08-12 panelists)
+## Known failure (2026-08-12, consumer store)
 
 A 19-doc reconcile run let born-`living` (status) leak into `level`: ten docs
 landed at `preference`/`requirement` because the code implementing them was
