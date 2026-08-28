@@ -105,3 +105,9 @@ The `ldoc` CLI is Python-3 stdlib-only (no dependencies); the skills target [Cla
 | `bin/`, `install.sh`, `mise.toml` | tooling to put `ldoc` on your PATH and install the plugins |
 | `docs/` | human-facing guides (setup, and more over time) |
 | `reports/` | design analyses and research artifacts (not part of the KB graph) |
+
+---
+
+## License
+
+[MIT](LICENSE) — Copyright (c) 2026 Mountain Biometrics. Contributions welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
