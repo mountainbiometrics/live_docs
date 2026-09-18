@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from ._paths import CONFIG_FILENAME
-from .model import DOCS_DIR, LEXICON_DIR, REVIEWS_DIR, STORE_ROOT
+from .store import DOCS_DIR, LEXICON_DIR, REVIEWS_DIR, STORE_ROOT
 from .serialize import parse_doc
 from .toml_flat import parse_config
 

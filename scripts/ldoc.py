@@ -93,7 +93,10 @@ sys.path.insert(0, str(_scripts_dir))
 
 from livedocs import KB, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
 from livedocs import ReviewLedger, generate_id, build_raw_frontmatter
+from livedocs.cli_entry import run_cli
+from livedocs.kb import churn_count, field_values
 from livedocs.model import change_types_for_fields
+from livedocs.store import StoreEntry
 
 
 # ---------------------------------------------------------------------------
@@ -129,40 +132,9 @@ def _fmt_edge_list(edges: list[dict], plain: bool = False) -> str:
     return "\n".join(lines)
 
 
-def _churn_count(doc: dict) -> int:
-    """Hot-file churn signal: history length EXCLUDING addition entries.
-
-    Creation is now recorded as an addition history entry, but creation is not
-    churn — so the opening addition never inflates the hot-file signal
-    (hot-file-signal 20260615203928). Counts genuine post-creation change.
-    """
-    n = 0
-    for h in doc.get("history", []):
-        ct = h.get("change_type")
-        is_addition = ("addition" in ct) if isinstance(ct, list) else (ct == "addition")
-        if not is_addition:
-            n += 1
-    return n
-
-
-def _fields_row(kb: KB, doc_id: str, fields: list[str]) -> str:
-    """Return a TSV row for doc_id, extracting named fields from the in-memory doc."""
-    doc = kb._docs.get(doc_id, {})
-    values = []
-    for f in fields:
-        if f == "id":
-            val = doc_id
-        elif f in ("title", "display"):
-            val = doc.get("title", "") or doc.get("label", "")
-        elif f == "history":
-            val = str(_churn_count(doc))
-        else:
-            raw = doc.get(f, "")
-            if isinstance(raw, list):
-                raw = ",".join(str(v) for v in raw)
-            val = str(raw) if raw else ""
-        values.append(val)
-    return "\t".join(values)
+def _fields_row(doc: dict, doc_id: str, fields: list[str]) -> str:
+    """Return the TSV row for one doc's named fields."""
+    return "\t".join(field_values(doc, doc_id, fields))
 
 
 def _split_csv(val: str) -> list[str]:
@@ -174,19 +146,17 @@ def _parse_fields(args) -> list[str] | None:
     return parsed if parsed else None
 
 
-def _apply_count_limit(results: list, args) -> tuple[list, bool]:
-    """Slice results by --limit, then print count and signal early-exit if --count."""
-    if args.limit is not None:
-        results = results[:args.limit]
+def _count_only(results: list, args) -> bool:
+    """Print the result count and signal early-exit when --count was passed."""
     if args.count:
         print(len(results))
-        return results, True
-    return results, False
+        return True
+    return False
 
 
-def _print_result(kb: "KB", r: dict, fields: list[str] | None, plain: bool, snippet: bool = False) -> None:
+def _print_result(r: dict, fields: list[str] | None, plain: bool, snippet: bool = False) -> None:
     if fields:
-        print(_fields_row(kb, r["id"], fields))
+        print("\t".join(r["fields"]))
     elif plain:
         label_part = f" [{r['label']}]" if r.get("label") else ""
         print(f"{r['id']}{label_part}  {r.get('display', '')}")
@@ -366,7 +336,7 @@ def cmd_get(kb: KB, args) -> int:
             except ValueError as e:
                 _err(str(e))
                 return 1
-            print(_fields_row(kb, result["id"], fields))
+            print(_fields_row(result["frontmatter"], result["id"], fields))
         return 0
 
     def render(ref: str) -> None:
@@ -392,7 +362,7 @@ def cmd_get(kb: KB, args) -> int:
         print(f"created: {fm.get('created', '')}")
         print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', '') or '(none)'}")
         hist = fm.get("history", [])
-        churn = _churn_count(fm)
+        churn = churn_count(fm)
         # Total entries, plus the churn count (additions excluded — hot-file signal).
         if churn != len(hist):
             print(f"history: {len(hist)} entries ({churn} churn)")
@@ -534,18 +504,14 @@ def cmd_find(kb: KB, args) -> int:
             status=args.status or None,
             scope=args.scope or None,
             domain=args.domain or None,
+            limit=args.limit,
+            fields=fields,
         )
     except ValueError as e:
         _err(str(e))
         return 1
 
-    # Drop the internal ranking flag from JSON/TSV unless callers want it —
-    # keep it only for sort (already applied in KB.find).
-    for r in results:
-        r.pop("archived", None)
-
-    results, done = _apply_count_limit(results, args)
-    if done:
+    if _count_only(results, args):
         return 0
 
     if args.json:
@@ -557,7 +523,7 @@ def cmd_find(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        _print_result(kb, r, fields, plain, snippet=True)
+        _print_result(r, fields, plain, snippet=True)
 
     return 0
 
@@ -569,13 +535,14 @@ def cmd_ls(kb: KB, args) -> int:
         results = kb.ls(
             type=args.type or None,
             include_reference=getattr(args, "include_reference", False),
+            limit=args.limit,
+            fields=fields,
         )
-    except Exception as e:
+    except ValueError as e:
         _err(str(e))
         return 1
 
-    results, done = _apply_count_limit(results, args)
-    if done:
+    if _count_only(results, args):
         return 0
 
     if args.json:
@@ -583,7 +550,7 @@ def cmd_ls(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        _print_result(kb, r, fields, plain)
+        _print_result(r, fields, plain)
 
     return 0
 
@@ -595,13 +562,14 @@ def cmd_orphans(kb: KB, args) -> int:
     try:
         results = kb.orphans(
             include_reference=getattr(args, "include_reference", False),
+            limit=args.limit,
+            fields=fields,
         )
-    except Exception as e:
+    except ValueError as e:
         _err(str(e))
         return 1
 
-    results, done = _apply_count_limit(results, args)
-    if done:
+    if _count_only(results, args):
         return 0
 
     if args.json:
@@ -613,7 +581,7 @@ def cmd_orphans(kb: KB, args) -> int:
         return 0
 
     for r in results:
-        _print_result(kb, r, fields, plain)
+        _print_result(r, fields, plain)
 
     return 0
 
@@ -621,10 +589,10 @@ def cmd_orphans(kb: KB, args) -> int:
 def cmd_map(kb: KB, args) -> int:
     """Orientation map: the topological entry points (signpost roots) of the store."""
     try:
-        overview = kb.map_overview(
+        overview = kb.map(
             include_reference=getattr(args, "include_reference", False),
         )
-    except Exception as e:
+    except ValueError as e:
         _err(str(e))
         return 1
 
@@ -696,8 +664,7 @@ def cmd_label(kb: KB, args) -> int:
 
     for ref in refs:
         try:
-            doc_id = kb.resolve(ref)
-            print(kb.display_label(doc_id))
+            print(kb.label(ref))
         except ValueError as e:
             _err(str(e))
             return 1
@@ -790,7 +757,7 @@ def cmd_log(kb: KB, args) -> int:
 
     try:
         events = kb.log(since=since, limit=limit)
-    except Exception as e:
+    except ValueError as e:
         _err(str(e))
         return 1
 
@@ -822,7 +789,7 @@ def cmd_count(kb: KB, args) -> int:
     """Doc and edge count statistics."""
     try:
         stats = kb.count()
-    except Exception as e:
+    except ValueError as e:
         _err(str(e))
         return 1
 
@@ -856,8 +823,8 @@ def cmd_count(kb: KB, args) -> int:
 def cmd_domains(kb: KB, args) -> int:
     """Domain registry: list every distinct domain tag in use, with doc counts."""
     try:
-        rows = kb.domain_counts()
-    except Exception as e:
+        rows = kb.domains()
+    except ValueError as e:
         _err(str(e))
         return 1
 
@@ -2039,23 +2006,29 @@ def cmd_viewer(kb: KB, args) -> int:
     return 0
 
 
-def cmd_term(kb: KB, args) -> int:
-    """Dispatch ldoc term <verb> over the lexicon/ sibling box."""
+def cmd_term(reads, args) -> int:
+    """Dispatch ldoc term <verb> over the lexicon/ sibling box.
+
+    The reading verbs are answered by whatever was handed in — the lexicon here,
+    or the same lexicon through the host serving a url-located store. Only the
+    writing verbs open the local box.
+    """
     from livedocs.lexicon import LexiconStore
 
-    store = LexiconStore()
     verb = args.term_verb
 
+    if verb == "get":
+        return _term_get(reads, args)
+    if verb == "show":
+        return _term_show(reads, args)
+    if verb in ("ls", "list"):
+        return _term_ls(reads, args)
+    if verb == "find":
+        return _term_find(reads, args)
+
+    store = LexiconStore()
     if verb == "new":
         return _term_new(store, args)
-    if verb == "get":
-        return _term_get(store, args)
-    if verb == "show":
-        return _term_show(store, args)
-    if verb in ("ls", "list"):
-        return _term_ls(store, args)
-    if verb == "find":
-        return _term_find(store, args)
     if verb == "set":
         return _term_set(store, args)
     if verb == "rm":
@@ -2095,26 +2068,22 @@ def _term_new(store, args) -> int:
     return 0
 
 
-def _term_get(store, args) -> int:
+def _term_get(reads, args) -> int:
     try:
-        rec = store.get(args.ref)
+        rec = reads.get(args.ref)
     except ValueError as e:
         _err(str(e))
         return 1
-    for key in (
-        "id", "term", "context", "definition", "allowed_aliases",
-        "restricted_aliases", "similar_terms",
-    ):
-        if key in rec and rec[key] not in (None, [], ""):
-            print(f"{key}: {rec[key]}")
+    for key, value in rec.items():
+        print(f"{key}: {value}")
     return 0
 
 
-def _term_show(store, args) -> int:
+def _term_show(reads, args) -> int:
     from livedocs.lexicon import display_form
 
     try:
-        rec = store.get(args.ref)
+        rec = reads.show(args.ref)
     except ValueError as e:
         _err(str(e))
         return 1
@@ -2147,39 +2116,26 @@ def _term_show(store, args) -> int:
     return 0
 
 
-def _term_ls(store, args) -> int:
-    from livedocs.lexicon import display_form
-
-    records = sorted(store.load_all().values(), key=lambda r: r.get("id", ""))
-    if args.context:
-        ctx_slug = args.context.strip().lower().replace(" ", "-")
-        records = [
-            r for r in records
-            if (r.get("context") or "").lower().replace(" ", "-") == ctx_slug
-            or r.get("id", "").startswith(ctx_slug + "/")
-        ]
+def _term_ls(reads, args) -> int:
+    records = reads.ls(context=args.context)
     if not records:
         print("(no terms)")
         return 0
     for r in records:
-        disp = display_form(r.get("term", ""), r.get("context"))
-        print(f"{r['id']:40}  {disp}")
+        print(f"{r['id']:40}  {r['display']}")
     return 0
 
 
-def _term_find(store, args) -> int:
-    from livedocs.lexicon import display_form
-
-    hits = store.find(" ".join(args.terms) if args.terms else "")
+def _term_find(reads, args) -> int:
+    hits = reads.find(" ".join(args.terms) if args.terms else "")
     if not hits:
         print("(no matches)")
         return 0
     for r in hits:
-        disp = display_form(r.get("term", ""), r.get("context"))
-        defn = (r.get("definition") or "").replace("\n", " ")
+        defn = r["definition"].replace("\n", " ")
         if len(defn) > 80:
             defn = defn[:77] + "..."
-        print(f"{r['id']:40}  {disp}")
+        print(f"{r['id']:40}  {r['display']}")
         print(f"  {defn}")
     return 0
 
@@ -2220,23 +2176,29 @@ def _term_rm(store, args) -> int:
     return 0
 
 
-def cmd_review(kb: KB, args) -> int:
-    """Dispatch ldoc review <subverb> commands over the reviews/ ledger."""
-    from livedocs import REVIEWS_DIR
-    ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=kb.docs_dir)
+def cmd_review(reads, args) -> int:
+    """Dispatch ldoc review <subverb> commands over the reviews/ ledger.
+
+    The reading verbs are answered by whatever was handed in — the ledger here,
+    or the same ledger through the host serving a url-located store. Only the
+    writing verbs open the local ledger.
+    """
     verb = args.review_verb
 
+    if verb == "list":
+        return _review_list(reads, args)
+    if verb == "show":
+        return _review_show(reads, args)
+
+    from livedocs import REVIEWS_DIR
+
+    ledger = ReviewLedger(reviews_dir=REVIEWS_DIR, docs_dir=reads.docs_dir)
     if verb == "new":
         return _review_new(ledger, args)
-    elif verb == "list":
-        return _review_list(ledger, args)
-    elif verb == "show":
-        return _review_show(ledger, args)
-    elif verb == "sign":
+    if verb == "sign":
         return _review_sign(ledger, args)
-    else:
-        _err(f"Unknown review subcommand: {verb!r}")
-        return 1
+    _err(f"Unknown review subcommand: {verb!r}")
+    return 1
 
 
 def _review_new(ledger: ReviewLedger, args) -> int:
@@ -2279,11 +2241,11 @@ def _review_new(ledger: ReviewLedger, args) -> int:
     return 0
 
 
-def _review_list(ledger: ReviewLedger, args) -> int:
+def _review_list(reads, args) -> int:
     unsigned_by = args.unsigned_by or ""
     try:
-        records = ledger.list_reviews(unsigned_by=unsigned_by)
-    except Exception as e:
+        records = reads.list(unsigned_by=unsigned_by)
+    except ValueError as e:
         _err(str(e))
         return 1
 
@@ -2298,9 +2260,9 @@ def _review_list(ledger: ReviewLedger, args) -> int:
     return 0
 
 
-def _review_show(ledger: ReviewLedger, args) -> int:
+def _review_show(reads, args) -> int:
     try:
-        rec = ledger.show(args.ref)
+        rec = reads.show(args.ref)
     except ValueError as e:
         _err(str(e))
         return 1
@@ -2322,7 +2284,7 @@ def _review_show(ledger: ReviewLedger, args) -> int:
         print("SIGNOFFS: (none)")
         print()
 
-    body = ledger.render_body(rec.get("body", "")).strip()
+    body = rec.get("body", "").strip()
     if body:
         print("SUMMARY:")
         print(body)
@@ -3395,51 +3357,114 @@ def _maybe_auto_rebuild_viewer(args, rc: int) -> None:
 # Dispatch table
 # ---------------------------------------------------------------------------
 
+# How an invocation reaches a store. A READ resolves through whoever holds the
+# store — a checkout here, or a host serving it — while a WRITE needs the files
+# themselves, and NO_STORE needs no store at all. A command with sub-verbs
+# classifies per verb, because `term ls` and `term new` are not the same kind of
+# thing.
+NO_STORE, READ, WRITE = "no-store", "read", "write"
+
 COMMANDS = {
-    "get": cmd_get,
-    "body": cmd_body,
-    "show": cmd_show,
-    "find": cmd_find,
-    "ls": cmd_ls,
-    "orphans": cmd_orphans,
-    "map": cmd_map,
-    "resolve": cmd_resolve,
-    "label": cmd_label,
-    "neighbors": cmd_neighbors,
-    "graph": cmd_graph,
-    "log": cmd_log,
-    "count": cmd_count,
-    "domains": cmd_domains,
-    "new": cmd_new,
-    "set": cmd_set,
-    "edit": cmd_edit,
-    "link": cmd_link,
-    "unlink": cmd_unlink,
-    "history": cmd_history,
-    "rm": cmd_rm,
-    "ingest-raw": cmd_ingest_raw,
-    "inbox": cmd_inbox,
-    "promote": cmd_promote,
-    "raw": cmd_raw,
-    "migrate": cmd_migrate,
-    "validate": cmd_validate,
-    "reindex": cmd_reindex,
-    "viewer": cmd_viewer,
-    "edges": cmd_edges,
-    "term": cmd_term,
-    "review": cmd_review,
-    "session": cmd_session,
-    "config": cmd_config,
-    "store": cmd_store,
-    "help": cmd_help,
+    "get": (cmd_get, READ),
+    "body": (cmd_body, READ),
+    "show": (cmd_show, READ),
+    "find": (cmd_find, READ),
+    "ls": (cmd_ls, READ),
+    "orphans": (cmd_orphans, READ),
+    "map": (cmd_map, READ),
+    "resolve": (cmd_resolve, READ),
+    "label": (cmd_label, READ),
+    "neighbors": (cmd_neighbors, READ),
+    "graph": (cmd_graph, READ),
+    "log": (cmd_log, READ),
+    "count": (cmd_count, READ),
+    "domains": (cmd_domains, READ),
+    "new": (cmd_new, WRITE),
+    "set": (cmd_set, WRITE),
+    "edit": (cmd_edit, WRITE),
+    "link": (cmd_link, WRITE),
+    "unlink": (cmd_unlink, WRITE),
+    "history": (cmd_history, WRITE),
+    "rm": (cmd_rm, WRITE),
+    "ingest-raw": (cmd_ingest_raw, WRITE),
+    "inbox": (cmd_inbox, WRITE),
+    "promote": (cmd_promote, WRITE),
+    "raw": (cmd_raw, WRITE),
+    "migrate": (cmd_migrate, WRITE),
+    "validate": (cmd_validate, WRITE),
+    "reindex": (cmd_reindex, WRITE),
+    "viewer": (cmd_viewer, WRITE),
+    "edges": (cmd_edges, WRITE),
+    "term": (cmd_term, {"get": READ, "show": READ, "ls": READ, "list": READ,
+                        "find": READ, "new": WRITE, "set": WRITE, "rm": WRITE}),
+    "review": (cmd_review, {"list": READ, "show": READ, "new": WRITE, "sign": WRITE}),
+    "session": (cmd_session, WRITE),
+    "config": (cmd_config, NO_STORE),
+    "store": (cmd_store, NO_STORE),
+    "help": (cmd_help, NO_STORE),
 }
+
+
+def _access(args) -> str:
+    """How this invocation reaches the store: NO_STORE, READ or WRITE."""
+    access = COMMANDS[args.subcommand][1]
+    if isinstance(access, dict):
+        return access[getattr(args, f"{args.subcommand}_verb")]
+    return access
+
+
+def _invocation(args) -> str:
+    """How to name what the user ran, for a refusal message."""
+    verb = getattr(args, f"{args.subcommand}_verb", None)
+    return f"`ldoc {args.subcommand} {verb}`" if verb else f"`ldoc {args.subcommand}`"
+
+
+def _remote_read_only_message(store: StoreEntry, what: str) -> str:
+    """Why a url-located store cannot be changed from here, and what to do instead.
+
+    Read-only is a property of the location, not of the command: what a host
+    offers is a read surface, so there is nothing to write through.
+    """
+    return (
+        f"store '{store.name}' is registered to a url ({store.url}), which is a "
+        f"read-only location — {what} would change the store.\n"
+        f"Either:\n"
+        f"  - check the store out and bind the name to it here: "
+        f"ldoc store register --force <path-to-store>\n"
+        f"  - or run this where the store lives, on the host serving {store.url}"
+    )
+
+
+def _read_surface(store, kb: "KB | None", subcommand: str):
+    """Whatever answers this command's reads.
+
+    `term` reads the lexicon and `review` the ledger; everything else reads the
+    docs. Against a url-located store each is the same class's remote
+    counterpart, so a handler never learns which one it got.
+    """
+    from livedocs.lexicon import LexiconStore
+    from livedocs import endpoint_client
+
+    remote = isinstance(store, StoreEntry)
+    if subcommand == "term":
+        return (endpoint_client.reader(store, LexiconStore) if remote
+                else LexiconStore(store.lexicon))
+    if subcommand == "review":
+        if remote:
+            return endpoint_client.reader(store, ReviewLedger)
+        # The KB already holds the store parsed, and a read creates nothing.
+        return ReviewLedger(
+            reviews_dir=store.reviews, docs_dir=store.docs,
+            docs=kb.all_docs(), create=False,
+        )
+    return endpoint_client.reader(store, KB) if remote else kb
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def main() -> int:
+def _run() -> int:
     # `ldoc config` is store-free; argparse's subparser dispatch can't reliably
     # pass flag-like args (--list, --unset) through REMAINDER, so we route it
     # directly before parse_args(). This is safe now that the module-level
@@ -3458,20 +3483,41 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    handler = COMMANDS.get(args.subcommand)
-    if not handler:
+    entry = COMMANDS.get(args.subcommand)
+    if not entry:
         _err(f"Unknown subcommand: {args.subcommand}")
         return 1
+    handler, access = entry[0], _access(args)
 
-    if args.subcommand == "help":
+    if access is NO_STORE:
         return handler(None, args)
 
-    from livedocs import DOCS_DIR
-    kb = KB(DOCS_DIR)
-    rc = handler(kb, args)
+    from livedocs.store import cwd_store
+
+    store = cwd_store()
+    if isinstance(store, StoreEntry):
+        if access is not READ:
+            sys.stderr.write(
+                f"ldoc: {_remote_read_only_message(store, _invocation(args))}\n"
+            )
+            return 2
+        # No KB, no session, and no viewer rebuild below: there is nothing local
+        # to load, tag or regenerate.
+        return handler(_read_surface(store, None, args.subcommand), args)
+
+    from livedocs.sessions import resolve_open_session
+
+    # The CLI finds its editing session in the shell environment and hands it in;
+    # the shared mutators never consult the environment themselves.
+    kb = KB(store.docs, session=resolve_open_session())
+    rc = handler(
+        _read_surface(store, kb, args.subcommand) if access is READ else kb, args,
+    )
     _maybe_auto_rebuild_viewer(args, rc)
     return rc
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Resolution is lazy — a module constant read deep inside a handler can raise
+    # LivedocsConfigError — so the translation sits at the process boundary.
+    run_cli(_run)

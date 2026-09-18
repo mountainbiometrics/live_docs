@@ -48,11 +48,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import argparse
 
 from livedocs import (
-    DOCS_DIR, load_all, dangling_edges, dangling_references, doc_prefix,
+    load_all, dangling_edges, dangling_references, doc_prefix,
     VALID_TYPES, VALID_STATUSES, VALID_LEVELS, VALID_REFERENCE_KINDS,
     is_archived,
 )
 from livedocs.lint import prose_links_not_edged, malformed_body_wikilinks
+from livedocs.store import cwd_store
+from livedocs.cli_entry import run_cli
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +319,7 @@ def main() -> int:
              "archive hygiene is not a requirement for the current model).",
     )
     args = parser.parse_args()
-    docs_dir = Path(args.docs_dir) if args.docs_dir else DOCS_DIR
+    docs_dir = Path(args.docs_dir) if args.docs_dir else cwd_store().docs
     include_reference = args.include_reference
 
     if not docs_dir.is_dir():
@@ -418,4 +420,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run_cli(main)

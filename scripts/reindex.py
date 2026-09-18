@@ -31,9 +31,9 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import (
-    DOCS_DIR, load_all, reverse_edges, referenced_by,
-)
+from livedocs import load_all, reverse_edges, referenced_by
+from livedocs.store import cwd_store
+from livedocs.cli_entry import run_cli
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ def main() -> int:
     if len(sys.argv) > 1:
         docs_dir = Path(sys.argv[1])
     else:
-        docs_dir = DOCS_DIR
+        docs_dir = cwd_store().docs
 
     if not docs_dir.is_dir():
         print(f"ERROR: docs directory not found: {docs_dir}", file=sys.stderr)
@@ -184,4 +184,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run_cli(main)

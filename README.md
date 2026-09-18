@@ -22,7 +22,7 @@ What makes live_docs itself, in five stances:
 
 - **Docs lead; code aligns.** The docs are the source of truth for *intent*; code reconciles to them, not the reverse. That's what makes a doc/code mismatch a *signal* — drift, or a decision the code hasn't caught up to — rather than an impossibility.
 - **The why, not the what.** Capture only what code can't re-derive: the decisions, rationale, constraints, and goals. The *what* is always recoverable from the source; the *why* is not, and it outlives any implementation.
-- **Accuracy, not access.** The valuable, hard job is keeping the knowledge accurate as reality changes — a write-time discipline — not fetching it. So live_docs is deliberately unopinionated about your agent harness: RAG, MCP, and prompt-assembly are downstream layers that bolt onto a store that's already true.
+- **Accuracy, not access.** The valuable, hard job is keeping the knowledge accurate as reality changes — a write-time discipline — not fetching it. So live_docs is deliberately unopinionated about your agent harness: it ships an optional read-only MCP endpoint that projects its own read commands ([`server/`](server/README.md)), while retrieval and prompt-assembly stay downstream layers that bolt onto a store that's already true.
 - **Living, not snapshotted.** When something changes, cascade *regenerates* the affected docs surgically from the graph — the stale nodes rewritten to current truth. Atomicity is what makes that safe and local.
 - **Revisable, not just enforced.** Every decision records its *why* and its dependencies, so it can be safely changed when reality moves — not merely checked against. The rulebook evolves instead of ossifying.
 
@@ -88,9 +88,9 @@ Full setup — installing just one part, attaching another repo to a store, shar
 
 ## Status & scope
 
-live_docs is **early and evolving**, developed in the open. Expect the schema and skills to move. It is deliberately narrow: it models a codebase's durable knowledge and keeps it consistent — it is *not* a retrieval stack, an MCP server, or an agent harness, and it doesn't try to be. Those are meant to layer on top.
+live_docs is **early and evolving**, developed in the open. Expect the schema and skills to move. It is deliberately narrow: it models a codebase's durable knowledge and keeps it consistent — it is *not* a retrieval stack or an agent harness, and it doesn't try to be. Those are meant to layer on top. The one exception is the optional MCP endpoint in [`server/`](server/README.md), which serves the `ldoc` read commands over the network and adds no surface of its own.
 
-The `ldoc` CLI is Python-3 stdlib-only (no dependencies); the skills target [Claude Code](https://claude.com/claude-code) but the store itself is just Markdown files you can read, grep, or open in any text or markdown reader.
+The `ldoc` CLI is Python-3 stdlib-only (no dependencies — the endpoint's live in `server/`, installed separately); the skills target [Claude Code](https://claude.com/claude-code) but the store itself is just Markdown files you can read, grep, or open in any text or markdown reader.
 
 ---
 
@@ -100,6 +100,7 @@ The `ldoc` CLI is Python-3 stdlib-only (no dependencies); the skills target [Cla
 |------|----------|
 | `kb/` | the knowledge base — live_docs' own docs (`00-inbox/`, `01-raw/`, `02-docs/`, `reviews/`) |
 | `scripts/` | the `ldoc` porcelain (`ldoc.py`) and the KB layer (`livedocs/`) |
+| `server/` | the optional read-only MCP endpoint, packaged and installed on its own |
 | `.claude/skills/` | the agent skill definitions |
 | `.claude-plugin/`, `.cursor-plugin/` | package the shared skills for Claude Code and Cursor |
 | `bin/`, `install.sh`, `mise.toml` | tooling to put `ldoc` on your PATH and install the plugins |

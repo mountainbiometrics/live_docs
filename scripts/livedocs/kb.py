@@ -8,13 +8,20 @@ Stdlib only. No external dependencies.
 
 from __future__ import annotations
 
-import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from .model import generate_id, display_label, is_archived, ARCHIVED_IMMUTABLE_MSG
+from .model import (
+    ARCHIVED_IMMUTABLE_MSG,
+    DocLevel,
+    DocStatus,
+    DocType,
+    display_label,
+    generate_id,
+    is_archived,
+)
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
 from .graph import (reverse_edges, reverse_requires, reverse_belongs_to,
                     referenced_by, forward_edges, relates_edges,
@@ -87,6 +94,62 @@ def normalize_tag_list(values: list[str] | None) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Row shaping — what a listing carries beyond id/label/display
+# ---------------------------------------------------------------------------
+
+def churn_count(doc: dict) -> int:
+    """Hot-file churn signal: history length EXCLUDING addition entries.
+
+    Creation is recorded as an addition history entry, but creation is not churn
+    — so the opening addition never inflates the hot-file signal
+    (hot-file-signal 20260615203928). Counts genuine post-creation change.
+    """
+    n = 0
+    for h in doc.get("history", []):
+        ct = h.get("change_type")
+        is_addition = ("addition" in ct) if isinstance(ct, list) else (ct == "addition")
+        if not is_addition:
+            n += 1
+    return n
+
+
+def field_values(doc: dict, doc_id: str, fields: list[str]) -> list[str]:
+    """The named stored fields of one doc, flattened to strings.
+
+    Shaped here rather than at a surface so a row means the same thing wherever
+    it is asked for. `id` and `history` are derived (`history` is the churn
+    count); everything else is read off the frontmatter, lists joined with
+    commas.
+    """
+    values = []
+    for f in fields:
+        if f == "id":
+            val = doc_id
+        elif f in ("title", "display"):
+            val = doc.get("title", "") or doc.get("label", "")
+        elif f == "history":
+            val = str(churn_count(doc))
+        else:
+            raw = doc.get(f, "")
+            if isinstance(raw, list):
+                raw = ",".join(str(v) for v in raw)
+            val = str(raw) if raw else ""
+        values.append(val)
+    return values
+
+
+# ---------------------------------------------------------------------------
+# Enumerated parameters of the graph reads
+# ---------------------------------------------------------------------------
+
+EdgeKind = Literal[
+    "requires", "belongs_to", "relates", "provenance", "superseded_by",
+    "required_by", "children", "dependents", "provenance_of", "all",
+]
+Direction = Literal["up", "down", "both"]
+
+
+# ---------------------------------------------------------------------------
 # Public: load all docs
 # ---------------------------------------------------------------------------
 
@@ -97,7 +160,7 @@ def load_all(docs_dir: Path | None = None) -> dict:
     Returns: {id: parsed_doc_dict}
     """
     if docs_dir is None:
-        from .model import DOCS_DIR
+        from .store import DOCS_DIR
         docs_dir = DOCS_DIR
     result = {}
     for path in sorted(docs_dir.glob("*.md")):
@@ -124,11 +187,26 @@ class KB:
     Skills handle cascade decisions.
     """
 
-    def __init__(self, docs_dir: Path | None = None):
+    # The reads this class owns. Each name is a method below; that method's
+    # signature and docstring are the whole definition of the read, so the CLI
+    # and a surface serving the store over a wire build from the same one thing
+    # and neither can drift from it. READ_NAMESPACE prefixes the names where they
+    # have to be one token beside another class's (see endpoint_client.tool_name).
+    READ_NAMESPACE = ""
+    READ_METHODS = (
+        "map", "ls", "find", "show", "get", "body", "neighbors", "graph",
+        "resolve", "label", "orphans", "log", "count", "domains",
+    )
+
+    def __init__(self, docs_dir: Path | None = None, session: str = ""):
         if docs_dir is None:
-            from .model import DOCS_DIR
+            from .store import DOCS_DIR
             docs_dir = DOCS_DIR
         self.docs_dir = docs_dir
+        # The editing session mutations are attributed to. The surface hands it
+        # in — the CLI from its shell environment, a request-driven surface from
+        # the request — so shared code never has to guess whose edit this is.
+        self.session = session
         self._reload()
 
     def _reload(self) -> None:
@@ -230,6 +308,13 @@ class KB:
         """Return '<Type>: <Title>' display string for a doc id."""
         return display_label(self._docs.get(doc_id, {"id": doc_id}))
 
+    def label(self, ref: str) -> str:
+        """Print '<Type>: <Title>' for a doc.
+
+        ref -- id, label, title, or a unique substring of either.
+        """
+        return self.display_label(self.resolve(ref))
+
     def _edge_list(self, ids: list[str]) -> list[dict]:
         """
         Convert a list of ids to [{id, label, display}] dicts.
@@ -251,9 +336,30 @@ class KB:
     # Reads
     # -----------------------------------------------------------------------
 
-    def get(self, ref: str) -> dict:
+    def _rows(
+        self, results: list, limit: int | None, fields: list[str] | None,
+    ) -> list[dict[str, Any]]:
+        """Trim a listing to ``limit`` and attach each row's requested fields.
+
+        Attached with the row rather than looked up per line by whoever prints
+        it, so one listing is one answer however far away the caller is.
         """
-        Return {id, label, display, frontmatter, body} for the resolved doc.
+        if limit is not None:
+            results = results[:limit]
+        if fields:
+            for row in results:
+                doc_id = row["id"]
+                row["fields"] = field_values(
+                    self._docs.get(doc_id, {}), doc_id, list(fields),
+                )
+        return results
+
+    def get(self, ref: str) -> dict[str, Any]:
+        """Show the frontmatter summary of one doc.
+
+        ref -- id, label, title, or a unique substring of either.
+
+        Returns {id, label, display, frontmatter, body} for the resolved doc.
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
@@ -266,14 +372,26 @@ class KB:
             "body": doc.get("body", ""),
         }
 
+    def doc(self, doc_id: str) -> dict:
+        """The parsed doc for an already-resolved id; {} when there is none."""
+        return self._docs.get(doc_id, {})
+
+    def all_docs(self) -> dict:
+        """Every parsed doc, keyed by id, for a caller that needs the whole store."""
+        return self._docs
+
     def body(self, ref: str) -> str:
-        """Return just the body text of the resolved doc."""
+        """Print the body text of one doc.
+
+        ref -- id, label, title, or a unique substring of either.
+        """
         doc_id = self.resolve(ref)
         return self._docs[doc_id].get("body", "")
 
-    def show(self, ref: str) -> dict:
-        """
-        Return full doc info including resolved edges.
+    def show(self, ref: str) -> dict[str, Any]:
+        """Show a full doc with its resolved edge links.
+
+        ref -- id, label, title, or a unique substring of either.
 
         requires, belongs_to, relates, provenance, superseded_by are rendered
         as [{id, label, display}] lists.  Reverse edges (required_by, children)
@@ -349,25 +467,36 @@ class KB:
     def find(
         self,
         query: str | None = None,
-        type: str | None = None,
-        level: str | None = None,
-        status: str | None = None,
+        type: DocType | None = None,
+        level: DocLevel | None = None,
+        status: DocStatus | None = None,
         scope: str | None = None,
         domain: str | None = None,
         terms: list[str] | None = None,
         or_mode: bool = False,
         regex: str | None = None,
-    ) -> list[dict]:
-        """
-        Search docs with optional filters. Returns [{id, label, display, snippet}].
+        limit: int | None = None,
+        fields: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search and filter docs. Multiple terms are AND by default.
+
+        Returns [{id, label, display, snippet}], reference/archived hits last.
 
         query       — single query string; matches title + label + body (case-insensitive).
+        type        — restrict to one doc type.
+        level       — restrict to one level.
+        status      — restrict to one status.
+        scope       — restrict to docs whose effective scope includes this anchor.
+        domain      — restrict to docs carrying this domain tag.
         terms       — list of query strings; in AND mode (default) all must match;
                       in OR mode (or_mode=True) any match is sufficient.
         or_mode     — when True, combine `terms` with OR logic instead of AND.
         regex       — a regex pattern applied to title + label + body (re.IGNORECASE).
+        limit       — return at most this many results.
+        fields      — also return these stored fields per row, in this order:
+                      id, label, title, type, status, level, scope, summary,
+                      domain, created, history (history is the churn count).
 
-        All other args filter by frontmatter field values.
         Multiple query mechanisms (query / terms / regex) are AND-combined with each other.
         """
         results = []
@@ -465,12 +594,22 @@ class KB:
             })
 
         # Reference/archived hits last (Surfaces Demote References). Stable by id.
+        # `archived` is ranking state, not part of the answer, so it goes no
+        # further than the sort it exists for.
         results.sort(key=lambda r: (r["archived"], r["id"]))
-        return results
+        for r in results:
+            del r["archived"]
+        return self._rows(results, limit, fields)
 
-    def orphans(self, *, include_reference: bool = False) -> list[dict]:
+    def orphans(
+        self,
+        *,
+        include_reference: bool = False,
+        limit: int | None = None,
+        fields: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """
-        Return docs that sit OUTSIDE the belongs_to hierarchy entirely.
+        List docs outside the belongs_to hierarchy (no belongs_to in OR out).
 
         Canonical, single-source definition (pure topology, navigability-based):
         a doc is an orphan iff it has NO `belongs_to` edge in EITHER direction —
@@ -481,9 +620,13 @@ class KB:
         `requires` / `relates` / `provenance` / `superseded_by` are NOT hierarchy
         and do NOT count.
 
-        By default, reference/archived docs are omitted — they are demoted
-        archive material, not hierarchy orphans to "fix" by scoping. Pass
-        ``include_reference=True`` to include them.
+        include_reference -- include type:reference / status:reference docs.
+            Omitted by default: they are demoted archive material, not hierarchy
+            orphans to "fix" by scoping.
+        limit -- return at most this many results.
+        fields -- also return these stored fields per row, in this order: id,
+            label, title, type, status, level, scope, summary, domain, created,
+            history (history is the churn count).
 
         This is the authoritative orphan computation. It is intentionally NOT a
         derived cache: callers query it FRESH (cf. cascade-check using
@@ -511,7 +654,7 @@ class KB:
                     "label": doc.get("label", ""),
                     "display": self.display_label(doc_id),
                 })
-        return results
+        return self._rows(results, limit, fields)
 
     def _children_map(self) -> dict[str, list[str]]:
         """Map each doc id to the ids that `belongs_to` it (its direct children)."""
@@ -522,11 +665,15 @@ class KB:
                     children.setdefault(parent, []).append(doc_id)
         return children
 
-    def map_overview(self, *, include_reference: bool = False) -> dict:
-        """
-        Return the store's navigational map: the topological ROOTS of the
-        belongs_to hierarchy, ranked so an agent can orient without a cold
-        search.
+    def map(self, *, include_reference: bool = False) -> dict[str, Any]:
+        """Orientation map: the store's entry points (signpost roots) with summaries.
+
+        The topological ROOTS of the belongs_to hierarchy, ranked so an agent can
+        orient without a cold search.
+
+        include_reference -- include type:reference / status:reference roots and
+            child hops. Omitted by default: they are footnote-grade, not
+            orientation peers. ``status: target`` roots are kept either way.
 
         A root is any doc with no resolving `belongs_to` parent. Roots split into:
           - signposts: roots that HAVE descendants (the entry points) — each
@@ -640,11 +787,24 @@ class KB:
             "floating": floating,
         }
 
-    def ls(self, type: str = None, *, include_reference: bool = False) -> list[dict]:
-        """List docs. Returns [{id, label, display}].
+    def ls(
+        self,
+        type: DocType | None = None,
+        *,
+        include_reference: bool = False,
+        limit: int | None = None,
+        fields: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List docs, optionally filtered by type. Returns [{id, label, display}].
 
-        By default omits reference/archived docs. ``include_reference=True`` or
-        an explicit ``type='reference'`` filter includes them.
+        type -- restrict to one doc type.
+        include_reference -- include type:reference / status:reference docs.
+            Omitted by default; an explicit ``type='reference'`` filter includes
+            them regardless.
+        limit -- return at most this many results.
+        fields -- also return these stored fields per row, in this order: id,
+            label, title, type, status, level, scope, summary, domain, created,
+            history (history is the churn count).
         """
         if type == "reference":
             include_reference = True
@@ -659,21 +819,20 @@ class KB:
                 "label": doc.get("label", ""),
                 "display": self.display_label(doc_id),
             })
-        return results
+        return self._rows(results, limit, fields)
 
     # -----------------------------------------------------------------------
     # Graph
     # -----------------------------------------------------------------------
 
-    def neighbors(self, ref: str, kind: str = "all") -> dict:
-        """
-        Return neighbor edge lists for ref.
+    def neighbors(self, ref: str, kind: EdgeKind = "all") -> dict[str, Any]:
+        """Show the neighbors of one doc.
 
-        kind: 'requires' | 'belongs_to' | 'relates' | 'provenance' |
-              'superseded_by' | 'required_by' | 'children' |
-              'dependents' (alias: required_by + children union) |
-              'provenance_of' | 'all'
-        Returns dict with requested edge lists as [{id, label, display}].
+        ref -- id, label, title, or a unique substring of either.
+        kind -- which edge lists to return. 'dependents' is the union of
+            required_by and children; 'all' returns every list.
+
+        Returns a dict with the requested edge lists as [{id, label, display}].
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
@@ -707,12 +866,17 @@ class KB:
 
         return result
 
-    def graph(self, ref: str, depth: int = 1, direction: str = "both") -> dict:
-        """
-        BFS traversal over cascade-hard edges only (requires + belongs_to).
+    def graph(
+        self, ref: str, depth: int = 1, direction: Direction = "both",
+    ) -> dict[str, Any]:
+        """BFS traversal over hard edges (requires + belongs_to).
+
         Navigation-only edges (relates, provenance, superseded_by) are NOT walked.
 
-        direction: 'up' (follow requires/belongs_to), 'down' (follow dependents), 'both'
+        ref -- id, label, title, or a unique substring of either.
+        depth -- how many hops to walk.
+        direction -- walk dependencies ('up'), dependents ('down'), or 'both'.
+
         Returns {nodes: [{id, label, display, depth}], edges: [[from_id, to_id], ...]}
         """
         root_id = self.resolve(ref)
@@ -1067,8 +1231,8 @@ class KB:
     ) -> None:
         """Append a history entry ``{at, summary[, change_type][, session]}``.
 
-        When ``session`` is None it defaults to the ``LDOC_SESSION`` environment
-        variable, so any mutation performed inside an open session
+        When ``session`` is None it falls back to the session this KB was opened
+        under, so any mutation performed inside an open session
         (``ldoc session start``) is tagged with that session id. The tag is
         additive: entries written outside a session omit it entirely, leaving
         pre-session history byte-for-byte unchanged (see session-stamped-history).
@@ -1083,7 +1247,7 @@ class KB:
 
         at = at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         if session is None:
-            session = os.environ.get("LDOC_SESSION", "")
+            session = self.session
         entry = {"at": at, "summary": summary}
         if change_type:
             if isinstance(change_type, str):
@@ -1117,7 +1281,7 @@ class KB:
         Write verbatim content into raw/ tier. Returns the raw id.
         """
         from datetime import date
-        from .model import RAW_DIR
+        from .store import RAW_DIR
 
         RAW_DIR.mkdir(parents=True, exist_ok=True)
         raw_id = generate_id(RAW_DIR)
@@ -1164,9 +1328,13 @@ class KB:
         self,
         since: str | None = None,
         limit: int | None = None,
-    ) -> list[dict]:
-        """
-        Return a READ-ONLY recent-changes view (newest first).
+    ) -> list[dict[str, Any]]:
+        """Recent-changes view (created/edited, newest first).
+
+        Read-only; does NOT create a review record — that is `ldoc review new`.
+
+        since -- show only changes at or after this ISO 8601 UTC timestamp.
+        limit -- maximum number of events to show.
 
         Each item represents a doc that was created or had a history entry added.
         Items: {id, label, display, at, event, summary}
@@ -1174,8 +1342,6 @@ class KB:
         `event` is 'created' or 'history'.
         `at` is the ISO 8601 timestamp of the event.
         `summary` is the history entry summary (empty for 'created' events).
-
-        Does NOT write a review record — that is `ldoc review new`.
         """
         events: list[dict] = []
 
@@ -1214,9 +1380,8 @@ class KB:
 
         return events
 
-    def count(self) -> dict:
-        """
-        Return doc and edge count statistics.
+    def count(self) -> dict[str, Any]:
+        """Doc and edge count statistics.
 
         Returns a dict with:
           total              — total doc count
@@ -1266,9 +1431,8 @@ class KB:
             "superseded_by_count": superseded_by_count,
         }
 
-    def domain_counts(self) -> list[dict]:
-        """
-        Return every distinct domain value in use across all docs, with counts.
+    def domains(self) -> list[dict[str, Any]]:
+        """Domain registry: every distinct domain tag in use, with doc counts.
 
         Sort order: count descending, then domain value alphabetically (case-sensitive,
         no folding — synonym consolidation is gardening's job, not the registry's).
@@ -1306,4 +1470,48 @@ class KB:
             except ValueError:
                 unresolved.append(r)
         return unresolved
+
+
+# ---------------------------------------------------------------------------
+# Staying current in a long-lived process
+# ---------------------------------------------------------------------------
+
+def docs_fingerprint(docs_dir: Path) -> tuple[int, float]:
+    """Return (doc count, newest mtime) for a store's docs — a cheap change signal.
+
+    Enough to notice an edit, a new doc or a deletion between requests without a
+    watcher or a thread. ``.index/`` is excluded because regenerating derived
+    artifacts is not a change to the corpus.
+    """
+    count = 0
+    newest = 0.0
+    for path in docs_dir.glob("*.md"):
+        if ".index" in path.parts:
+            continue
+        count += 1
+        newest = max(newest, path.stat().st_mtime)
+    return count, newest
+
+
+class KBCache:
+    """Holds one KB per store and rebuilds it only when that store's files changed.
+
+    For a surface that stays open across many requests: reloading every store on
+    every request is wasteful, and never reloading serves docs that have since
+    been edited on disk.
+    """
+
+    def __init__(self) -> None:
+        self._entries: dict[Path, tuple[tuple[int, float], KB]] = {}
+
+    def get(self, docs_dir: Path) -> KB:
+        """Return a KB over ``docs_dir``, freshly loaded if the files moved on."""
+        docs_dir = Path(docs_dir)
+        fingerprint = docs_fingerprint(docs_dir)
+        cached = self._entries.get(docs_dir)
+        if cached is not None and cached[0] == fingerprint:
+            return cached[1]
+        kb = KB(docs_dir)
+        self._entries[docs_dir] = (fingerprint, kb)
+        return kb
 

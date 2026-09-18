@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "livedocs-mcp"
+version = "0.1.0"
+description = "MCP endpoint for live_docs — the read porcelain, served over the network."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+
+# The endpoint is an optional part of the tool, so its dependencies live here and
+# `ldoc` takes on none of them. uvicorn is listed because this package imports it
+# directly to run the app it wraps, rather than inheriting it from mcp.
+dependencies = [
+    "mcp>=2",
+    "uvicorn>=0.31",
+]
+
+[project.scripts]
+livedocs-mcp = "livedocs_mcp:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["livedocs_mcp"]
