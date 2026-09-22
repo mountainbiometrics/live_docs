@@ -369,23 +369,43 @@ class ReviewLedger:
     the dependency graph. All review records live in REVIEWS_DIR.
     """
 
-    def __init__(self, reviews_dir: Path | None = None, docs_dir: Path | None = None):
+    # See KB.READ_METHODS: the reads this class owns, named as the CLI and a
+    # serving surface name them (`ldoc review show`, the tool `review_show`).
+    READ_NAMESPACE = "review"
+    READ_METHODS = ("list", "show")
+
+    def __init__(
+        self,
+        reviews_dir: Path | None = None,
+        docs_dir: Path | None = None,
+        *,
+        docs: dict | None = None,
+        create: bool = True,
+    ):
+        """``docs`` lets a caller that already parsed the store hand them over, and
+        ``create=False`` keeps a read from writing: a reader has no business
+        making the ledger directory, least of all one serving over a network.
+        """
         if reviews_dir is None:
-            from .model import REVIEWS_DIR
+            from .store import REVIEWS_DIR
             reviews_dir = REVIEWS_DIR
         if docs_dir is None:
-            from .model import DOCS_DIR
+            from .store import DOCS_DIR
             docs_dir = DOCS_DIR
         self.reviews_dir = reviews_dir
         self.docs_dir = docs_dir
-        reviews_dir.mkdir(parents=True, exist_ok=True)
+        self._docs = docs
+        if create:
+            reviews_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     def _load_docs(self) -> dict:
-        """Load all docs from docs_dir (used when building summaries)."""
+        """All docs, as handed in or loaded from docs_dir (used for summaries)."""
+        if self._docs is not None:
+            return self._docs
         from .serialize import parse_doc
         result = {}
         for path in sorted(self.docs_dir.glob("*.md")):
@@ -824,14 +844,13 @@ class ReviewLedger:
     # list
     # ------------------------------------------------------------------
 
-    def list_reviews(self, unsigned_by: str = "") -> list[dict]:
-        """
-        Return list of review records as summary dicts.
+    def list(self, unsigned_by: str = "") -> list[dict[str, Any]]:
+        """List review records.
+
+        unsigned_by -- show only records NOT signed by this name (exact,
+            case-insensitive, against the signoff entries).
 
         Each item: {id, created, touched_count, signers (list of who strings)}
-
-        With unsigned_by: only records where `who` has NOT signed (exact
-        case-insensitive match against signoff entries).
         """
         records = self._load_all_reviews()
         result = []
@@ -858,15 +877,19 @@ class ReviewLedger:
     # show
     # ------------------------------------------------------------------
 
-    def show(self, ref: str) -> dict:
-        """
-        Return full review record for ref (id or prefix/substring).
+    def show(self, ref: str) -> dict[str, Any]:
+        """Show a review record.
 
-        Returns: {id, created, touched, signoffs, body}
+        ref -- review record id, or a unique prefix/substring of one.
+
+        Returns {id, created, touched, signoffs, body}. Refs inside the body are
+        stored bare and expanded here, so the record carries the docs' current
+        labels rather than a snapshot of them.
         """
         records = self._load_all_reviews()
         rec_id = self._resolve(ref, records)
-        return records[rec_id]
+        rec = records[rec_id]
+        return dict(rec, body=self.render_body(rec.get("body", "")))
 
     def render_body(self, body: str) -> str:
         """

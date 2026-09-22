@@ -1,7 +1,10 @@
 """
-model.py — Primitives and constants for the live_docs tooling.
+model.py — the doc model: what a live_docs doc is made of.
 
-Paths, enum sets, label utilities, and ID generation.
+Enum sets, the archived test, the change-type taxonomy, id generation, and the
+label and wiki-link rendering every surface shares. Where a store lives and how
+it is opened is store.py's; nothing here reads a config or touches a path.
+
 Stdlib only. No external dependencies.
 """
 
@@ -9,214 +12,9 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
-from ._paths import CONFIG_FILENAME, HOME_CONFIG
-from .toml_flat import (
-    BASE_DEFAULT_SUBDIRS,
-    BOX_KEYS,
-    ConfigChainError,
-    resolve_store_config,
-    set_store_registry_entry,
-)
-
-
-# ---------------------------------------------------------------------------
-# Paths — located by DISCOVERY, not by where this code lives
-# ---------------------------------------------------------------------------
-#
-# A single installed `ldoc` must operate on whichever store the directory you're
-# standing in belongs to, so resolution is anchored to the CURRENT WORKING
-# DIRECTORY, not to __file__. Git-style: walk up from the CWD looking for a
-# `.live_docs.toml` marker; if none is found in the CWD or any parent, fall
-# back to a per-user config at ~/.config/live_docs/config.toml; if neither
-# exists, complain and exit.
-#
-# Paths inside a config file resolve relative to the directory CONTAINING that
-# file (absolute and ~ paths are kept as-is). So a config can point at docs that
-# live in a different repo entirely — a shared "mono-doc" store for several
-# related code repos.
-
-# Built-in defaults when neither `base` nor an explicit box key is set. Relative
-# to the discovered config file's directory.
-_DEFAULT_PATHS = {
-    "docs": "docs",
-    "raw": "raw",
-    "reviews": "reviews",
-    "sessions": "sessions",
-    "lexicon": "lexicon",
-    "inbox": "inbox",
-    "index": None,  # None → derived as <docs>/.index
-}
-
-# Per-key env var overrides (win over the config file). Relative values resolve
-# against the CWD, since they are invocation-time overrides.
-_ENV_VARS = {
-    "docs": "LIVEDOCS_DOCS_DIR",
-    "raw": "LIVEDOCS_RAW_DIR",
-    "reviews": "LIVEDOCS_REVIEWS_DIR",
-    "sessions": "LIVEDOCS_SESSIONS_DIR",
-    "lexicon": "LIVEDOCS_LEXICON_DIR",
-    "inbox": "LIVEDOCS_INBOX_DIR",
-}
-
-
-class LivedocsConfigError(Exception):
-    """No live_docs config could be located by discovery."""
-
-
-def _find_config() -> "tuple[Path | None, list[Path]]":
-    """Locate the governing config file.
-
-    Returns (config_path, searched): the chosen file (or None if none exists)
-    and every location inspected, so a failure can show its work.
-    """
-    searched: list[Path] = []
-    cwd = Path.cwd().resolve()
-    for d in (cwd, *cwd.parents):
-        candidate = d / CONFIG_FILENAME
-        searched.append(candidate)
-        if candidate.is_file():
-            return candidate, searched
-    searched.append(HOME_CONFIG)
-    if HOME_CONFIG.is_file():
-        return HOME_CONFIG, searched
-    return None, searched
-
-
-def _resolve_path(value: str, base: Path) -> Path:
-    """Resolve a configured path string relative to `base` (absolute/~ kept as-is)."""
-    p = Path(value).expanduser()
-    return p if p.is_absolute() else (base / p)
-
-
-def _self_register_store(name: str, root: Path) -> None:
-    """Idempotently record name -> root in the per-user registry.
-
-    Never overwrites a conflicting binding and never raises: registration is a
-    courtesy side-effect, so on a conflict it warns and moves on rather than
-    blocking the command the user actually ran.
-    """
-    try:
-        status, old = set_store_registry_entry(HOME_CONFIG, name, root, force=False)
-    except OSError:
-        return
-    if status == "conflict":
-        sys.stderr.write(
-            f"ldoc: store name '{name}' is already registered to {old}, not {root}.\n"
-            f"      Auto-registration skipped. If this checkout is the right one, run: "
-            f"ldoc store register --force\n"
-        )
-
-
-def _resolve() -> dict:
-    """Run discovery and resolve every store directory. Raises on no config."""
-    config_path, searched = _find_config()
-    cwd = Path.cwd().resolve()
-
-    if config_path is None:
-        # Escape hatch: explicit env overrides can operate without a marker file
-        # (e.g. CI). Otherwise there is no store to point at — complain.
-        if not any(os.environ.get(v) for v in _ENV_VARS.values()):
-            looked = "\n".join(f"  - {p}" for p in searched)
-            raise LivedocsConfigError(
-                f"no live_docs config found.\n"
-                f"Looked for '{CONFIG_FILENAME}' in the current directory and each "
-                f"parent, then for a home config:\n{looked}\n"
-                f"Create a '{CONFIG_FILENAME}' at your store root, or set a "
-                f"LIVEDOCS_* override."
-            )
-        store_root = cwd
-        consumer_root = None
-        config: dict[str, str] = {}
-        sources: dict[str, Path] = {}
-        consumer_locals: dict[str, str] = {}
-    else:
-        local_marker = config_path.parent
-        try:
-            store = resolve_store_config(config_path)
-        except ConfigChainError as e:
-            raise LivedocsConfigError(str(e)) from e
-        config = store.config
-        sources = store.sources
-        store_root = store.store_root
-        consumer_root = store.consumer_root
-        consumer_locals = store.consumer_locals
-
-        # When we are standing inside the store itself (the discovered marker is
-        # that store, not a consumer pointer) and it declares a name, record
-        # name -> root so consumers can resolve it. Idempotent; fail-loud on a
-        # conflicting binding without blocking this command.
-        if store.store_name and consumer_root == store_root:
-            _self_register_store(store.store_name, store_root)
-
-    base_path: Path | None = None
-    if config.get("base"):
-        base_source = sources.get("base", store_root)
-        base_path = _resolve_path(config["base"], base_source)
-
-    resolved: dict = {
-        "store_root": store_root,
-        "consumer_root": consumer_root,
-        "consumer_locals": consumer_locals,
-    }
-    for key in BOX_KEYS:
-        env_val = os.environ.get(_ENV_VARS[key])
-        if env_val:
-            resolved[key] = _resolve_path(env_val, cwd)
-        elif key in config:
-            source = sources.get(key, store_root)
-            resolved[key] = _resolve_path(config[key], source)
-        elif base_path is not None:
-            resolved[key] = base_path / BASE_DEFAULT_SUBDIRS[key]
-        else:
-            resolved[key] = store_root / _DEFAULT_PATHS[key]
-
-    # Index cache derives under docs by default; an explicit `index` key
-    # (config only — no env var) overrides it.
-    if config.get("index"):
-        index_source = sources.get("index", store_root)
-        resolved["index"] = _resolve_path(config["index"], index_source)
-    else:
-        resolved["index"] = resolved["docs"] / ".index"
-    return resolved
-
-
-_resolved_paths: dict | None = None
-
-_PATH_ATTRS: dict[str, str] = {
-    "STORE_ROOT": "store_root",
-    "CONSUMER_ROOT": "consumer_root",
-    "REPO_ROOT": "store_root",  # backward-compatible alias
-    "DOCS_DIR": "docs",
-    "RAW_DIR": "raw",
-    "REVIEWS_DIR": "reviews",
-    "SESSIONS_DIR": "sessions",
-    "LEXICON_DIR": "lexicon",
-    "INBOX_DIR": "inbox",
-    "INDEX_DIR": "index",
-}
-
-
-def _get_paths() -> dict:
-    global _resolved_paths
-    if _resolved_paths is None:
-        try:
-            _resolved_paths = _resolve()
-        except LivedocsConfigError as e:
-            sys.stderr.write(f"ldoc: {e}\n")
-            sys.exit(2)
-    return _resolved_paths
-
-
-def __getattr__(name: str) -> "Path":
-    if name in _PATH_ATTRS:
-        obj = _get_paths()[_PATH_ATTRS[name]]
-        globals()[name] = obj  # cache so subsequent access skips __getattr__
-        return obj
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+from typing import Literal
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +28,12 @@ VALID_TYPES = {
 VALID_STATUSES = {"living", "target", "deprecated", "reference"}
 VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
+
+# The same three enums as annotations, so a method that takes one says which
+# values it takes and a surface reading its signature can offer them.
+DocType = Literal[tuple(sorted(VALID_TYPES))]
+DocStatus = Literal[tuple(sorted(VALID_STATUSES))]
+DocLevel = Literal[tuple(sorted(VALID_LEVELS))]
 
 
 def is_archived(doc: dict | None) -> bool:

@@ -110,6 +110,17 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc viewer [--out PATH]` | Build the read-only HTML viewer (default path: `[viewer] build_path`, else `build/viewer.html`) |
 | `ldoc session start\|close\|list\|summary\|resume\|merge ...` | Editing-session lifecycle; every mutation runs in a session, `close` mints one review (see `.claude/skills/_shared/session-lifecycle.md`) |
 | `ldoc review new\|list\|show\|sign ...` | Post-hoc review ledger (a review is minted at `session close`) |
+| `ldoc store register <path> \| <name> --url URL [--remote-name N]` | Bind a store name to a location on this machine: a local checkout, or the url of a host that serves it. `--force` re-points an existing binding |
+| `ldoc store list` / `ldoc store forget <name>` | Show each name's location / drop a binding |
+
+**A store registered to a url is read-only from here.** Every read command
+above works against it — `ldoc` resolves the url by calling the host's MCP
+endpoint and prints exactly what it prints for a checkout, `--json` included.
+Anything that would change the store (every mutator, `session`, `review
+new/sign`, `term new/set/rm`, `validate`, `reindex`, `viewer`, the inbox and
+raw pipeline) fails loud with exit 2 and says so; check the store out and
+register its root, or run the command where the store lives. Set
+`LIVEDOCS_MCP_TOKEN` when the host requires a token.
 
 ---
 

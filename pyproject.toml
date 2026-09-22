@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "livedocs"
+version = "0.1.0"
+description = "A living knowledge graph for a codebase — atomic typed docs, a dependency graph, and cascade-on-change."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+
+# The base distribution is the `ldoc` porcelain and the shared library it calls,
+# both stdlib-only. Nothing here forces a dependency onto an install that only
+# wants that.
+dependencies = []
+
+# The endpoint is an optional part of the tool, so its dependencies live behind
+# this extra and `ldoc` takes on none of them. uvicorn is listed because this
+# package imports it directly to run the app it wraps, rather than inheriting it
+# from mcp. Both are marked >=3.10 because that's the endpoint's own floor
+# (mcp>=2 requires it) — without the marker, resolving this project for the
+# whole >=3.9 requires-python range fails even when the extra is never
+# installed, because the resolver must find versions of these deps that work on
+# 3.9 too.
+[project.optional-dependencies]
+mcp = [
+    "mcp>=2; python_version >= '3.10'",
+    "uvicorn>=0.31; python_version >= '3.10'",
+]
+
+[project.scripts]
+livedocs-mcp = "livedocs_mcp:main"
+
+# hatchling strips the leading path components of each package, so both land at
+# top level in the wheel: `livedocs` and `livedocs_mcp`. The files stay where
+# they are in the checkout; only this listing changes.
+[tool.hatch.build.targets.wheel]
+packages = ["scripts/livedocs", "server/livedocs_mcp"]
+
+# scripts/viewer/ (template.html + vendored JS) isn't a Python package — it has
+# no __init__.py — so it can't go through `packages` above. viewer.py finds it
+# by walking up from its own file to a sibling `viewer/` directory, so
+# force-include reproduces that same sibling relationship at the install root
+# instead of moving the lookup into the package.
+[tool.hatch.build.targets.wheel.force-include]
+"scripts/viewer" = "viewer"

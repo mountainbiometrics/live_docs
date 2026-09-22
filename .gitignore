@@ -5,3 +5,8 @@ kb/02-docs/.index
 build/
 
 __pycache__/
+
+# `uv run` at the repo root creates both. This is a library, not a deployment —
+# no lock file to commit.
+.venv/
+uv.lock

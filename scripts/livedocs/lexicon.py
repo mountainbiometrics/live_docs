@@ -214,12 +214,38 @@ def dump_term(term: dict[str, Any]) -> str:
     return "\n".join(lines) + ("\n" if not lines[-1].endswith("\n") else "")
 
 
+# The identity + definition fields of a term record, in reading order. Alias and
+# similar-term lists come last because they qualify the definition.
+_TERM_FIELDS = (
+    "id", "term", "context", "definition", "allowed_aliases",
+    "restricted_aliases", "similar_terms",
+)
+
+
+def _listing_row(rec: dict) -> dict[str, Any]:
+    """One term as a listing line: its id and what it is called."""
+    return {
+        "id": rec["id"],
+        "display": display_form(rec.get("term", ""), rec.get("context")),
+    }
+
+
+def _defined_row(rec: dict) -> dict[str, Any]:
+    """A listing line plus the definition, for a search that has to show why it hit."""
+    return dict(_listing_row(rec), definition=rec.get("definition") or "")
+
+
 class LexiconStore:
     """Query/mutation layer over the lexicon/ box."""
 
+    # See KB.READ_METHODS: the reads this class owns, named as the CLI and a
+    # serving surface name them (`ldoc term ls`, the tool `term_ls`).
+    READ_NAMESPACE = "term"
+    READ_METHODS = ("get", "show", "ls", "find")
+
     def __init__(self, lexicon_dir: Path | None = None):
         if lexicon_dir is None:
-            from .model import LEXICON_DIR
+            from .store import LEXICON_DIR
 
             lexicon_dir = LEXICON_DIR
         self.lexicon_dir = lexicon_dir
@@ -245,8 +271,26 @@ class LexiconStore:
             out[rec["id"]] = rec
         return out
 
-    def get(self, ref: str) -> dict:
-        """Resolve by id, display form, or unique substring of term/id."""
+    def get(self, ref: str) -> dict[str, Any]:
+        """Print a term's frontmatter fields.
+
+        ref -- term id, display form, or unique substring.
+
+        The identity and definition fields only, and only those the record
+        carries — the fuller record is `show`.
+        """
+        rec = self.show(ref)
+        return {
+            key: rec[key]
+            for key in _TERM_FIELDS
+            if key in rec and rec[key] not in (None, [], "")
+        }
+
+    def show(self, ref: str) -> dict[str, Any]:
+        """Print a term with its definition and alias lists.
+
+        ref -- term id, display form, or unique substring.
+        """
         ref = (ref or "").strip()
         if not ref:
             raise ValueError("empty term ref")
@@ -328,7 +372,7 @@ class LexiconStore:
         return tid, path
 
     def set(self, ref: str, **fields: Any) -> dict:
-        rec = self.get(ref)
+        rec = self.show(ref)
         tid = rec["id"]
         path = self.path_for(tid)
 
@@ -381,7 +425,7 @@ class LexiconStore:
         return parse_term(path, self.lexicon_dir)
 
     def rm(self, ref: str) -> str:
-        rec = self.get(ref)
+        rec = self.show(ref)
         tid = rec["id"]
         path = self.path_for(tid)
         path.unlink()
@@ -391,10 +435,34 @@ class LexiconStore:
             parent.rmdir()
         return tid
 
-    def find(self, query: str) -> list[dict]:
+    def ls(self, context: str = "") -> list[dict[str, Any]]:
+        """List terms.
+
+        context -- filter to one context slug or name.
+
+        Returns [{id, display}], sorted by id.
+        """
+        records = sorted(self.load_all().values(), key=lambda r: r.get("id", ""))
+        if context:
+            ctx_slug = context.strip().lower().replace(" ", "-")
+            records = [
+                r for r in records
+                if (r.get("context") or "").lower().replace(" ", "-") == ctx_slug
+                or r.get("id", "").startswith(ctx_slug + "/")
+            ]
+        return [_listing_row(r) for r in records]
+
+    def find(self, query: str = "") -> list[dict[str, Any]]:
+        """Search terms by substring.
+
+        query -- matched against id, term, context, definition, aliases and
+            body. Empty returns every term.
+
+        Returns [{id, display, definition}].
+        """
         q = (query or "").strip().lower()
         if not q:
-            return list(self.load_all().values())
+            return [_defined_row(r) for r in self.load_all().values()]
         hits = []
         for rec in self.load_all().values():
             blob = " ".join(
@@ -410,7 +478,7 @@ class LexiconStore:
             ).lower()
             if q in blob:
                 hits.append(rec)
-        return sorted(hits, key=lambda r: r.get("id", ""))
+        return [_defined_row(r) for r in sorted(hits, key=lambda r: r.get("id", ""))]
 
     def export_records(self) -> list[dict]:
         """JSON-friendly list for the viewer export."""

@@ -7,7 +7,7 @@ Stdlib only (pathlib, re, datetime). No external dependencies. Import from other
 
 Store location: resolved by discovery, not by where this code lives. `ldoc` walks
 up from the current working directory for a `.live_docs.toml` marker, falling back
-to ~/.config/live_docs/config.toml. See model.py for the resolution rules.
+to ~/.config/live_docs/config.toml. See store.py for the resolution rules.
 
 Exports are lazy so submodules like user_config can load without locating a store.
 """
@@ -17,9 +17,14 @@ from __future__ import annotations
 import importlib
 
 _EXPORT_MAP = [
-    ("model",     {"STORE_ROOT", "CONSUMER_ROOT", "REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
+    ("store",     {"STORE_ROOT", "CONSUMER_ROOT", "REPO_ROOT", "DOCS_DIR", "RAW_DIR", "REVIEWS_DIR", "SESSIONS_DIR",
                    "LEXICON_DIR", "INBOX_DIR", "INDEX_DIR",
-                   "VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
+                   "StorePaths", "StoreEntry",
+                   "open_store", "open_store_at", "cwd_store",
+                   "LivedocsConfigError", "StoreNotRegisteredError", "StoreUnreachableError"}),
+    ("cli_entry", {"run_cli", "config_error_message"}),
+    ("model",     {"VALID_TYPES", "VALID_STATUSES", "VALID_LEVELS", "VALID_REFERENCE_KINDS",
+                   "DocType", "DocStatus", "DocLevel",
                    "is_archived", "ARCHIVED_IMMUTABLE_MSG",
                    "generate_id", "generate_session_id", "session_start_iso",
                    "change_types_for_fields", "dominant_change_type",
@@ -37,7 +42,8 @@ _EXPORT_MAP = [
                    "superseded_by_edges", "id_title_map", "BLOCKING_EDGE_FIELDS", "ALL_EDGE_FIELDS"}),
     ("lint",      {"body_doc_refs", "edged_ids", "prose_links_not_edged",
                    "malformed_body_wikilinks", "BODY_WIKILINK_RE"}),
-    ("kb",        {"KB", "load_all"}),
+    ("kb",        {"KB", "KBCache", "load_all", "docs_fingerprint",
+                   "churn_count", "field_values"}),
     ("reviews",   {"ReviewLedger", "parse_review", "dump_review", "strip_wal_archive"}),
     ("viewer",    {"build_viewer", "auto_rebuild_viewer", "auto_viewer_enabled",
                    "resolve_viewer_build_path", "DEFAULT_BUILD_PATH"}),

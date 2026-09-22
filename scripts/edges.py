@@ -25,13 +25,18 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import DOCS_DIR, load_all, forward_edges, reverse_edges, dangling_edges, id_title_map
+from livedocs import load_all, forward_edges, reverse_edges, dangling_edges, id_title_map
+from livedocs.store import cwd_store
+from livedocs.cli_entry import run_cli
 
 
 def main() -> int:
     use_json = "--json" in sys.argv
 
-    docs = load_all(DOCS_DIR)
+    # Resolved here rather than at import: a missing store is this command
+    # failing, not this module failing to load.
+    docs_dir = cwd_store().docs
+    docs = load_all(docs_dir)
     fwd = forward_edges(docs)
     rev = reverse_edges(docs)
     titles = id_title_map(docs)
@@ -57,7 +62,7 @@ def main() -> int:
     def _node_list(ids) -> str:
         return ", ".join(_node(i) for i in ids) if ids else "(none)"
 
-    print(f"edges — {DOCS_DIR}")
+    print(f"edges — {docs_dir}")
     print(f"Docs: {len(docs)}")
     print()
 
@@ -88,4 +93,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run_cli(main)

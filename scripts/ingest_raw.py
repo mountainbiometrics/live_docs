@@ -35,7 +35,9 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path so livedocs is importable from any CWD.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from livedocs import RAW_DIR, generate_id, build_raw_frontmatter
+from livedocs import generate_id, build_raw_frontmatter
+from livedocs.store import cwd_store
+from livedocs.cli_entry import run_cli
 
 
 # ---------------------------------------------------------------------------
@@ -127,14 +129,18 @@ Examples:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # Resolved before the arguments are parsed, so "there is no store here" is
+    # the first thing said rather than a complaint about missing flags.
+    raw_dir = cwd_store().raw
+
     parser = build_parser()
     args = parser.parse_args()
 
     # Ensure the raw/ directory exists.
-    RAW_DIR.mkdir(parents=False, exist_ok=True)
+    raw_dir.mkdir(parents=False, exist_ok=True)
 
     # Collision-safe id within raw/.
-    raw_id = generate_id(RAW_DIR)
+    raw_id = generate_id(raw_dir)
 
     # Today's date for the imported field.
     imported = date.today().strftime("%Y-%m-%d")
@@ -160,7 +166,7 @@ def main() -> None:
         content += "\n"
 
     # Write.
-    output_path = RAW_DIR / f"{raw_id}.md"
+    output_path = raw_dir / f"{raw_id}.md"
     output_path.write_text(content, encoding="utf-8")
 
     # Report.
@@ -169,4 +175,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    run_cli(main)

@@ -151,7 +151,7 @@ class SessionStore:
 
     def __init__(self, sessions_dir: Path | None = None):
         if sessions_dir is None:
-            from .model import SESSIONS_DIR
+            from .store import SESSIONS_DIR
             sessions_dir = SESSIONS_DIR
         self.sessions_dir = sessions_dir
 
