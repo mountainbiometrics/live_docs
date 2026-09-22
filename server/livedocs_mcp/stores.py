@@ -14,7 +14,6 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import shared  # noqa: F401  — puts the shared code on sys.path
 from livedocs._paths import HOME_CONFIG
 from livedocs.kb import KB, KBCache
 from livedocs.lexicon import LexiconStore

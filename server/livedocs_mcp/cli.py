@@ -13,7 +13,6 @@ import ipaddress
 import os
 import sys
 
-from . import shared  # noqa: F401  — puts the shared code on sys.path
 from .auth import BearerToken
 # The CLI client that reads a url-located store names this variable; both ends
 # of the same token must agree on where it is read from.

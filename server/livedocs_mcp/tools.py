@@ -14,7 +14,6 @@ import inspect
 import typing
 from typing import Any, Optional
 
-from . import shared  # noqa: F401  — puts the shared code on sys.path
 from livedocs.endpoint_client import tool_name
 from livedocs.store import LivedocsConfigError
 from mcp.server.mcpserver import MCPServer

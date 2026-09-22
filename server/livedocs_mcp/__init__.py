@@ -9,11 +9,16 @@ names and semantics, and serves the checkouts on its host rather than a copy.
 Packaged apart from the tooling so `ldoc` carries none of its dependencies.
 """
 
+import sys
+
 __all__ = ["main"]
 
 
 def main(argv: "list[str] | None" = None) -> int:
     """Console-script entry point. Imported lazily so `--help` costs nothing."""
+    if sys.version_info < (3, 10):
+        raise SystemExit("livedocs-mcp requires Python >=3.10 (the mcp extra's floor).")
+
     from .cli import main as _main
 
     return _main(argv)

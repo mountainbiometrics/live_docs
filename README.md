@@ -90,7 +90,7 @@ Full setup — installing just one part, attaching another repo to a store, shar
 
 live_docs is **early and evolving**, developed in the open. Expect the schema and skills to move. It is deliberately narrow: it models a codebase's durable knowledge and keeps it consistent — it is *not* a retrieval stack or an agent harness, and it doesn't try to be. Those are meant to layer on top. The one exception is the optional MCP endpoint in [`server/`](server/README.md), which serves the `ldoc` read commands over the network and adds no surface of its own.
 
-The `ldoc` CLI is Python-3 stdlib-only (no dependencies — the endpoint's live in `server/`, installed separately); the skills target [Claude Code](https://claude.com/claude-code) but the store itself is just Markdown files you can read, grep, or open in any text or markdown reader.
+The `ldoc` CLI is Python-3 stdlib-only (no dependencies — the endpoint's dependencies live behind its own `mcp` extra, at [`server/`](server/README.md)); the skills target [Claude Code](https://claude.com/claude-code) but the store itself is just Markdown files you can read, grep, or open in any text or markdown reader.
 
 ---
 
@@ -99,8 +99,8 @@ The `ldoc` CLI is Python-3 stdlib-only (no dependencies — the endpoint's live 
 | Path | Contents |
 |------|----------|
 | `kb/` | the knowledge base — live_docs' own docs (`00-inbox/`, `01-raw/`, `02-docs/`, `reviews/`) |
-| `scripts/` | the `ldoc` porcelain (`ldoc.py`) and the KB layer (`livedocs/`) |
-| `server/` | the optional read-only MCP endpoint, packaged and installed on its own |
+| `scripts/` | the `ldoc` porcelain (`ldoc.py`) and the KB layer (`livedocs/`), packaged from the repo root as `livedocs` |
+| `server/` | the optional read-only MCP endpoint (`livedocs_mcp`), packaged with `scripts/livedocs` as the same distribution's `mcp` extra |
 | `.claude/skills/` | the agent skill definitions |
 | `.claude-plugin/`, `.cursor-plugin/` | package the shared skills for Claude Code and Cursor |
 | `bin/`, `install.sh`, `mise.toml` | tooling to put `ldoc` on your PATH and install the plugins |

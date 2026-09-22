@@ -17,22 +17,26 @@ other checkout is kept current — the endpoint re-reads a store's docs whenever
 they change on disk, with no restart.
 
 It is an optional part of the tool, the way git's web server is optional to git:
-it is packaged here on its own with its own dependencies, and `ldoc` behaves the
-same whether or not it is installed. The shared code it calls stays stdlib-only.
+its dependencies live behind the `mcp` extra, and `ldoc` behaves the same whether
+or not that extra is installed. The shared code it calls stays stdlib-only.
 
 ## Install and run
 
-The endpoint reads the shared code out of the checkout it was installed from, so
-install it **from a checkout** (`uv run` and `pip install -e` both do that).
+The endpoint is packaged together with the shared code as one distribution
+(`livedocs`), with the endpoint's own dependencies behind the `mcp` extra —
+installing the base package alone gets none of them.
 
 ```sh
-# uv — no install step; run it straight from the checkout
-uv run --directory server livedocs-mcp
+# uv — from a checkout, no separate install step
+uv run --extra mcp livedocs-mcp
 
-# pip — editable install into an environment of your own
-python3 -m pip install -e server
-livedocs-mcp
+# from anywhere, by git URL — what a deployment depends on
+uv pip install "livedocs[mcp] @ git+https://github.com/mountainbiometrics/live_docs"
+# or: python3 -m pip install "livedocs[mcp] @ git+https://github.com/mountainbiometrics/live_docs"
 ```
+
+`livedocs-mcp` needs Python >=3.10; `ldoc` and the shared library stay on
+whatever Python >=3.9 the base package supports.
 
 ## Flags and environment
 
@@ -63,7 +67,7 @@ Over stdio, for a client that launches the process itself:
   "mcpServers": {
     "live_docs": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/live_docs/server", "livedocs-mcp",
+      "args": ["run", "--directory", "/path/to/live_docs", "--extra", "mcp", "livedocs-mcp",
                "--transport", "stdio"]
     }
   }
