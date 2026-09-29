@@ -162,7 +162,9 @@ permission-slip for doing the work the user asked for.
    present (frozen/deprecated clash, or a contradiction the synthesis cannot
    mechanically reconcile). The user must address something the conversation
    has not settled yet.
-   *Unresolved* means authority is genuinely contested. A doc the survey
+   *Unresolved* means authority is genuinely contested — a why the existing
+   claim rests on argues against the request's reason
+   (`_shared/conflict-test.md`). A doc the survey
    turns up that is contradicted by **settled** authority — the request's
    stated intent, or an in-force doc that intent reaffirms — is not a
    conflict, and not a side-effect to weigh under trigger 2: it is cruft
