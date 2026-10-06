@@ -328,6 +328,7 @@ and the post-hoc review summary:
 | Bring in external material (notes, RFC, URL, research) | **ingest-reference** |
 | Edit / correct / amend an existing doc | **revise-doc** |
 | Record decisions already built in a working session | **reconcile-changes** |
+| Check whether docs' claims are built; refresh `realization` from the code | **sync-realization** |
 | Know what else went stale after a change | **cascade-check** |
 | Tidy navigation, orphans, grouping, tree structure | **garden** (or `/garden find homes for orphans`) |
 | Refresh a signpost orientation guide | **garden** or **garden-summarize** |
