@@ -125,15 +125,20 @@ def write_hierarchy_md(docs: dict, bt_rev: dict, index_dir: Path) -> None:
         children.sort(key=lambda d: d["id"])
 
         if children:
-            lines.append("| id | label | title | type | status |")
-            lines.append("|----|-------|-------|------|--------|")
+            lines.append("| id | label | title | type | status | intent | force | realization |")
+            lines.append("|----|-------|-------|------|--------|--------|-------|-------------|")
             for child in children:
                 c_id = child["id"]
                 c_label = child.get("label", "")
                 c_title = child.get("title", c_id)
                 c_type = child.get("type", "")
                 c_status = child.get("status", "")
-                lines.append(f"| {c_id} | {c_label} | {c_title} | {c_type} | {c_status} |")
+                # A doc with no intent is legacy, so it reads `unattributed` as in
+                # every other surface; a reference has none by type and stays blank.
+                c_intent = child.get("intent") or ("" if c_type == "reference" else "unattributed")
+                c_facets = " | ".join(
+                    [c_intent, child.get("force", ""), child.get("realization", "")])
+                lines.append(f"| {c_id} | {c_label} | {c_title} | {c_type} | {c_status} | {c_facets} |")
         else:
             lines.append("_(no children)_")
 
