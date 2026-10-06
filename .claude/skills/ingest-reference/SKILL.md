@@ -186,7 +186,6 @@ ldoc new \
   --type reference \
   --kind <kind> \
   --status reference \
-  --level incidental \
   --label "<2–5 word Title-Case handle>" \
   --title "<descriptive title>" \  # optional; no "Reference:" prefix — the type is shown automatically on display
   --source "raw/<RAW_ID>.md" \
@@ -207,8 +206,9 @@ Key differences from Step 2:
   raw clipping (gate-1 promotion preserves them) and pass them here so the graph
   node — and every doc that takes `--provenance <NORM_ID>` — retains
   source-corpus, medium, and source-age context for staleness reasoning.
-- `type: reference` docs always get `status: reference` — they are frozen
-  supporting material, not truth claims that evolve.
+- `type: reference` docs always get `status: reference` and carry no facets
+  (no intent, force, realization, or imposed_by) — they are frozen supporting
+  material, not truth claims that evolve.
 
 Note the created id: call it **NORM_ID**. This is the provenance anchor handed
 to `synthesize-doc-changes` in Step 5; every extracted doc gets
@@ -277,21 +277,24 @@ shape, `domain` vs `scope`, body style, placement). Hand it:
 It applies all changes in one batch: revise/deprecate stale existing docs, create
 new atomic docs for unmatched concepts. It returns the list of writes performed.
 
-### Status inference — read and apply `.claude/skills/_shared/status-living-vs-target.md`
+### Facet inference — read and apply `.claude/skills/_shared/facets.md`
 
-As `synthesize-doc-changes` assigns each *new* extracted doc its `status`,
-**read and apply** `.claude/skills/_shared/status-living-vs-target.md`. Do
-**not** inherit status from celebratory source language ("done / all todos
-complete!") — that prose records intent at authoring time, not whether the
-claim is the system's current paradigm. Classify **per concept**, not per source
-document: a single plan/RFC often mixes in-force design (`living`) with
-explicitly deferred future work (`target` on `decision`/`component` only).
+As `synthesize-doc-changes` assigns each *new* extracted doc its facets, pass
+it ingest's knobs from `facets.md`, classified **per concept**, not per source
+document:
 
-Default `living`. Ambiguity → `living` (surface for confirmation if the
-deferral horizon is unclear) — do **not** prefer `target` on ambiguity. The
-old failure mode (stamping everything `living` off plan tone) is fixed by
-per-concept classification + the shared deferral test, not by an
-ambiguity-defaults-to-`target` bias.
+- **Intent.** The material's author is not the person. A claim is
+  `incidental` unless the material records the person requesting or choosing
+  it, in which case the passage is the `--intent-basis` (cite NORM_ID/RAW_ID).
+- **Realization.** A single plan/RFC often mixes built design, work about to
+  be built (`planned`), and work explicitly put off (`deferred`). Do **not**
+  inherit realization from celebratory source language ("done / all todos
+  complete!") — that prose records a mood at authoring time. When neither the
+  material nor a check of the implementation settles it, `unassessed` is
+  allowed here — ingest is one of the two places it is.
+- **imposed_by.** A force the material reports from outside (a regulation, a
+  vendor, a customer) is `environment`, with the material as `provenance`.
+- **Status** is `living` for every extracted claim.
 
 ---
 
@@ -393,6 +396,6 @@ signoff and never blocks the change. Reviewers inspect it via
 - [ ] `map-concepts-to-docs` conflict scan (Step 5a) ran before any write.
 - [ ] Any corrected or deprecated existing docs have a `## Correction` section and, if deprecated, a `superseded_by` edge.
 - [ ] cascade-check was run from CORRECTED EXISTING docs (not from freshly created docs).
-- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Status follows `.claude/skills/_shared/status-living-vs-target.md` (default `living`; `target` only for explicit deferral). Apply `.claude/skills/_shared/cruft-verdicts.md`'s detection lens proactively, including its incidental-vs-subject test.
+- [ ] Extracted doc bodies describe the decision/mental model, not implementation history or absence. Facets follow `.claude/skills/_shared/facets.md` per concept (intent `incidental` unless the material records the person's act; realization from evidence, `unassessed` allowed). Apply `.claude/skills/_shared/cruft-verdicts.md`'s detection lens proactively, including its incidental-vs-subject test.
 - [ ] No extracted doc duplicates an existing doc.
 - [ ] No `requires` edge points at RAW_ID — raw files are not graph nodes.

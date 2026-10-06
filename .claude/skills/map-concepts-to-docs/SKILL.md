@@ -105,6 +105,15 @@ relationship of the concept's claim to that doc's claim:
 | `full-supersession` | New concept renders the entire existing doc's claim obsolete. |
 | `conflict-unresolved` | The two claims are incompatible and need human judgment. |
 
+**Protected matches.** Read each match's `intent` (the first word of its doc
+line) and apply the permission table in `.claude/skills/_shared/facets.md`. A
+`requested`, `chosen`, or Unattributed doc is revised or deprecated only on the
+person's own words. When a concept whose `Basis` is "none" would partially or
+fully supersede such a doc, classify the match `conflict-unresolved` and plan
+`create-new` — an `incidental` doc that `relates` to the protected one — so the
+person can decide. An agent's claim does not overturn the person's by being
+newer or freshly built.
+
 The source rarely says "doc 1234 is wrong" outright — it just asserts a concept
 that contradicts an existing claim. Judge the substance, not the wording.
 
@@ -155,7 +164,7 @@ Emit a labeled verdict map:
 Concept: "<short noun phrase>"
   Asserts: "<new claim>"
   Matches:
-    <id>  "<existing title>"  — <compatible | partial-supersession | full-supersession | conflict-unresolved>
+    <id>  <Intent> <type>: "<existing title>" [<force>]  — <compatible | partial-supersession | full-supersession | conflict-unresolved>
       Reason: <one sentence>
   Action planned: <revise | deprecate | link-provenance | create-new>
 ```

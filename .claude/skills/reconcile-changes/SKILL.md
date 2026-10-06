@@ -18,20 +18,22 @@ description: >
 
 The cardinal rule: **record what is already true; do not propose it.** A working
 session decided things and built them; the store never heard about it. This skill
-walks that gap closed — the resulting docs are born `status: living`, not
-`target`, because they describe reality as it now stands.
+walks that gap closed — the resulting docs are born `status: living` with
+`realization: realized` for what the session built, because they describe
+reality as it now stands.
 
-**Born-`living` governs `status` only — it has no bearing on `level`.** `status`
-answers "is this settled?"; `level` answers "who decided this, and how
-deliberately?" That code got built, tested, and committed is evidence for the
-former, never for the latter — an implementer's own convenience choice is
-`incidental` no matter how solid the code behind it is. This distinction
-matters because a claim recorded above its real authority does not sit inert:
-it acquires inertia that future work has to argue against. The worst case is a
-convenience nobody asked for, sitting at `preference` or `requirement`,
-quietly obstructing a direction the user has actually asked for. Read every
-"already real" instinct in this file as scoped to `status`; carrying it into
-`level` is this skill's most common failure.
+**"Already real" governs `realization` only — it has no bearing on `intent`.**
+`realization` answers "does this exist in the implementation?"; `intent`
+answers "what did the person do to make this claim exist?" That code got
+built, tested, and committed is evidence for the former, never for the latter
+— an implementer's own convenience choice is `incidental` no matter how solid
+the code behind it is (`.claude/skills/_shared/facets.md`, the evidence rule).
+This distinction matters because a claim recorded above its real intent does
+not sit inert: the permission rule protects it, and future work has to argue
+against it. The worst case is a convenience nobody asked for, recorded as
+`chosen`, quietly obstructing a direction the person has actually asked for.
+Read every "already real" instinct in this file as scoped to `realization`;
+carrying it into `intent` is this skill's most common failure.
 
 This skill is a **thin orchestrator**. The shared phases live in sub-skills it
 invokes in order — `identify-key-concepts`, `map-concepts-to-docs`,
@@ -54,14 +56,14 @@ to yourself before starting:
   Pause** requirement). Here the change has **already happened and is live** — we
   are not asking permission to change reality, we are recording reality that
   changed. There is no proposal to gate. So this skill has **no pause gate**, and
-  resulting docs are born **`status: living`** (not `target`, not a proposal
-  awaiting confirmation). The blast-radius survey still runs — but to inform the
+  resulting docs are born **`status: living`** and, for what was built,
+  **`realization: realized`** (not a proposal awaiting confirmation). The blast-radius survey still runs — but to inform the
   synthesis, not to ask "should we proceed?".
 
 - **Source is our own decisions/episode, not external material (vs.
   ingest-reference).** ingest-reference brings in *outside* knowledge (meeting
   notes, RFCs, articles) that arrives through the inbox pipeline and becomes
-  `reference`/`target` material. Here the source is the **working session we just
+  `reference` material plus claims of mostly `incidental` intent. Here the source is the **working session we just
   finished** — our own decisions and rationale. It MAY still be persisted as a
   raw clipping for provenance (Step 1), but the extracted docs are first-class
   `living` truth claims about the system, not frozen external references.
@@ -204,26 +206,24 @@ Run — but do not stop after — **`/synthesize-doc-changes`**, handing it:
   `--provenance <DIGEST_ID>`; duplicated/strengthened concepts link DIGEST_ID
   into an existing doc's `provenance` instead of creating a new doc),
 - the **born-`living` knob**: new docs describe reality that already exists, so
-  they are created with **`--status living`**, never a proposal. The only
-  exception is decided-but-explicitly-unbuilt under
-  `.claude/skills/_shared/status-living-vs-target.md` (narrow `target` test).
-- the **level-authority test**, applied per claim, not per batch: ask *who
-  decided this*. An implementer's own convenience choice — never raised,
-  requested, or reviewed by the user — is `incidental`, however well-tested;
-  built-and-committed is not the same as authorized. A claim whose force is
-  inherited from a standing user requirement takes whatever level that
-  requirement supports. Something the user stated in their own words is
-  weighted accordingly, and stays weighted accordingly even when the code for
-  it doesn't exist yet — that gap belongs to `status`, not `level`. Watch for
-  the inverse too: a user-stated claim landing weak and agent-attributed while
-  the convenience built in its place lands strong and settled inverts the
-  record, which this test exists to catch.
+  they are created with **`--status living`** and, for what the session built,
+  **`--realization realized`** (with `--realization-refs` where the anchors are
+  known). A concept the session decided but explicitly left unbuilt is
+  `planned`, or `deferred` if it was put off.
+- the **intent test** (`facets.md`, the evidence rule), applied per claim, not
+  per batch: ask *what the person did*. An implementer's own convenience choice
+  — never raised, requested, or chosen by the person — is `incidental`, however
+  well-tested; built-and-committed is not a basis. Something the person stated
+  in their own words is `requested` with those words as `--intent-basis`, and
+  stays `requested` even when the code for it doesn't exist yet — that gap
+  belongs to `realization`, not `intent`. Watch for the inverse too: a
+  person-stated claim landing `incidental` while the convenience built in its
+  place lands `chosen` inverts the record, which this test exists to catch.
 
-Before any new doc is written, check its claim against the impact set from
-Step 4 for a **level collision**: does it contradict an existing doc at a
-higher `level`? A lower rung cannot overturn a higher one by being newer or
-freshly implemented. If a collision exists, do not record the new claim as if
-it won — surface the collision to the user, the same way Step 4 surfaces
+A new claim that contradicts an existing doc the agent may not alter is caught
+by `map-concepts-to-docs` as `conflict-unresolved` (the permission table in
+`facets.md`); a freshly built convenience does not overturn the person's
+claim by being newer. Surface it to the person, the same way Step 4 surfaces
 `conflict-unresolved` docs.
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
@@ -280,16 +280,17 @@ the source digest — these are process smells, not a truth oracle:
 - **Domain vs scope:** if the batch shares one domain that names the subsystem
   the docs live in, that is a `scope` mis-tagged as a `domain` — put `scope` on
   the anchor and let the members inherit.
-- **Levels:** a batch of new docs all at `level: requirement` with only a
-  session-digest provenance edge is almost certainly wrong — unconfirmed
-  articulations should be `incidental`.
-- **Levels vs. build status:** if levels track what got implemented more than
-  who asked for it — everything shipped sits at `preference`+, everything
-  unbuilt sits at `incidental` — that correlation is itself the smell; re-run
-  the level-authority test (Step 5) per claim, not per batch.
-- **Level collisions:** if a new doc's claim was never checked against
-  existing higher-level docs for contradiction, do that now, before closing —
-  a `preference` does not get to silently overrule a `requirement`.
+- **Intent:** a batch of new docs all `requested` or `chosen` with one shared
+  basis is almost certainly wrong — unconfirmed articulations are
+  `incidental`.
+- **Intent vs. realization:** if intent tracks what got implemented more than
+  what the person did — everything shipped `chosen`, everything unbuilt
+  `incidental` — that correlation is itself the smell; re-run the intent test
+  (Step 5) per claim, not per batch.
+- **Protected-doc conflicts:** if a new doc's claim was never checked against
+  existing `requested`, `chosen`, or Unattributed docs for contradiction, do
+  that now, before closing — an `incidental` claim does not get to silently
+  overrule them.
 - **Source string:** if the digest was agent-authored, its `--source` must not
   claim `user-request`.
 
@@ -305,7 +306,7 @@ Concepts identified: N   (abstract/why-priority)
   "<concept>"  type: <type>  →  <action taken>
 
 Docs changed:
-  <id>  "<title>"  created     — born living; new doc for concept "<concept>"
+  <id>  "<title>"  created     — born living, <realization>; new doc for concept "<concept>"
   <id>  "<title>"  revised     — <one-line: what changed>
   <id>  "<title>"  deprecated  — superseded by <REPLACEMENT_ID>
 
@@ -314,7 +315,7 @@ Unchanged docs (compatible / inconsequential):
 
 Cascade summary: <N neighbors evaluated — list each id: verdict>
 Validation: <N docs scanned — clean | N errors, N warnings>
-Self-check: <type-mix / labels / levels / source — ok or what you fixed>
+Self-check: <type-mix / labels / intent / source — ok or what you fixed>
 ```
 
 Then close the session, minting the single review for the whole episode.
@@ -342,9 +343,7 @@ Doc bodies describe the decision or mental model — what is true and **why**. T
 do NOT narrate implementation state, absence, or history. Because reconcile-changes
 records reality that already exists, born-`living` is the norm and the body
 simply states the current truth and its rationale; it does not say "this was just
-built" or narrate the session. Status exceptions follow
-`.claude/skills/_shared/status-living-vs-target.md` — decided-but-explicitly-
-unbuilt may take `target`; mere session timing does not.
+built" or narrate the session — that is `realization` (`facets.md`).
 
 ---
 
@@ -353,10 +352,10 @@ unbuilt may take `target`; mere session timing does not.
 - [ ] Concept extraction used root-over-decision: principles/constraints/requirements/goals first-class; decisions thin — not just components mirroring code.
 - [ ] map-concepts-to-docs ran with heavy dedup; existing docs revised in preference to near-duplicate new docs.
 - [ ] No pause gate was applied (this skill records reality, not a proposal).
-- [ ] New docs born `status: living` (only explicit-deferral concepts take `target` per `.claude/skills/_shared/status-living-vs-target.md`).
-- [ ] Levels reflect claim authority — apply the level-authority test (Step 5): who decided, not whether it's built or has a provenance edge.
+- [ ] New docs born `status: living`, with realization from the implementation (`realized` for what was built; `planned`/`deferred` only for decided-but-unbuilt).
+- [ ] Intent follows the evidence rule (Step 5): what the person did, with a basis for every `requested`/`chosen` — not whether it's built or has a provenance edge.
 - [ ] Every new doc has provenance (DIGEST_ID) or a genuine `requires`/`belongs_to` edge — no floating docs.
 - [ ] cascade-check ran from corrected/deprecated existing docs (not from fresh docs).
-- [ ] Batch self-check (type-mix / labels / levels / source) done.
+- [ ] Batch self-check (type-mix / labels / intent / source) done.
 - [ ] Validate is 0 errors. No reindex (left to maintenance cadence).
 - [ ] Exactly one review summary emitted, owned by this orchestrator.

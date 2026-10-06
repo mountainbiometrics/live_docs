@@ -52,10 +52,16 @@ concentrate every pass on the same well-worn center of the store.
      keys — edit the doc file directly (preserve canonical field order per
      `ldoc show` / schema), then run `ldoc validate`. Skip if no legacy keys
      appear in the sample.
-   - `state: target` → `status: target`; drop `state` (via `ldoc set` + direct
-     edit to remove the `state:` line).
-   - `state: actual` → leave/set `status: living`; drop `state`.
-   - Enum fixes via `ldoc set --status` / `--level`.
+   - Retired `level` key and `status: target` (validate warns on both): map
+     them as `.claude/skills/_shared/facets.md` says (its status section, and
+     absent intent for `level`). Dropping `level` is a direct edit — `ldoc set`
+     has no flag for it. A legacy `state: target` is the same as
+     `status: target`; `state: actual` → leave or set `status: living`; drop
+     `state`. Migration is a structural edit: bulk or direct edits are fine
+     here.
+   - Enum fixes via `ldoc set --status` / `--intent` / `--force` /
+     `--realization` / `--imposed-by`, following the type's row in
+     `.claude/skills/_shared/doc-types.md`.
    - Legacy `keywords:` frontmatter key (retired field): drop the key if still
      present on a sampled doc.
 

@@ -45,8 +45,15 @@ it is a split candidate.
    and whether the original becomes a signpost over A/B or is deprecated.
 5. Apply each split. Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
    ```bash
-   ldoc new --type <type> --label "<2–5 word Title-Case handle>" [--title "<title>"] --level <level> --status <status> --requires <dep-id>,<dep-id>
+   ldoc new --type <type> --label "<2–5 word Title-Case handle>" [--title "<title>"] --status living <facet flags for the type> --requires <dep-id>,<dep-id>
    ```
+   Each piece carries the original's `intent` and `intent_basis` (the person's
+   act covered the claim the pieces split), and the facets its type takes per
+   `.claude/skills/_shared/doc-types.md`. Splitting a `requested`, `chosen`, or
+   Unattributed doc must leave every part of its claim unchanged across the
+   pieces; a split that would reword or drop any of it alters the claim, which
+   the permission table in `.claude/skills/_shared/facets.md` reserves for the
+   person — flag it instead.
    Add `## Correction` to the original body (via `ldoc set <original-id> --body -`), then
    deprecate — two-part operation; `ldoc set` has no `--superseded-by` flag:
    ```bash

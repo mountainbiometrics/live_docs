@@ -107,6 +107,15 @@ frozen — never mark them `cascade-extend` or `cascade-full`. Mark them
 `conflict-unresolved` if their claim now contradicts the new intent, and surface
 to the user.
 
+**Permission and force rule** (`.claude/skills/_shared/facets.md`): a living
+neighbor whose `intent` is `requested`, `chosen`, or absent is never marked
+`cascade-extend` or `cascade-full` on an agent's inference — mark it
+`conflict-unresolved` unless the change description is the person's own words
+directing that change. A conflict with a `must` neighbor is
+`conflict-unresolved`; with a `should` neighbor it is `conflict-unresolved`
+unless the change description states its reason for departing, which goes in
+the verdict's reason.
+
 **Bias rule**: prefer `inconsequential` when the relationship is weak or
 tangential; prefer `conflict-unresolved` over a low-confidence guess.
 

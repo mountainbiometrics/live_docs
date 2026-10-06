@@ -50,6 +50,13 @@ leaking in. Test: strip the specific name and ask whether the doc's claim
 still makes sense. If yes, the name was incidental — strip it (this is
 EXCAVATE below). If no, the name is what's being decided — keep it.
 
+**Current implementation detail has a place.** Detail that is incidental to
+the claim but still true of the code is not cruft once it is out of the
+claim: anchors belong in `realization_refs` and description in a
+`## Implementation` section, which is exempt from the why-not-what rule
+(`facets.md`, realization). Only *dead* detail — removed or renamed code — is
+stripped outright.
+
 Do **not** lead with "wrong status" — status is usually not the cruft signal
 (see calibration below).
 
@@ -72,9 +79,9 @@ Assign each doc exactly one verdict (the compounds below are the only stacks).
 | Verdict | Apply when | Action |
 |---|---|---|
 | **KEEP** | Current, well-typed, carries its why. | Nothing. |
-| **EXCAVATE** | The architectural decision is **still current** but the doc is buried under removed/renamed implementation detail. | Strip the dead *what*; keep the *why*. **Status was never wrong** — do not deprecate. |
+| **EXCAVATE** | The architectural decision is **still current** but the doc is buried under removed/renamed implementation detail. | Strip the dead *what*; keep the *why*; move still-true detail to `realization_refs` or `## Implementation`. **Status was never wrong** — do not deprecate. |
 | **EXCAVATE(rename)** | Sub-case of EXCAVATE: the doc's subject is named after a class / function / module that was renamed or never built. | Strip the dead symbol noun-phrase; keep the decision. Status was never wrong. |
-| **RECLASSIFY→type** | The doc is the wrong type (e.g. a "have a module that does X" decision is really a `component` named "module for X"). | Re-type per `doc-types.md` and its "is this really a decision?" ladder. |
+| **RECLASSIFY→type** | The doc is the wrong type (e.g. a "have a module that does X" decision is really a `component` named "module for X"). | Re-type per `doc-types.md` and its "is this really a decision?" ladder, and set the facets the new type's row requires while dropping the ones it forbids (a decision retyped as a component loses `force`). |
 | **ADD-WHY** | A **non-signpost** doc states a *what* with no *why*. | Add the why (may cite its provenance doc); every non-signpost doc must carry its why. Signposts are the allowed exception. |
 | **REMOVE** | No durable content not already captured elsewhere. | `ldoc rm` — deletion is the default retirement path when content is fully captured elsewhere. **Especially:** a doc that is a step in a *completed* refactor plan whose durable why already lives in the plan's `reference` doc → default REMOVE. |
 | **MERGE→id** | Folds wholly into a sibling/target. | Port unique content into the target, deprecate or `ldoc rm` the loser. |
@@ -85,6 +92,12 @@ Assign each doc exactly one verdict (the compounds below are the only stacks).
 the implementation cruft is stripped. It operationalizes docs-lead-code-aligns:
 the doc keeps the *why* the code must align to, never a snapshot of the *what*.
 
+**Whose doc it is.** Every verdict except KEEP and RE-PARENT changes the doc's
+claim or retires it, so it follows the permission table in `facets.md`: on an
+`incidental` doc, apply it; on a `requested`, `chosen`, or Unattributed doc,
+apply only an EXCAVATE that leaves the claim itself unchanged, and flag every
+other verdict for the person.
+
 ## Applying the verdicts (existing ldoc only)
 
 No new CLI flags — every action uses `ldoc set` / `rm` / `link` / `unlink`:
@@ -92,7 +105,7 @@ No new CLI flags — every action uses `ldoc set` / `rm` / `link` / `unlink`:
 - **EXCAVATE / EXCAVATE(rename) / ADD-WHY** — rewrite the body via
   `ldoc set <id> --body - --note "garden-cruft: excavated — stripped <dead what>, kept the why"`
   (and `--summary` to match).
-- **RECLASSIFY** — `ldoc set <id> --type <type> --note "garden-cruft: reclassified type"`.
+- **RECLASSIFY** — `ldoc set <id> --type <type> <facet flags for the new type> --note "garden-cruft: reclassified type"`.
 - **REMOVE** — `ldoc rm <id>`; rewire any inbound edges first.
 - **MERGE→id / EXCAVATE→MERGE→id** — port into the target via
   `ldoc set <target> --body - --note "garden-cruft: merged in <loser-id>"`, then

@@ -111,8 +111,8 @@ be addressed — "deferred," "not yet designed," "currently out of scope,"
   discussed X but decided to defer it" reads, months later, as a standing
   decision *not* to build X — an agent asked to build it will cite the doc
   back at the person asking. Say only what's true (the need exists) and never
-  what's temporarily not true (it isn't built yet — that's what the codebase
-  and task tracker already show).
+  what's temporarily not true (it isn't built yet — that is the doc's
+  `realization`, `planned` or `deferred`; see `facets.md`).
 - If a doc genuinely needs to record that an idea was considered and
   explicitly rejected (not merely "not yet"), that's a `decision` with a real
   rationale, not a goal with deferral hedging.
@@ -120,11 +120,9 @@ be addressed — "deferred," "not yet designed," "currently out of scope,"
 ## Stop-gaps are `incidental`, and say so honestly
 
 Sometimes the right move today is a placeholder — good enough to unblock work,
-known not to be the durable design. Record it as a `decision` at
-`level: incidental` (claim authority is low / provisional — see
-`synthesize-doc-changes` level classification: incidental is the default for
-unconfirmed agent articulations and stop-gaps, not a synonym for "missing
-provenance edge"), and say plainly in the body that it's a stop-gap:
+known not to be the durable design. Record it as a `decision` with
+`intent: incidental` (a provisional adoption the person let happen — see
+`facets.md`), and say plainly in the body that it's a stop-gap:
 
 - Name the actual need the stop-gap satisfies ("a worker's deployment region
   must be stored somewhere and handed to the monitoring dashboard").
@@ -134,6 +132,15 @@ provenance edge"), and say plainly in the body that it's a stop-gap:
   problem — a reader should come away knowing this is provisional without the
   doc using deferral language to say so (the honesty comes from calling it a
   stop-gap once, not from hedging every sentence).
+
+## The `## Implementation` section is exempt
+
+A body may carry a `## Implementation` section describing how the claim is
+currently implemented. That section is volatile and exempt from the rule that
+bodies carry the why and not the *what* the code encodes (`doc-types.md`,
+`cruft-verdicts.md`); what it is and when it is refreshed is `facets.md`
+(realization). The rest of the body stays the claim and its why, in this
+file's register.
 
 ## Owned claims are linked, not restated
 

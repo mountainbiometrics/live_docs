@@ -4,8 +4,9 @@ description: >
   Read-only mechanical check of the entire docs/ store. Verifies every doc has
   required fields with valid enum values, that labels are trimmed and unique, that
   all requires/belongs_to/relates/provenance references resolve, that `belongs_to`
-  is acyclic, that deprecated docs have a superseded_by edge, that reference docs
-  have their extra fields, and that every doc carries a summary. Omitted edge lists
+  is acyclic, that deprecated docs have a superseded_by edge, that each doc's
+  facets fit its type, that reference docs have their extra fields, and that
+  every doc carries a summary. Omitted edge lists
   and omitted history are valid and normal. Emits a report but does NOT fix anything.
   Use before a release, after bulk edits, or anytime you want confidence the store
   is structurally sound. To also get fix proposals, use the garden `consistency`
@@ -41,7 +42,7 @@ code 0 if no violations are found, 1 otherwise.
 
 ### 1. Required baseline fields
 
-Every doc must have all of: `id`, `title`, `label`, `type`, `status`, `level`,
+Every doc must have all of: `id`, `title`, `label`, `type`, `status`,
 `created`.
 
 Edge lists (`belongs_to`, `requires`, `relates`, `provenance`, `superseded_by`),
@@ -63,8 +64,11 @@ Missing any required field → **ERROR: missing field `<field>` in `<id>`**.
 | Field | Valid values |
 |-------|-------------|
 | `type` | type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference |
-| `status` | living, target, deprecated, reference |
-| `level` | incidental, trial, preference, requirement |
+| `status` | living, deprecated, reference |
+| `intent` | requested, chosen, incidental |
+| `force` | must, should, may |
+| `realization` | realized, partial, planned, deferred, unassessed |
+| `imposed_by` | environment, tradeoff, choice |
 
 `type` no longer includes `index`.
 
@@ -110,9 +114,28 @@ Missing it → **ERROR: deprecated doc `<id>` has no `superseded_by` edge**.
 Rationale: deprecation without a successor edge is a dead end in the graph.
 Callers and dependents cannot discover what replaced this doc.
 
-A doc with a non-empty `superseded_by` edge list but `status` ≠ `deprecated` is
-**staged-incomplete retirement** → **WARNING: `<id>` has `superseded_by` but
-status is not `deprecated`**.
+A `living` doc may carry `superseded_by`: it points at the planned successor
+of a current path that is still in force (`.claude/skills/_shared/facets.md`,
+status). That is valid and not reported.
+
+### 7a. Facets fit the type
+
+The per-type table in `.claude/skills/_shared/doc-types.md` decides which
+facets a doc must, may, or must not carry. The tooling is loose on input and
+strict on output: what `ldoc` refuses to write is an error here; what an older
+doc merely lacks is a warning, and everything keeps working.
+
+| Check | Severity |
+|---|---|
+| `intent` is `requested` or `chosen` with no `intent_basis` | **ERROR** |
+| `force`, `realization`, or `imposed_by` present on a type that forbids it (any facet, or `intent`, on a `reference`) | **ERROR** |
+| A required facet missing on an existing doc — e.g. a realizable doc with no `realization`, a constraint with no `imposed_by` | **WARNING** |
+| `imposed_by: tradeoff` with no `requires` edge to a decision or component | **WARNING** |
+| An expected why-chain `requires` edge missing for the type (e.g. a principle that requires no goal or use-case) | **WARNING** |
+| Obsolete `level` key, or retired `status: target` | **WARNING**, naming the migration |
+
+A missing why-chain edge is the signal `garden-densify` works from; the
+legacy-field warnings are what `garden-refine` normalizes.
 
 ### 8. Body wikilink hygiene
 
@@ -157,7 +180,8 @@ validate — docs/
 Scanned: N docs
 
 ERRORS (must fix):
-  [E] 20260615090003  missing field `level`
+  [E] 20260615090003  missing field `status`
+  [E] 20260615090004  intent `chosen` has no `intent_basis`
   [E] 20260615100001  broken `requires` edge `20260615999999`
   [E] 20260615090009  reference doc missing `imported`
   [E] 20260615110002  deprecated doc has no `superseded_by` edge
@@ -167,7 +191,8 @@ ERRORS (must fix):
 WARNINGS (should review):
   [W] 20260615100004  unresolved `provenance` ref `20260615999998`
   [W] 20260615110005  summary is long (~84 words); tighten to a signpost
-  [W] 20260615110006  has `superseded_by` but status is not `deprecated`
+  [W] 20260615110006  principle requires no goal or use-case
+  [W] 20260615110009  obsolete `level` key; migrate to intent/force
   [W] 20260615110007  body wikilink `20260615999999` not present in any edge field
   [W] 20260615110008  malformed body wikilink `[[20260615100001|label]]`
 

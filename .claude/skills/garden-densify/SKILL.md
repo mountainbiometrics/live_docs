@@ -4,8 +4,8 @@ user-invocable: false
 description: >
   Gardening phase: build the missing/better edges so the graph becomes
   well-connected and cascade can self-heal — materialize prose wikilinks into
-  real edges, and add genuine missing dependencies (favoring cascade-HARD
-  `requires`). Nested phase; garden dispatcher owns the episode and runs densify
+  real edges, close gaps in the why-chain, and add genuine missing dependencies
+  (favoring cascade-HARD `requires`). Nested phase; garden dispatcher owns the episode and runs densify
   after structure is settled, before form.
 ---
 
@@ -80,6 +80,26 @@ relationship — but adding them is not the goal. If you find yourself only ever
 adding `relates`, you are not densifying for self-healing; re-ask whether the
 relationship is actually existential.
 
+### 3. Close the why-chain
+
+Each type is expected to `requires` certain types above it — shapes require
+norms, norms require purposes, purposes require nothing (the table and the
+why-chain in `.claude/skills/_shared/doc-types.md`). `ldoc validate` warns on
+each doc missing its expected edge; those warnings are this phase's primary
+work list. Work them in this order, loudest first:
+
+1. **A norm (principle, constraint, requirement) with no goal or use-case
+   above it** — the loudest gardening signal: a rule nobody can weigh.
+2. **A shape (decision, component) with no norm above it.**
+3. **An `imposed_by: tradeoff` doc with no `requires` to the decision or
+   component it follows from**, and an `imposed_by: choice` doc with nothing
+   that motivates it (`.claude/skills/_shared/facets.md`, imposed_by).
+
+For each, find the existing doc the claim actually serves and add the
+`requires` edge. When the store has no such doc, **do not invent one**: a
+purpose nobody stated is not a why. Report it as a finding — "<id> states a
+rule with no recorded purpose" — so the person can state the goal or use-case.
+
 ---
 
 ## Scope and restraint
@@ -107,12 +127,14 @@ relationship is actually existential.
 2. For each doc, scan the body for `[[id]]` wikilinks and diff against its
    existing edge lists.
 3. Materialize each missing wikilink with the per-link type judgment above.
-4. Scan for genuine missing dependencies not named in prose; add `requires`
+4. Take the validate warnings for missing why-chain edges in the cluster and
+   close each per §3, loudest first; report the ones with no upstream doc.
+5. Scan for genuine missing dependencies not named in prose; add `requires`
    (preferred for existential deps) / `belongs_to` / `relates` as the
    relationship truly is.
-5. Apply with `ldoc link` only — no invented flags. Append a `garden-densify:`
+6. Apply with `ldoc link` only — no invented flags. Append a `garden-densify:`
    history entry on each doc whose edges you changed.
-6. Report changed ids. Do **not** cascade, summarize, or review.
+7. Report changed ids. Do **not** cascade, summarize, or review.
 
 ---
 
@@ -122,7 +144,8 @@ relationship is actually existential.
 garden — phase: densify
 Scanned: N docs
 Findings:
-  <id>  "<title>"  — <n> prose wikilinks unmaterialized; <m> missing deps
+  <id>  "<title>"  — <n> prose wikilinks unmaterialized; <m> missing deps; <k> why-chain gaps
+  <id>  "<title>"  — rule with no recorded purpose (no goal/use-case exists to require)
 Actions:
   [1] LINK <id> --requires <target> — existential dep; cascade now reaches it
   [2] LINK <id> --belongs-to <parent> — prose named the parent; materialized
