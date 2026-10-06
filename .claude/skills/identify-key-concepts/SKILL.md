@@ -60,8 +60,11 @@ of ADR-shaped outcomes.
 
 When the input asserts (or clearly depends on) such a root claim *and* a
 concrete choice that instantiates it, extract **both** as separate concepts:
-the root typed `principle` | `constraint` | `requirement` | `goal`, and the
-choice as a thinner `decision` | `component`. Do **not** collapse them into one
+the root typed as a norm (`principle` | `constraint` | `requirement`) or a
+purpose (`goal` | `use-case`), and the choice as a thinner `decision` |
+`component`. The roots follow the why-chain in `doc-types.md` — shapes require
+norms, norms require purposes — so for each norm, also look for the goal or
+use-case it serves; those two types are the ones extraction misses most. Do **not** collapse them into one
 decision concept whose `Asserts` buries the root as rationale prose. A concept
 list that is mostly `decision`s restating what was chosen, with the driving
 reasons only implied inside those Asserts, has failed this step.
@@ -77,9 +80,15 @@ Write each concept found in the record shape below, labeled `Concept`:
 
 ```
 Concept: "<short noun phrase>"
-  Type:    <principle | decision | constraint | requirement | use-case | component>
+  Type:    <principle | decision | constraint | requirement | goal | use-case | component | guide>
   Asserts: <one sentence: the single claim this concept makes about how things should be>
+  Basis:   <the person's own words in the input that bring this claim forward or choose it, quoted — or "none">
 ```
+
+`Basis` is the evidence `synthesize-doc-changes` needs to set `intent`
+(`.claude/skills/_shared/facets.md`, the evidence rule). Quote only words the
+person said about *this* claim; a concept an agent articulated around what the
+person said, or one the input's author (not the person) states, gets "none".
 
 Each concept should be expressible as a short noun phrase. Commit each
 `Asserts` sentence before finishing: a precise claim produces exact KB matches

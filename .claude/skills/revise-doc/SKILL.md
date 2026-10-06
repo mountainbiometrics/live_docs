@@ -5,7 +5,7 @@ description: >
   same disciplined care that ingest-reference applies to new material. Performs a
   dedup/conflict scan before writing, classifies the change as substantive or
   provenance-only, appends a history entry and runs cascade-check only for
-  substantive changes (title, body, type, level, status, requires, belongs_to),
+  substantive changes (title, body, type, a facet, status, requires, belongs_to),
   and validates the store afterward. Provenance/relates changes are never cascade
   edges; whether they get a history entry depends on intent: backfilling initial
   provenance is not history-worthy, but adding a genuinely new reference later is.
@@ -75,7 +75,16 @@ Step 7).
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
-4. **Extract the concepts the revision introduces** — run **`/identify-key-concepts`**
+4. **Check the permission table** in `.claude/skills/_shared/facets.md` against
+   the doc's `intent` (shown first on its doc line). An `incidental` doc may be
+   revised freely, with a note. A `requested`, `chosen`, or Unattributed doc's
+   claim is never altered by an agent: unless the change comes in the person's
+   own words (which then become the basis), do not edit the claim — record the
+   alternative as a new `incidental` doc that `relates` to this one, and flag
+   the conflict to the person. Realization, its companions, the
+   `## Implementation` section, provenance, relates, and placement are not the
+   claim and may be updated on any living doc.
+5. **Extract the concepts the revision introduces** — run **`/identify-key-concepts`**
    on the proposed change (don't stop after it; its concept list is the input to
    Step 2). A revision usually introduces just one or a few concepts:
 
@@ -123,7 +132,9 @@ for all mutations; fall back to direct file editing only for body-text changes:
 ```bash
 # scalar frontmatter fields
 ldoc set <id> --title "New title"
-ldoc set <id> --level preference --status target
+ldoc set <id> --force must --note "<why>"
+ldoc set <id> --realization realized --realization-refs <path>,<symbol> --realization-verified <date-or-commit>
+ldoc set <id> --intent chosen --intent-basis "<the person's words, or session/review + date>"
 
 # edge additions / removals
 ldoc link <id> --requires <dep-id>
@@ -176,8 +187,12 @@ edge.
   all backfills, or added if they are new references.
 
 ### Substantive change
-**Definition**: any change to `title`, body content, `type`, `level`, `status`,
-`requires`, `belongs_to`, or `tags`.
+**Definition**: any change to `title`, body content (outside the
+`## Implementation` section), `type`, `intent`, `force`, `imposed_by`,
+`status`, `requires`, `belongs_to`, or `tags`. Changes to `realization` or its
+companions, or to the `## Implementation` section, record the implementation
+catching up and get a note, but do not cascade: no neighbor's claim depends on
+them.
 
 **Action — note the reason inline on the edit:**
 
@@ -249,8 +264,8 @@ Validation: <N docs scanned — clean | N errors, N warnings>
 
 ## Step 7 — Close the session (substantive changes only; FINAL step)
 
-**Only for substantive changes** (title, body, type, level, status, requires,
-belongs_to, or tags were altered). A provenance-only change that added no author
+**Only for substantive changes** (title, body, type, a facet, status,
+requires, belongs_to, or tags were altered). A provenance-only change that added no author
 note needs no review — skip this step entirely for those.
 
 **Standalone invocation only**: if revise-doc was called nested by a higher-level
@@ -284,13 +299,20 @@ For reference during edits, the canonical frontmatter shape (field order is sign
 | `title` | Human-readable name. Substantive change if altered. |
 | `label` | Short slug. |
 | `type` | Enum: type, principle, goal, decision, constraint, requirement, use-case, guide, component, reference. Substantive change. |
-| `status` | `living`, `target`, `deprecated`, or `reference`. Substantive change. |
-| `level` | `incidental`, `trial`, `preference`, `requirement`. Substantive change. |
+| `status` | `living`, `deprecated`, or `reference`. Substantive change. |
+| `intent`, `intent_basis` | `requested`, `chosen`, `incidental`; basis required for the first two. Substantive change. |
+| `force` | `must`, `should`, `may` — normative types only. Substantive change. |
+| `realization`, `realization_refs`, `realization_verified` | Realizable types only. Note it; no cascade. |
+| `imposed_by` | `environment`, `tradeoff`, `choice`. Substantive change. |
+
+Meanings, and which types carry which facets: `.claude/skills/_shared/facets.md`
+and `.claude/skills/_shared/doc-types.md`. The field order in this table is the
+serializer's.
 | `belongs_to` | List of parent doc ids — structural hierarchy; HARD/cascade edge. Substantive change if altered. Omit when empty. |
 | `requires` | List of doc ids — existential cascade dependency; HARD edge. Substantive change if altered. Omit when empty. |
 | `relates` | List of doc ids — symmetric clustering / see-also; NOT a cascade edge. Provenance-only if only this changes. Omit when empty. |
 | `provenance` | List of source/reference doc ids — derivation; NOT a cascade edge. **Provenance-only** if only this changes. Omit when empty. |
-| `superseded_by` | List of doc ids replacing this one. Required when `status: deprecated`. Omit when empty. |
+| `superseded_by` | List of doc ids replacing this one. Required when `status: deprecated`; allowed on a living doc to point at its planned successor. Omit when empty. |
 | `tags` | `domain: []` and `scope: []`. Treat as substantive. Omit when both lists are empty. |
 | `created` | ISO timestamp. Never change. |
 | `history` | List of `{at, summary}`. Append only — never alter or delete existing entries. Omit when empty. |
@@ -299,11 +321,15 @@ For reference during edits, the canonical frontmatter shape (field order is sign
 
 ## Common patterns
 
-**Promote a level** (e.g. `trial` → `preference`): substantive — append history,
-run cascade. The promotion may affect downstream docs that were waiting on the
-level to stabilize.
+**Raise intent** (e.g. `incidental` → `chosen`): substantive — only with a
+basis showing the person's act for this claim (`facets.md`, the evidence
+rule); append history, run cascade. Lowering a `requested` or `chosen` intent
+is altering it, which an agent never does.
 
-**Deprecate a doc** (`status: living` or `target` → `status: deprecated`):
+**Change force** (e.g. `should` → `must`): substantive — run cascade; a
+stronger force can turn a neighbor's tolerated departure into a conflict.
+
+**Deprecate a doc** (`status: living` → `status: deprecated`):
 substantive — this is a two-part mandatory operation, not just a field change:
 1. Add a `superseded_by` edge listing the doc(s) that replace this one:
    ```bash
@@ -344,21 +370,21 @@ rewrite — its plain-register rule included. Common anti-patterns to reject or
 correct before writing:
 
 - Writing about absence ("X was never built", "summaries do not yet exist"):
-  replace with the positive model ("summaries should exist"). Assign `status`
-  per `.claude/skills/_shared/status-living-vs-target.md` — default `living`;
-  `target` only for explicitly deferred realization, not mere code lag.
-- Migration plans or implementation details in the body ("a migration will
-  happen", "this will be refactored"): these belong in a separate plan doc, not
-  in the body of a living principle or decision.
+  replace with the positive model ("summaries should exist"). Whether it is
+  built is `realization` (`.claude/skills/_shared/facets.md`).
+- Migration plans in the body ("a migration will happen", "this will be
+  refactored"): these belong in a separate plan doc, not in the body of a
+  living principle or decision. Implementation details worth keeping go in
+  `realization_refs` or the `## Implementation` section (`facets.md`).
 - "Extension" or addendum notes that are really migration plans rather than
   corrections to the doc's own claim: strip them. If the doc's claim is itself
   wrong, write a `## Correction` section and deprecate the doc; if the claim is
-  right and realization is explicitly deferred, `status: target` may apply
-  (see the shared status file) — otherwise keep `living`.
+  right and its realization is put off, set `realization: deferred` and keep
+  `living`.
 - Implementation-shaped detail used as incidental illustration rather than the
   doc's actual subject: strip it — apply
   `.claude/skills/_shared/cruft-verdicts.md`'s detection lens (including its
   incidental-vs-subject test).
 
-**Rule**: body states the claim; deferred realization (when the shared status
-test passes) is carried by `status: target`, not by body narration.
+**Rule**: body states the claim; whether and when it is built is carried by
+`realization`, not by body narration.

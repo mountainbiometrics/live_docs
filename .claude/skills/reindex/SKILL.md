@@ -81,13 +81,18 @@ Generated: <ISO 8601 timestamp>
 
 ## <signpost doc title> (`<id>`)
 
-| id | title | type | status |
-|----|-------|------|--------|
-| <id> | <title> | <type> | <status> |
+| id | doc | status |
+|----|-----|--------|
+| <id> | <Intent> <type>: <title> [<force>] [<realization>] | <status> |
 ...
 
 ---
 ```
+
+Each doc cell is the same doc line every surface prints — intent first, force
+and realization as trailing tags, deprecated docs struck through with their
+successor — and children rank by status, then intent, so a reader of the
+rollup sees which docs bind without opening them.
 
 Docs that no other doc depends on (no descendants) are omitted from this file.
 

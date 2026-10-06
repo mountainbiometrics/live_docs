@@ -21,6 +21,12 @@ Gardening is a **thin dispatcher** over single-purpose phases. You own the **who
 Phases are `user-invocable: false` — invoke them via the Skill tool, never tell
 the user to run them directly.
 
+Every phase obeys the agent permission table in
+`.claude/skills/_shared/facets.md`: gardening applies judgment directly to
+`incidental` docs, but never alters the claim of a `requested`, `chosen`, or
+Unattributed doc — it flags those for the person in the review. Setting an
+Unattributed doc's `intent` from evidence is assessment, not a claim change.
+
 ---
 
 ## Episode start (always first)
@@ -49,6 +55,8 @@ sample 1–2 maintenance phases.
 | Hot-files (history ≥5, mixed summaries) | `garden-decompose` |
 | Near-duplicate titles/summaries (skim `ldoc ls`) | `garden-collapse` |
 | Cluster under-linked / prose `[[id]]` mentions aren't edges / cascade can't reach related docs | `garden-densify` |
+| `ldoc validate` warns of missing why-chain edges (a norm with no goal or use-case above it is the loudest) | `garden-densify` |
+| `ldoc validate` warns of an obsolete `level` key or retired `status: target` | `garden-refine` (schema normalization) |
 | Staleness (dependency updated after dependent) | **signal only** — note for user; cascade-check owns writes |
 | else | random 1–2 of `{refine, domains, decompose}` |
 

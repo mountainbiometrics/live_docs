@@ -54,9 +54,14 @@ members. Leave ungrouped rather than force a bad home.
 Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
 
 ```bash
-ldoc new --type component --label "<2–5 word Title-Case handle>" [--title "<theme>"] --belongs-to <parent> --body "…"
+ldoc new --type component --label "<2–5 word Title-Case handle>" [--title "<theme>"] --realization <value> --belongs-to <parent> --body "…"
 ldoc link <member-id> --belongs-to <SIGNPOST_ID>
 ```
+
+A signpost you create is your proposal, so it takes the default
+`intent: incidental`. A `component` signpost requires `realization`: whether
+the part of the system it names exists, judged from its members
+(`.claude/skills/_shared/facets.md`).
 
 Recategorize: `ldoc unlink` old + `ldoc link` new. Split: create narrower
 signposts, reassign, deprecate over-broad signpost with `## Correction` +

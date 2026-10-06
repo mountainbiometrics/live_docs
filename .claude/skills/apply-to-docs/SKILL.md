@@ -102,7 +102,6 @@ ldoc new \
   --type reference \
   --kind plan \
   --status reference \
-  --level incidental \
   --label "<2–5 word Title-Case handle>" \
   --title "<short description>" \   # optional; no "Reference:" prefix — the type is shown automatically on display
   --source "raw/<RAW_ID>.md" \
@@ -122,7 +121,9 @@ restatement from Step 1, then carry its concept list into Step 3:
 
 > Extract every distinct durable concept the request asserts, labeled `Concept`.
 > Root-over-decision applies (identify-key-concepts invariant): prefer
-> first-class why-roots over a decision inventory. (No splitting test.)
+> first-class why-roots over a decision inventory. (No splitting test.) Quote
+> each `Basis` from the verbatim request archived as RAW_ID, never from the
+> restatement — the restatement is an agent's words.
 
 It returns a typed concept list (`Concept / Type / Asserts`) in context — the
 input to Step 3.
@@ -162,11 +163,21 @@ permission-slip for doing the work the user asked for.
    present (frozen/deprecated clash, or a contradiction the synthesis cannot
    mechanically reconcile). The user must address something the conversation
    has not settled yet.
+<<<<<<< HEAD
+   *Unresolved* means authority is genuinely contested. A `requested`,
+   `chosen`, or Unattributed doc is settled only by the request's own stated
+   intent: when the impact set would alter one on an agent's inference (as a
+   consequence, or from another doc), the permission table in
+   `_shared/facets.md` forbids it, so it is `conflict-unresolved`. Any other
+   doc the survey turns up that is contradicted by **settled** authority — the
+   request's stated intent, or an in-force doc that intent reaffirms — is not a
+=======
    *Unresolved* means authority is genuinely contested — a why the existing
    claim rests on argues against the request's reason
    (`_shared/conflict-test.md`). A doc the survey
    turns up that is contradicted by **settled** authority — the request's
    stated intent, or an in-force doc that intent reaffirms — is not a
+>>>>>>> origin/main
    conflict, and not a side-effect to weigh under trigger 2: it is cruft
    found in the blast radius, whatever subsystem it lives in. It joins the
    impact set and is resolved in this same pass per
@@ -225,7 +236,12 @@ shape, `domain` vs `scope`, body style, placement). Hand it:
 
 - the complete impact set from Step 4 (each affected doc with its verdict),
 - the concept list from Step 2 (for new-doc creation),
-- the provenance anchor **REQ_ID** (every new doc gets `--provenance <REQ_ID>`).
+- the provenance anchor **REQ_ID** (every new doc gets `--provenance <REQ_ID>`),
+- the facet knobs from `.claude/skills/_shared/facets.md`: a claim the person
+  states in the request is `requested`, with the request's words (citing
+  RAW_ID) as `--intent-basis`; a claim an agent articulated around the request
+  is `incidental`. Concepts the request is about to build are `planned`;
+  concepts it puts off are `deferred`.
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
 downstream, and returns the list of writes performed in context for the report.
@@ -276,13 +292,13 @@ request — process smells, not a truth oracle:
 - **Type mix:** mostly `decision` docs restating outcomes, with why only in
   body prose → revisit before closing.
 - **Labels:** new handles absent from the request's vocabulary → rename or flag.
-- **Levels:** unconfirmed agent articulations must not ship as
-  `level: requirement` merely because they carry `--provenance <REQ_ID>`.
+- **Intent:** unconfirmed agent articulations must not ship as `requested` or
+  `chosen` merely because they carry `--provenance <REQ_ID>`; every
+  `requested`/`chosen` doc's basis quotes the request for *that* claim.
 - **Source string:** agent-authored archive bodies must not claim `user-request`.
-- **Status:** any new `status: target` without explicit deferral (weeks+/migration/
-  external deps) in the request → flip to `living` or justify per
-  `.claude/skills/_shared/status-living-vs-target.md`. Principles/constraints/goals/requirements
-  born `target` are almost always wrong.
+- **Realization:** any new `deferred` doc without explicit deferral in the
+  request → `planned`; any `unassessed` doc → assess it (`unassessed` is only
+  for migrated or ingested material).
 
 apply-to-docs owns the episode: close the session, which mints the single review
 over everything the episode touched (the nested sub-skills never open or close
@@ -298,7 +314,7 @@ review id to the user:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)
-Self-check: <type-mix / labels / levels / source / status — ok or what you fixed>
+Self-check: <type-mix / labels / intent / source / realization — ok or what you fixed>
 ```
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): this records
@@ -309,11 +325,9 @@ the episode for later signoff and never blocks the apply.
 ## Body-content rule (store-wide convention)
 
 Doc bodies describe the decision or mental model — what is true (or intended)
-and why. They do NOT narrate implementation state, absence, or history. Status
-assignment (`living` vs `target`) follows
-`.claude/skills/_shared/status-living-vs-target.md` — default `living`;
-`target` only for explicitly deferred realization, not because this skill runs
-before current-work implementation. Also apply
+and why. They do NOT narrate implementation state, absence, or history: that
+this skill runs before implementation is carried by `realization: planned`
+(`.claude/skills/_shared/facets.md`), not by the body or the status. Also apply
 `.claude/skills/_shared/cruft-verdicts.md`'s detection lens proactively.
 (Enforced by `synthesize-doc-changes`, restated here as the store-wide
 convention.)

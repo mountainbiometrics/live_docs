@@ -39,13 +39,24 @@ title:   "live_docs is the portable system; a consuming store is a specific inst
 label:   "Portable System vs Instance"
 summary: "live_docs is a portable, reusable system; a store that consumes it is a specific instance…"
 type:    decision        # principle | goal | decision | constraint | requirement | use-case | guide | component | reference
-status:  living          # living (current) | target (intended, not yet built) | deprecated | reference
-level:   preference      # incidental | trial | preference | requirement
+status:  living          # living | deprecated | reference
+intent:  incidental      # requested | chosen | incidental — what the person did to make this claim exist
+# intent_basis: "<quote or citation>"   — required when intent is requested or chosen
+force:   should          # must | should | may — how hard it binds (normative types)
+realization: realized    # realized | partial | planned | deferred | unassessed (realizable types)
 requires: ["[[20260615182358]]"]
 ---
 ```
 
-**`status` lets contradictions coexist honestly.** A `living` doc describes current reality; a `target` doc describes where you want to be. The two can disagree without the store being "wrong" — that's how you track a migration or an aspiration without pretending it's already done.
+**Facets say how much a claim binds, before anyone opens it.** Every listing prints a doc as `<Intent> <type>: <Title>` with force and realization tags — "Requested decision: …", "Incidental component: …" — so an agent can tell what it must respect from the list alone:
+
+- **`intent`** records what the person did: *requested* it, *chose* it from options, or let it happen (*incidental*). `requested` and `chosen` need an `intent_basis` — the quote or citation — so authority can be checked, not assumed. Agents never alter a requested or chosen claim; incidental ones they revise freely, with a note.
+- **`force`** separates a rule (`must`) from a guideline (`should`) and an allowance (`may`).
+- **`realization`** records whether the implementation has the thing yet — `planned` docs are the build backlog, `deferred` ones are put off on purpose — so "decided" and "built" stop being confused.
+- **`imposed_by`** says whether a claim is set by us (`choice`), follows from a trade-off recorded elsewhere (`tradeoff`), or comes from the world (`environment`).
+- **`status`** is lifecycle only: `living`, `deprecated`, or `reference`. A current path and its planned replacement coexist honestly — both living, the current one pointing at its successor with `superseded_by`.
+
+Each type decides which facets apply and which `requires` edges it should have: decisions and components require the principles, constraints, and requirements they serve, which require the goals and use-cases behind them.
 
 **Two graphs over the same docs.**
 - A `belongs_to` **hierarchy** — the navigational tree. Any doc that others belong to is, structurally, a signpost. `ldoc map` prints these entry points, ranked, as the closest thing to a front page.

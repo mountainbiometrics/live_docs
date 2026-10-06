@@ -79,8 +79,8 @@ For each doc with verdict `full-supersession` or `cascade-full`:
      --type <type> \
      --label "<2–5 word Title-Case handle>" \
      --title "<precise, single-responsibility title>" \   # optional; omit if label suffices
-     --level <level> \
      --status living \
+     <facet flags — see "Facets" below> \
      --body "<new claim>"
    ```
    Note the new id: **REPLACEMENT_ID**.
@@ -123,17 +123,33 @@ ldoc new \
   --type <type> \
   --label "<2–5 word Title-Case handle>" \
   --title "<precise, single-responsibility title>" \   # optional; omit if label suffices
-  --level <incidental|trial|preference|requirement> \
-  --status <living|target> \
+  --status living \
+  [--intent <requested|chosen> --intent-basis "<quote or citation>"] \   # omit for incidental
+  [--force <must|should|may>] \                                          # normative types
+  [--realization <realized|partial|planned|deferred|unassessed>] \       # realizable types
+  [--realization-refs <anchor>,<anchor>] \
+  [--imposed-by <environment|tradeoff|choice>] \                        # required on constraint
   --provenance "<anchor id>" \
   --belongs-to <nearest-signpost-id> \
   --body "<the claim>"
 ```
 
-**Status** — read and apply `.claude/skills/_shared/status-living-vs-target.md`.
-Default `--status living`. Use `target` only when the deferral test in that
-file passes (explicit weeks+/migration deferral on a `decision`/`component`);
-never because code has not caught up yet or because the caller is pre-implement.
+**Facets** — read and apply `.claude/skills/_shared/facets.md` for every doc
+you create or revise, and `.claude/skills/_shared/doc-types.md` for which
+facets the type takes. `ldoc new` refuses a doc that breaks the type's row, so
+decide each facet per claim before writing:
+
+- **Status** is `living`. "Not built yet" is never a status.
+- **Realization, force, imposed_by** — judged per claim by `facets.md`, with
+  the caller's knob for realization (its orchestrator knobs section). A
+  `tradeoff` claim also gets its `requires` edge to the decision or component
+  it follows from.
+- **Intent and basis** — the evidence rule below.
+- **Revisions** obey the permission table in `facets.md`: a doc whose intent is
+  `requested`, `chosen`, or absent has its claim left as it is unless the
+  caller's input is the person's own words directing the change; otherwise
+  write the alternative as a new `incidental` doc, `relates` it to the
+  protected doc, and return the conflict to the caller.
 
 Use `--belongs-to` per the shared placement policy whenever a visible coherent
 signpost exists in the concepts/edges already in hand. Omit only when no good
@@ -188,23 +204,15 @@ other's removal, get `relates` (or just a shared `domain`/`scope` tag), never
 and `requires` it (existential dependency) — wire both when both hold, but never
 substitute one axis for the other.
 
-**Level classification — claim authority, not "has a provenance edge".**
-`level` is the settledness/authority of the *claim*. Every new doc in this
-pass already gets `--provenance <anchor>`, so "has a provenance edge" must
-**not** be treated as grounds for `trial` / `preference` / `requirement` —
-that reading makes `incidental` unreachable and is the observed failure mode.
-
-- Default new claims to **`level: incidental`** when the provenance anchor does
-  not contain an explicit user utterance (or clear confirmation) of *this*
-  claim. Agent-articulated generalizations, mechanisms the user only saw in a
-  report, and "the user didn't contradict it" are incidental — silence is not
-  ratification.
-- Raise to `trial` / `preference` / `requirement` only when the source evidence
-  for *this claim* supports that settledness. Do not inflate because the claim
-  feels important, because `type: requirement` is nearby in the taxonomy, or
-  because the episode archived a request/digest.
-- `level: requirement` means high settledness of the claim, **not** "this doc's
-  type is requirement" and **not** "future agents must treat this as user law."
+**Intent — the evidence rule, per claim.** Apply `facets.md`'s evidence rule
+to each new doc separately. Every new doc in this pass already gets
+`--provenance <anchor>`, so "has a provenance edge" is never a basis; if it
+were, `incidental` would be unreachable, which is the observed failure mode.
+Set `--intent requested` or `--intent chosen` only when the anchor contains the
+person's own words (or explicit choice) for *this* claim, and pass those words
+or their citation as `--intent-basis`. Everything else — agent-articulated
+generalizations, mechanisms the person only saw in a report, claims the person
+did not contradict — is `incidental`, the default.
 
 **Vocabulary for labels/titles.** Prefer the source material's own words (user
 utterances, established project terms, lexicon hits). An agent-coined name that
@@ -214,17 +222,21 @@ a term and supplied another, use theirs. (Apply
 `.claude/skills/_shared/label-title-summary.md` as usual; this is an
 additional naming constraint.)
 
-**Attribution honesty.** Never write that the user stated or ratified a claim
-unless the provenance anchor contains that utterance (or an explicit
-confirmation). State the claim without false speaker attribution. Consumer
-stores may keep their own body conventions for attribution; when you follow
-one, evidence still binds — do not blanket-stamp a batch with identical
-attribution that the source does not support.
+**Attribution honesty.** Attribution lives in `intent` and `intent_basis`, not
+in body prose. Never write — in either place — that the person stated or chose
+a claim unless the provenance anchor contains that utterance (or an explicit
+choice). Do not blanket-stamp a batch with one basis the source does not
+support for each claim.
 
-**Thin decisions wire to roots.** When this batch creates both a why-root and a
-decision/component that instantiates it, the thin doc **`requires`** the root
-(and often `belongs_to` it when membership holds). Do not leave the root only
-as prose inside the decision body.
+**Wire the why-chain.** Each new doc gets the `requires` edges its type is
+expected to have (`doc-types.md`, the why-chain): a decision or component
+requires the norm it serves, a norm requires the goal or use-case that
+motivates it. When this batch creates both a why-root and a doc that
+instantiates it, the thin doc **`requires`** the root (and often `belongs_to`
+it when membership holds). Do not leave the root only as prose inside the
+decision body. When no upstream doc exists and the source does not state one,
+leave the edge missing rather than invent a purpose; validate's warning is
+the gardening signal.
 
 **Dedup shortcut**: if a concept merely DUPLICATES or STRENGTHENS an existing
 living doc, do NOT create a new doc — instead link the anchor to that doc's
@@ -238,10 +250,10 @@ ldoc link <existing-id> --provenance <anchor id>
 ## Body-content rule (store-wide convention)
 
 Doc bodies describe the decision or mental model — what is true (or intended)
-and why. They do NOT narrate implementation state, absence, or history. When
-realization is deferred, express that with `status` per
-`.claude/skills/_shared/status-living-vs-target.md` (default `living`; not
-"code lags → target") — the body need not narrate the gap. Strip
+and why. They do NOT narrate implementation state, absence, or history: whether
+the thing is built is `realization` (`facets.md`), and the body need not narrate
+the gap. Implementation detail worth keeping goes in `realization_refs` or a
+`## Implementation` section (`facets.md`), not in the claim. Strip
 "extension"/addendum notes that are really migration plans; if a doc's own
 claim is wrong, deprecate it with a `## Correction` section (Step 1) rather
 than qualifying it.
