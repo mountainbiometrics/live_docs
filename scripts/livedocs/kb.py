@@ -33,6 +33,7 @@ from .model import (
     generate_id,
     intent_needs_basis,
     is_archived,
+    rank_key,
     successor_displays,
 )
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
@@ -435,8 +436,9 @@ class KB:
         return rec
 
     def _edge_list(self, ids: list[str]) -> list[dict]:
-        """Convert a list of ids to doc records (see ``doc_record``)."""
-        return [self.doc_record(eid) for eid in ids]
+        """Convert a list of ids to doc records (see ``doc_record``), ranked."""
+        return [self.doc_record(eid) for eid in
+                sorted(ids, key=lambda i: (rank_key(self._docs.get(i)), i))]
 
     # -----------------------------------------------------------------------
     # Reads
@@ -700,18 +702,23 @@ class KB:
                     start = max(0, m.start() - 20)
                     snippet = body_raw[start:m.end() + 60].strip()[:120]
 
+            # Relevance only orders docs of equal rank: a hit in the title or label
+            # says what the doc is about, a body hit only that it mentions it; and
+            # more distinct terms matched beat fewer (only differs under --or).
+            heads = sum(1 for t in all_terms if t in title_lower or t in label_lower)
+            matched = sum(1 for t in all_terms if t in title_lower or t in label_lower
+                          or t in body_lower)
             results.append({
                 **self.doc_record(doc_id),
                 "snippet": snippet,
-                "archived": is_archived(doc),
+                "_rank": (rank_key(doc), -heads, -matched),
             })
 
-        # Reference/archived hits last (Surfaces Demote References). Stable by id.
-        # `archived` is ranking state, not part of the answer, so it goes no
-        # further than the sort it exists for.
-        results.sort(key=lambda r: (r["archived"], r["id"]))
+        # `_rank` is ranking state, not part of the answer, so it goes no further
+        # than the sort it exists for. Ties fall to id (stable).
+        results.sort(key=lambda r: (r["_rank"], r["id"]))
         for r in results:
-            del r["archived"]
+            del r["_rank"]
         return self._rows(results, limit, fields)
 
     def orphans(
@@ -763,8 +770,9 @@ class KB:
                 continue
             has_parent = any(t in all_ids for t in doc.get("belongs_to", []))
             if not has_parent and doc_id not in has_descendants:
-                results.append(self.doc_record(doc_id))
-        return self._rows(results, limit, fields)
+                results.append(doc_id)
+        results.sort(key=lambda i: (rank_key(self._docs[i]), i))
+        return self._rows([self.doc_record(i) for i in results], limit, fields)
 
     def _children_map(self) -> dict[str, list[str]]:
         """Map each doc id to the ids that `belongs_to` it (its direct children)."""
@@ -861,7 +869,8 @@ class KB:
                             "summary": _summary(self._docs[c]),
                             "descendants": desc_count(c),
                         }
-                        for c in sorted(kids, key=lambda c: (-desc_count(c), c))
+                        for c in sorted(kids, key=lambda c: (
+                            rank_key(self._docs[c]), -desc_count(c), c))
                     ],
                 })
             else:
@@ -870,9 +879,10 @@ class KB:
                     "summary": _summary(doc),
                 })
 
-        # Biggest signposts first; floating sorted by id for stability.
+        # Entry points stay by size (structure, not trust); floating docs have no
+        # size, so they rank like every other listing.
         signposts.sort(key=lambda s: (-s["descendants"], s["id"]))
-        floating.sort(key=lambda f: f["id"])
+        floating.sort(key=lambda f: (rank_key(self._docs[f["id"]]), f["id"]))
 
         visible_total = (
             len(self._docs) if include_reference
@@ -914,8 +924,9 @@ class KB:
                 continue
             if not include_reference and is_archived(doc):
                 continue
-            results.append(self.doc_record(doc_id))
-        return self._rows(results, limit, fields)
+            results.append(doc_id)
+        results.sort(key=lambda i: (rank_key(self._docs[i]), i))
+        return self._rows([self.doc_record(i) for i in results], limit, fields)
 
     # -----------------------------------------------------------------------
     # Graph
@@ -1006,7 +1017,8 @@ class KB:
 
         nodes = [
             {**self.doc_record(nid), "depth": d}
-            for nid, d in sorted(visited.items(), key=lambda x: (x[1], x[0]))
+            for nid, d in sorted(visited.items(),
+                                key=lambda x: (x[1], rank_key(self._docs.get(x[0])), x[0]))
         ]
 
         return {"nodes": nodes, "edges": edges}
