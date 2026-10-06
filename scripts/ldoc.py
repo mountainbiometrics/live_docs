@@ -24,7 +24,8 @@ Subcommands (grouped):
   ── Orient / search / list ──
     map [--include-reference] [--json]   # entry points — omits reference/archived by default
     find [term ...] [--or] [--regex PAT]
-         [--type] [--level] [--status] [--scope] [--domain] [--json] [--plain]
+         [--type] [--status] [--intent] [--force] [--realization] [--imposed-by]
+         [--scope] [--domain] [--json] [--plain]
          # reference/archived hits ranked last
     ls [--type] [--include-reference] [--json] [--plain]
     orphans [--include-reference] [--json] [--plain]
@@ -37,13 +38,17 @@ Subcommands (grouped):
     edges [--json]
 
   ── Mutations ──
-    new --type T --title T [--label L] [--summary S] [--level L] [--status S]
+    new --type T --title T [--label L] [--summary S] [--status S]
+        [--intent I] [--intent-basis B] [--force F] [--realization R]
+        [--realization-refs a,b] [--realization-verified V] [--imposed-by X]
         [--requires a,b] [--belongs-to|--parent a,b] [--relates a,b]
         [--provenance a,b] [--superseded-by a,b]
         [--tags-domain d] [--tags-scope s]
         [--kind K] [--source S] [--origin O] [--medium M] [--authored-at A]
         [--body T|-] [--dry-run]
-    set <ref> [--title] [--label] [--summary] [--level] [--status] [--type]
+    set <ref> [--title] [--label] [--summary] [--status] [--type]
+              [--intent] [--intent-basis] [--force] [--realization]
+              [--realization-refs] [--realization-verified] [--imposed-by]
               [--scope] [--domain] [--body -|TEXT] [--dry-run]
     edit <ref>   (alias: set <ref> --body -)
     link <ref> [--requires a,b] [--belongs-to|--parent a,b] [--relates a,b]
@@ -91,7 +96,11 @@ from pathlib import Path
 _scripts_dir = Path(__file__).resolve().parent
 sys.path.insert(0, str(_scripts_dir))
 
-from livedocs import KB, VALID_TYPES, VALID_LEVELS, VALID_STATUSES, VALID_REFERENCE_KINDS
+from livedocs import (
+    KB, VALID_TYPES, VALID_STATUSES, VALID_REFERENCE_KINDS,
+    VALID_INTENTS, VALID_FORCES, VALID_REALIZATIONS, VALID_IMPOSITIONS, FACET_FIELDS,
+    TYPE_TABLE,
+)
 from livedocs import ReviewLedger, generate_id, build_raw_frontmatter
 from livedocs.cli_entry import run_cli
 from livedocs.kb import churn_count, field_values
@@ -358,7 +367,8 @@ def cmd_get(kb: KB, args) -> int:
         if summary:
             print(f"summary: {summary}")
         print(f"type:   {fm.get('type', '')}")
-        print(f"status: {fm.get('status', '')}  level: {fm.get('level', '')}")
+        print(f"status: {fm.get('status', '')}  {_facet_summary(fm)}")
+        _print_intent_basis(fm)
         print(f"created: {fm.get('created', '')}")
         print(f"domain: {fm.get('domain', [])}  scope: {fm.get('scope', '') or '(none)'}")
         hist = fm.get("history", [])
@@ -439,7 +449,8 @@ def cmd_show(kb: KB, args) -> int:
         if summary:
             print(f"  summary: {summary}")
         print(f"  type:   {fm.get('type','')}  status: {fm.get('status','')}  "
-              f"level: {fm.get('level','')}")
+              f"{_facet_summary(fm)}")
+        _print_intent_basis(fm, "  ")
         own_scope = fm.get('scope', '') or '(none)'
         eff_scope = result.get('effective_scope', [])
         print(f"  domain: {fm.get('domain',[])}  scope: {own_scope}")
@@ -500,8 +511,11 @@ def cmd_find(kb: KB, args) -> int:
             or_mode=getattr(args, "or_mode", False),
             regex=getattr(args, "regex", None) or None,
             type=args.type or None,
-            level=args.level or None,
             status=args.status or None,
+            intent=args.intent or None,
+            force=args.force or None,
+            realization=args.realization or None,
+            imposed_by=args.imposed_by or None,
             scope=args.scope or None,
             domain=args.domain or None,
             limit=args.limit,
@@ -803,14 +817,12 @@ def cmd_count(kb: KB, args) -> int:
     for k, v in stats["by_type"].items():
         print(f"  {k:20s}  {v}")
     print()
-    print("By level:")
-    for k, v in stats["by_level"].items():
-        print(f"  {k:20s}  {v}")
-    print()
-    print("By status:")
-    for k, v in stats["by_status"].items():
-        print(f"  {k:20s}  {v}")
-    print()
+    for title, key in (("status", "by_status"), ("intent", "by_intent"),
+                       ("force", "by_force"), ("realization", "by_realization")):
+        print(f"By {title}:")
+        for k, v in stats[key].items():
+            print(f"  {k:20s}  {v}")
+        print()
     print(f"requires edges:      {stats['requires_count']}")
     print(f"belongs_to edges:    {stats['belongs_to_count']}")
     print(f"relates edges:       {stats['relates_count']}")
@@ -860,6 +872,7 @@ def cmd_domains(kb: KB, args) -> int:
 
 def cmd_new(kb: KB, args) -> int:
     edges = _parse_edge_args(args)
+    facets = _facet_args(args)
     domain_tags = [s.strip() for s in args.tags_domain.split(",") if s.strip()] \
         if args.tags_domain else []
     scope_tags = [s.strip() for s in args.tags_scope.split(",") if s.strip()] \
@@ -885,6 +898,12 @@ def cmd_new(kb: KB, args) -> int:
 
     # --dry-run preview
     if getattr(args, "dry_run", False):
+        # Strict on output applies to previews: show the refusal a real run gives.
+        try:
+            kb.check_new_facets(args.type, **facets)
+        except ValueError as e:
+            _err(str(e))
+            return 1
         # label is required; title is optional and falls back to the label.
         label = args.label
         title = args.title or label
@@ -894,8 +913,10 @@ def cmd_new(kb: KB, args) -> int:
         print(f"  title:   {title}")
         if args.summary:
             print(f"  summary: {args.summary}")
-        print(f"  level:   {args.level}")
         print(f"  status:  {args.status}")
+        for field, val in facets.items():
+            if val:
+                print(f"  {field}: {val}")
         for field, refs in edges.items():
             if refs:
                 print(f"  {field}: {refs}")
@@ -910,8 +931,8 @@ def cmd_new(kb: KB, args) -> int:
             label=args.label,
             title=args.title or "",
             summary=args.summary or "",
-            level=args.level,
             status=args.status,
+            **facets,
             **edges,
             tags_domain=domain_tags,
             tags_scope=scope_tags,
@@ -963,8 +984,7 @@ def cmd_set(kb: KB, args) -> int:
         set_fields["summary"] = args.summary
     if args.label is not None:
         set_fields["label"] = args.label.strip()
-    if args.level is not None:
-        set_fields["level"] = args.level
+    set_fields.update(_facet_args(args))
     if args.status is not None:
         set_fields["status"] = args.status
     if args.type is not None:
@@ -986,7 +1006,7 @@ def cmd_set(kb: KB, args) -> int:
         return 1
 
     if not set_fields and new_body is None:
-        _err("No fields specified. Use --title, --label, --summary, --level, --status, --type, --scope, --domain, or --body.")
+        _err("No fields specified. Use --title, --label, --summary, --status, --type, --scope, --domain, a facet flag (--intent, --intent-basis, --force, --realization, --realization-refs, --realization-verified, --imposed-by), or --body.")
         return 1
 
     note = getattr(args, "note", "")
@@ -1038,8 +1058,9 @@ def cmd_edit(kb: KB, args) -> int:
     """
     set_args = argparse.Namespace(
         refs=[args.ref], body="-", note=getattr(args, "note", ""),
-        title=None, summary=None, label=None, level=None, status=None,
+        title=None, summary=None, label=None, status=None,
         type=None, scope=None, domain=None, dry_run=False,
+        **{f: None for f in FACET_FIELDS},
     )
     return cmd_set(kb, set_args)
 
@@ -2657,8 +2678,8 @@ def cmd_help(kb: KB, args) -> int:
   ldoc domains --plain
 
   # Mutations
-  ldoc new --type decision --label "My Decision" --level preference \\
-       --requires cognitive-load
+  ldoc new --type decision --label "My Decision" --force should \\
+       --realization planned --requires cognitive-load
   ldoc new --type decision --label "Test Decision" --dry-run
   ldoc set porcelain-roadmap --title "New Title"
   ldoc set porcelain-roadmap --summary "One-line gist."
@@ -2709,9 +2730,93 @@ def cmd_help(kb: KB, args) -> int:
 # ---------------------------------------------------------------------------
 
 VALID_TYPES_SORTED = sorted(VALID_TYPES)
-VALID_LEVELS_SORTED = sorted(VALID_LEVELS)
 VALID_STATUSES_SORTED = sorted(VALID_STATUSES)
 REFERENCE_KIND_CHOICES = sorted(VALID_REFERENCE_KINDS) + [""]
+
+# Facet flags shared by new/set (and the enum-valued ones by find). The enum
+# lists come from the model; which types take which facet is TYPE_TABLE's, and
+# kb.new/kb.set refuse a violation with the flag to add or drop.
+_FACET_ENUM_CHOICES = {
+    "intent": VALID_INTENTS, "force": VALID_FORCES,
+    "realization": VALID_REALIZATIONS, "imposed_by": VALID_IMPOSITIONS,
+}
+
+
+def _types_where(field: str, presence: str) -> str:
+    """The doc types whose TYPE_TABLE entry gives `field` this presence, for help text."""
+    names = [t for t, spec in TYPE_TABLE.items() if getattr(spec, field) == presence]
+    return ", ".join(sorted(names))
+
+
+_FACET_HELP = {
+    "intent": "What the person did to make this exist: requested (brought it forward), "
+              "chosen (picked it from options), incidental (let it happen). "
+              "Default on new: incidental. Not on " + _types_where("intent", "forbidden")
+              + " docs.",
+    "force": "How hard it binds: must (a rule), should (a guideline), may (an allowance). "
+             "Required on: " + _types_where("force", "required") + ".",
+    "realization": "Whether the claimed thing exists in the implementation. "
+                   "Required on: " + _types_where("realization", "required") + ".",
+    "imposed_by": "What makes it hold: environment (the world), tradeoff (follows from "
+                  "a recorded choice), choice (set directly). Required on: "
+                  + _types_where("imposed_by", "required") + ".",
+}
+
+
+def _facet_args(args) -> dict:
+    """The facet flags the caller passed, as KB keyword arguments.
+
+    An unpassed flag is None and is left out, so `set` leaves the facet alone
+    and `new` lets the KB apply its default. A passed empty string stays in:
+    on `set` it clears the facet.
+    """
+    out = {}
+    for field in FACET_FIELDS:
+        val = getattr(args, field, None)
+        if val is None:
+            continue
+        out[field] = _split_csv(val) if field == "realization_refs" else val
+    return out
+
+
+def _facet_summary(fm: dict) -> str:
+    """One line of the facets a doc carries, for get/show.
+
+    The intent basis is evidence, a sentence long, so get/show print it on its
+    own line (see _print_intent_basis) rather than here.
+    """
+    shown = []
+    for f in FACET_FIELDS:
+        val = fm.get(f)
+        if not val or f == "intent_basis":
+            continue
+        shown.append(f"{f}: {', '.join(val) if isinstance(val, list) else val}")
+    return "  ".join(shown) if shown else "(no facets)"
+
+
+def _print_intent_basis(fm: dict, indent: str = "") -> None:
+    if fm.get("intent_basis"):
+        print(f"{indent}intent_basis: {fm['intent_basis']}")
+
+
+def _add_facet_flags(p, *, clear: bool) -> None:
+    """The facet flags of `new` and `set`; on `set` an empty value clears the facet."""
+    tail = [""] if clear else []
+    cleared = " Empty string clears it." if clear else ""
+    for field, values in _FACET_ENUM_CHOICES.items():
+        p.add_argument("--" + field.replace("_", "-"), default=None, dest=field,
+                       choices=sorted(values) + tail, metavar=f"{{{'|'.join(sorted(values))}}}",
+                       help=_FACET_HELP[field] + cleared)
+    p.add_argument("--intent-basis", default=None, dest="intent_basis",
+                   help="The quote or citation (session, review, raw clipping, date) that "
+                        "shows the person requested or chose this. Required with "
+                        "--intent requested|chosen." + cleared)
+    p.add_argument("--realization-refs", default=None, dest="realization_refs",
+                   help="Comma-separated anchors (paths, symbols, URLs) where the "
+                        "claimed thing lives." + cleared)
+    p.add_argument("--realization-verified", default=None, dest="realization_verified",
+                   help="Date or commit at which the realization was last checked."
+                        + cleared)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2736,7 +2841,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,created,history.")
+                        "intent,force,realization,imposed_by,scope,summary,domain,created,history.")
 
     # --- body ---
     p = sub.add_parser("body", help="Print the body text of one or more docs.")
@@ -2760,8 +2865,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--regex", default="", metavar="PATTERN",
                    help="Regex pattern applied to title + label + body (re.IGNORECASE).")
     p.add_argument("--type", default="", choices=VALID_TYPES_SORTED + [""])
-    p.add_argument("--level", default="", choices=VALID_LEVELS_SORTED + [""])
     p.add_argument("--status", default="", choices=VALID_STATUSES_SORTED + [""])
+    for field, values in _FACET_ENUM_CHOICES.items():
+        p.add_argument("--" + field.replace("_", "-"), default="", dest=field,
+                       choices=sorted(values) + [""])
     p.add_argument("--scope", default="")
     p.add_argument("--domain", default="")
     p.add_argument("--json", action="store_true")
@@ -2769,7 +2876,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label output instead of typed wiki-links.")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,created,history.")
+                        "intent,force,realization,imposed_by,scope,summary,domain,created,history.")
     p.add_argument("--count", action="store_true", help="Print result count only.")
     p.add_argument("--limit", type=int, default=None, metavar="N",
                    help="Show at most N results.")
@@ -2787,7 +2894,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label output instead of typed wiki-links.")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,created,history.")
+                        "intent,force,realization,imposed_by,scope,summary,domain,created,history.")
     p.add_argument("--count", action="store_true", help="Print doc count only.")
     p.add_argument("--limit", type=int, default=None, metavar="N",
                    help="Show at most N results.")
@@ -2807,7 +2914,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Plain id/label output instead of typed wiki-links.")
     p.add_argument("--fields", default="", metavar="FIELDS",
                    help="Comma-separated fields for TSV output: id,label,title,type,status,"
-                        "level,scope,summary,domain,created,history.")
+                        "intent,force,realization,imposed_by,scope,summary,domain,created,history.")
     p.add_argument("--count", action="store_true", help="Print orphan count only.")
     p.add_argument("--limit", type=int, default=None, metavar="N",
                    help="Show at most N results.")
@@ -2883,10 +2990,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("new", help="Create a new doc.",
                        description=(
                            "Type-aware defaults:\n"
-                           "  --level:  incidental (override with --level)\n"
+                           "  --intent: incidental (every type but reference)\n"
                            "  --status: living     (override with --status)\n"
                            "  --label:  auto-derived as Title-Case from title words\n"
                            "            (up to ~24 chars, word boundaries only)\n"
+                           "The doc type decides which facets apply (TYPE_TABLE in\n"
+                           "livedocs/model.py); a doc that breaks its type's rules is refused.\n"
+                           "--force and --realization are forbidden on a type that does not\n"
+                           "require them; --intent requested|chosen needs --intent-basis.\n"
                            "Edge refs validated before writing; unresolved refs cause an error."
                        ),
                        formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -2900,8 +3011,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "to the label when omitted.")
     p.add_argument("--summary", default="",
                    help="2–5 sentence overview of the doc's concept (omitted if empty).")
-    p.add_argument("--level", default="incidental", choices=VALID_LEVELS_SORTED)
     p.add_argument("--status", default="living", choices=VALID_STATUSES_SORTED)
+    _add_facet_flags(p, clear=False)
     p.add_argument("--requires", default="",
                    help="Comma-separated ids/labels/titles. Cascade-hard. Validated before write.")
     p.add_argument("--belongs-to", "--parent", default="", dest="belongs_to",
@@ -2937,9 +3048,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--summary", default=None,
                    help="Replace the summary scalar (empty string removes it).")
     p.add_argument("--label", default=None)
-    p.add_argument("--level", default=None, choices=VALID_LEVELS_SORTED)
     p.add_argument("--status", default=None, choices=VALID_STATUSES_SORTED)
     p.add_argument("--type", default=None, choices=VALID_TYPES_SORTED)
+    _add_facet_flags(p, clear=True)
     p.add_argument("--scope", default=None,
                    help="Single string naming a topological zone; applies to this "
                         "doc and its whole belongs_to subtree. Empty string clears it.")
