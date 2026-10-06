@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -25,23 +26,137 @@ VALID_TYPES = {
     "type", "principle", "goal", "decision", "constraint",
     "requirement", "use-case", "guide", "component", "reference",
 }
-VALID_STATUSES = {"living", "target", "deprecated", "reference"}
-VALID_LEVELS = {"incidental", "trial", "preference", "requirement"}
+# Lifecycle only. Deferral is `realization: deferred`; a current path coexisting
+# with its planned successor is `superseded_by` on the still-living doc.
+VALID_STATUSES = {"living", "deprecated", "reference"}
+# Read-only: still parsed so existing docs keep working, but validate warns and
+# nothing writes it. (`target` split into living + a realization.)
+RETIRED_STATUSES = {"target"}
 VALID_REFERENCE_KINDS = {"brainstorm", "plan", "clipping", "external"}
 
-# The same three enums as annotations, so a method that takes one says which
-# values it takes and a surface reading its signature can offer them.
+# The four facets that replaced `level`; each answers one question.
+# intent: what the person did to make the claim exist. force: how hard it binds.
+# realization: whether the claimed thing exists in the implementation.
+# imposed_by: what makes the claim hold.
+VALID_INTENTS = {"requested", "chosen", "incidental"}
+VALID_FORCES = {"must", "should", "may"}
+VALID_REALIZATIONS = {"realized", "partial", "planned", "deferred", "unassessed"}
+VALID_IMPOSITIONS = {"environment", "tradeoff", "choice"}
+
+# The same enums as annotations, so a method that takes one says which values it
+# takes and a surface reading its signature can offer them.
 DocType = Literal[tuple(sorted(VALID_TYPES))]
 DocStatus = Literal[tuple(sorted(VALID_STATUSES))]
-DocLevel = Literal[tuple(sorted(VALID_LEVELS))]
+DocIntent = Literal[tuple(sorted(VALID_INTENTS))]
+DocForce = Literal[tuple(sorted(VALID_FORCES))]
+DocRealization = Literal[tuple(sorted(VALID_REALIZATIONS))]
+DocImposition = Literal[tuple(sorted(VALID_IMPOSITIONS))]
+
+
+# ---------------------------------------------------------------------------
+# What each doc type decides about the facets
+# ---------------------------------------------------------------------------
+
+Presence = Literal["required", "optional", "forbidden"]
+
+
+@dataclass(frozen=True)
+class TypeSpec:
+    """Which facets a doc type carries, and the why-chain it should sit in.
+
+    ``required`` is an error when the tool writes the doc and a warning on an
+    existing one (loose on input, strict on output); ``forbidden`` is an error
+    either way. ``realization_verb`` is the predicate for what realization means
+    on this type ("is reached", "exists"); a message uses it to ask the
+    question in the type's own terms.
+    ``expected_requires`` are the types a doc of this type should depend on, any
+    one of which satisfies it; the chain reads goal/use-case, then norm, then
+    decision/component.
+    """
+
+    intent: Presence = "required"
+    force: Presence = "forbidden"
+    realization: Presence = "forbidden"
+    realization_verb: str = ""
+    imposed_by: Presence = "optional"
+    imposed_by_values: frozenset = frozenset(VALID_IMPOSITIONS)
+    expected_requires: tuple = ()
+
+
+# The one copy of the per-type rules. Everything that writes or checks a doc
+# reads this; nothing restates it. `type` is the meta-type that defines types and
+# carries no facets beyond intent.
+TYPE_TABLE: dict[str, TypeSpec] = {
+    "goal": TypeSpec(realization="required", realization_verb="is reached"),
+    "use-case": TypeSpec(realization="required", realization_verb="is supported",
+                         expected_requires=("goal",)),
+    "principle": TypeSpec(force="required",
+                          expected_requires=("goal", "use-case")),
+    # The decision/component a tradeoff follows from is checked off imposed_by
+    # itself (TRADEOFF_UPSTREAM), since it applies to any type that carries it.
+    "constraint": TypeSpec(force="required", imposed_by="required",
+                           imposed_by_values=frozenset({"environment", "tradeoff"})),
+    "requirement": TypeSpec(force="required", realization="required",
+                            realization_verb="is met",
+                            expected_requires=("goal", "use-case")),
+    "decision": TypeSpec(force="required", realization="required",
+                         realization_verb="is in effect",
+                         expected_requires=("principle", "constraint", "requirement")),
+    "component": TypeSpec(realization="required", realization_verb="exists",
+                          expected_requires=("decision", "requirement")),
+    "guide": TypeSpec(force="required", expected_requires=("principle", "decision")),
+    "reference": TypeSpec(intent="forbidden", imposed_by="forbidden"),
+    "type": TypeSpec(),
+}
+
+# A claim imposed by `tradeoff` follows from a choice recorded elsewhere, so it
+# must depend on the decision or component that made the choice.
+TRADEOFF_UPSTREAM = ("decision", "component")
+
+# Every frontmatter field a facet owns. `realization_refs` and
+# `realization_verified` ride with `realization`; `intent_basis` rides with
+# `intent`.
+FACET_FIELDS = (
+    "intent", "intent_basis", "force", "realization",
+    "realization_refs", "realization_verified", "imposed_by",
+)
+_COMPANIONS = {
+    "intent_basis": "intent",
+    "realization_refs": "realization",
+    "realization_verified": "realization",
+}
+
+
+def facet_forbidden(doc_type: str, field: str) -> bool:
+    """True when this type's table entry forbids `field` (or its owning facet)."""
+    spec = TYPE_TABLE.get(doc_type)
+    if spec is None:
+        return False
+    return getattr(spec, _COMPANIONS.get(field, field)) == "forbidden"
+
+
+def facet_required(doc_type: str, field: str) -> bool:
+    """True when this type's table entry requires `field`.
+
+    Companions are never required: a basis is required by the intent *value*
+    (see ``intent_needs_basis``), not by the type.
+    """
+    spec = TYPE_TABLE.get(doc_type)
+    return spec is not None and field not in _COMPANIONS \
+        and getattr(spec, field) == "required"
+
+
+def intent_needs_basis(intent: str | None) -> bool:
+    """`requested` and `chosen` are claims about the person; the basis is the evidence."""
+    return intent in ("requested", "chosen")
 
 
 def is_archived(doc: dict | None) -> bool:
     """True when a doc is reference/archived surface material.
 
     Matches viewer ``isArchived``: ``type: reference`` OR ``status: reference``.
-    ``status: target`` is NOT archived — demotion is about reference material,
-    not the living-vs-target adoption axis.
+    Lifecycle (`deprecated`) is not archived: demotion is about reference
+    material.
     """
     if not doc:
         return False
@@ -82,7 +197,13 @@ FIELD_CHANGE_TYPE = {
     "requires": "restructure",
     "belongs_to": "restructure",
     "status": "restructure",
-    "level": "restructure",
+    "intent": "restructure",
+    "intent_basis": "restructure",
+    "force": "restructure",
+    "realization": "restructure",
+    "realization_refs": "restructure",
+    "realization_verified": "restructure",
+    "imposed_by": "restructure",
     "type": "restructure",
     "scope": "restructure",
     "superseded_by": "restructure",

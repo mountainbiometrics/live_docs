@@ -15,11 +15,23 @@ from typing import Any, Literal
 
 from .model import (
     ARCHIVED_IMMUTABLE_MSG,
-    DocLevel,
+    FACET_FIELDS,
+    TYPE_TABLE,
+    VALID_FORCES,
+    VALID_IMPOSITIONS,
+    VALID_INTENTS,
+    VALID_REALIZATIONS,
+    DocForce,
+    DocImposition,
+    DocIntent,
+    DocRealization,
     DocStatus,
     DocType,
     display_label,
+    facet_forbidden,
+    facet_required,
     generate_id,
+    intent_needs_basis,
     is_archived,
 )
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
@@ -32,6 +44,85 @@ def _refuse_archived_mutation(doc: dict, ref: str) -> None:
     """Raise ValueError when *doc* is a reference/archived snapshot."""
     if is_archived(doc):
         raise ValueError(ARCHIVED_IMMUTABLE_MSG.format(ref=ref))
+
+
+# ---------------------------------------------------------------------------
+# Strict on output: a doc the tool writes must satisfy its type's table entry
+# ---------------------------------------------------------------------------
+
+_FACET_ENUMS = {
+    "intent": VALID_INTENTS, "force": VALID_FORCES,
+    "realization": VALID_REALIZATIONS, "imposed_by": VALID_IMPOSITIONS,
+}
+
+
+def _flag(field: str) -> str:
+    return "--" + field.replace("_", "-")
+
+
+def _choices(values) -> str:
+    return "|".join(sorted(values))
+
+
+def _refuse_facet_violations(fm: dict, *, complete: bool) -> None:
+    """Raise ValueError naming every way `fm` breaks its type's table entry.
+
+    Each message says which flag to add or drop, since the caller can only fix
+    it by re-running. `complete` demands every required facet (a new doc, or a
+    type change that moves the doc under a different entry); without it only
+    what is present is checked, so an assessment such as `set --intent` still
+    works on a legacy doc that predates the facets and lacks the rest.
+    """
+    doc_type = fm.get("type", "")
+    spec = TYPE_TABLE.get(doc_type)
+    problems: list[str] = []
+
+    for field, allowed in _FACET_ENUMS.items():
+        val = fm.get(field)
+        if val and val not in allowed:
+            problems.append(f"invalid {_flag(field)} `{val}` (choose {_choices(allowed)})")
+
+    for field in FACET_FIELDS:
+        if fm.get(field) and facet_forbidden(doc_type, field):
+            problems.append(
+                f"a {doc_type} doc takes no {_flag(field)}: drop it "
+                f"(the {doc_type} type forbids `{field}`)"
+            )
+
+    if spec is not None:
+        if (fm.get("imposed_by") and spec.imposed_by == "required"
+                and fm["imposed_by"] in VALID_IMPOSITIONS
+                and fm["imposed_by"] not in spec.imposed_by_values):
+            problems.append(
+                f"a {doc_type} doc is imposed from outside or by a recorded choice: "
+                f"use --imposed-by {_choices(spec.imposed_by_values)}, not `{fm['imposed_by']}`"
+            )
+        if complete:
+            if facet_required(doc_type, "force"):
+                if not fm.get("force"):
+                    problems.append(
+                        f"a {doc_type} is normative, so it needs "
+                        f"--force {_choices(VALID_FORCES)}"
+                    )
+            if facet_required(doc_type, "realization") and not fm.get("realization"):
+                problems.append(
+                    f"a {doc_type} must say whether it {spec.realization_verb}: "
+                    f"add --realization {_choices(VALID_REALIZATIONS)}"
+                )
+            if facet_required(doc_type, "imposed_by") and not fm.get("imposed_by"):
+                problems.append(
+                    f"a {doc_type} must say what imposes it: add "
+                    f"--imposed-by {_choices(spec.imposed_by_values)}"
+                )
+
+    if intent_needs_basis(fm.get("intent")) and not fm.get("intent_basis"):
+        problems.append(
+            f"--intent {fm['intent']} needs --intent-basis "
+            f"\"<the quote or citation that shows it>\""
+        )
+
+    if problems:
+        raise ValueError("; ".join(problems))
 
 
 # ---------------------------------------------------------------------------
@@ -468,8 +559,11 @@ class KB:
         self,
         query: str | None = None,
         type: DocType | None = None,
-        level: DocLevel | None = None,
         status: DocStatus | None = None,
+        intent: DocIntent | None = None,
+        force: DocForce | None = None,
+        realization: DocRealization | None = None,
+        imposed_by: DocImposition | None = None,
         scope: str | None = None,
         domain: str | None = None,
         terms: list[str] | None = None,
@@ -484,8 +578,11 @@ class KB:
 
         query       — single query string; matches title + label + body (case-insensitive).
         type        — restrict to one doc type.
-        level       — restrict to one level.
         status      — restrict to one status.
+        intent      — restrict to one intent (the ratification queue is `incidental`).
+        force       — restrict to one force.
+        realization — restrict to one realization (the build backlog is `planned`).
+        imposed_by  — restrict to one imposition.
         scope       — restrict to docs whose effective scope includes this anchor.
         domain      — restrict to docs carrying this domain tag.
         terms       — list of query strings; in AND mode (default) all must match;
@@ -494,8 +591,9 @@ class KB:
         regex       — a regex pattern applied to title + label + body (re.IGNORECASE).
         limit       — return at most this many results.
         fields      — also return these stored fields per row, in this order:
-                      id, label, title, type, status, level, scope, summary,
-                      domain, created, history (history is the churn count).
+                      id, label, title, type, status, intent, force, realization,
+                      imposed_by, scope, summary, domain, created, history
+                      (history is the churn count).
 
         Multiple query mechanisms (query / terms / regex) are AND-combined with each other.
         """
@@ -520,9 +618,15 @@ class KB:
             # Metadata filters
             if type and doc.get("type") != type:
                 continue
-            if level and doc.get("level") != level:
-                continue
             if status and doc.get("status") != status:
+                continue
+            if intent and doc.get("intent") != intent:
+                continue
+            if force and doc.get("force") != force:
+                continue
+            if realization and doc.get("realization") != realization:
+                continue
+            if imposed_by and doc.get("imposed_by") != imposed_by:
                 continue
 
             doc_domain = _doc_tag_list(doc, "domain")
@@ -625,7 +729,8 @@ class KB:
             orphans to "fix" by scoping.
         limit -- return at most this many results.
         fields -- also return these stored fields per row, in this order: id,
-            label, title, type, status, level, scope, summary, domain, created,
+            label, title, type, status, intent, force, realization, imposed_by, scope,
+            summary, domain, created,
             history (history is the churn count).
 
         This is the authoritative orphan computation. It is intentionally NOT a
@@ -673,7 +778,7 @@ class KB:
 
         include_reference -- include type:reference / status:reference roots and
             child hops. Omitted by default: they are footnote-grade, not
-            orientation peers. ``status: target`` roots are kept either way.
+            orientation peers.
 
         A root is any doc with no resolving `belongs_to` parent. Roots split into:
           - signposts: roots that HAVE descendants (the entry points) — each
@@ -684,7 +789,6 @@ class KB:
         By default, reference/archived docs (type:reference or status:reference)
         are omitted from roots and child hops — they are footnote-grade, not
         orientation peers. Pass ``include_reference=True`` to include them.
-        ``status: target`` roots are kept.
 
         Mirrors the viewer's structural-signpost derivation (the retired `index`
         type, re-computed from topology). Read-only.
@@ -803,7 +907,8 @@ class KB:
             them regardless.
         limit -- return at most this many results.
         fields -- also return these stored fields per row, in this order: id,
-            label, title, type, status, level, scope, summary, domain, created,
+            label, title, type, status, intent, force, realization, imposed_by, scope,
+            summary, domain, created,
             history (history is the churn count).
         """
         if type == "reference":
@@ -945,14 +1050,44 @@ class KB:
         if not defer_reload:
             self._reload()
 
+    @staticmethod
+    def check_new_facets(type: str, *, intent: str | None = None,
+                         intent_basis: str = "", force: str = "",
+                         realization: str = "", realization_refs: list[str] = None,
+                         realization_verified: str = "",
+                         imposed_by: str = "") -> dict[str, Any]:
+        """Apply new()'s intent default and refuse a facet set its type forbids.
+
+        Returns the facets a new doc of this type would carry. Public so a
+        preview (`new --dry-run`) refuses exactly what the real write would.
+        """
+        facets = {
+            "intent": intent if intent is not None
+                      else ("" if type == "reference" else "incidental"),
+            "intent_basis": intent_basis,
+            "force": force,
+            "realization": realization,
+            "realization_refs": list(realization_refs or []),
+            "realization_verified": realization_verified,
+            "imposed_by": imposed_by,
+        }
+        _refuse_facet_violations({"type": type, **facets}, complete=True)
+        return facets
+
     def new(
         self,
         type: str,
         label: str,
         title: str = "",
         summary: str = "",
-        level: str = "incidental",
         status: str = "living",
+        intent: str | None = None,
+        intent_basis: str = "",
+        force: str = "",
+        realization: str = "",
+        realization_refs: list[str] = None,
+        realization_verified: str = "",
+        imposed_by: str = "",
         requires: list[str] = None,
         belongs_to: list[str] = None,
         relates: list[str] = None,
@@ -973,7 +1108,17 @@ class KB:
 
         All edge arguments (requires, belongs_to, relates, provenance,
         superseded_by) accept ids, labels, or titles — resolved via resolve().
+
+        Strict on output: the doc must satisfy its type's TYPE_TABLE entry, or
+        this raises ValueError saying which flag to add or drop. `intent`
+        defaults to `incidental` on every doc except a reference, which takes none.
         """
+        facets = self.check_new_facets(
+            type, intent=intent, intent_basis=intent_basis, force=force,
+            realization=realization, realization_refs=realization_refs,
+            realization_verified=realization_verified, imposed_by=imposed_by,
+        )
+
         doc_id = generate_id(self.docs_dir)
         # `imported` (reference docs) still records the import moment. The doc's
         # creation TIME is no longer stored as `created` — it is the timestamp of
@@ -1006,12 +1151,16 @@ class KB:
             "label": label,
             "type": type,
             "status": status,
-            "level": level,
         }
 
         # Summary: scalar, omitted when empty (matches serialize emission rule)
         if summary:
             fm["summary"] = summary
+
+        # Facets: only those the doc carries (a type that forbids one never gets it)
+        for field in FACET_FIELDS:
+            if facets[field]:
+                fm[field] = facets[field]
 
         # Flat domain/scope tags: omitted entirely when empty (per schema)
         domain = normalize_tag_list(tags_domain)
@@ -1045,8 +1194,9 @@ class KB:
 
     def set(self, ref: str, **fields) -> None:
         """
-        Update scalar frontmatter fields: title, label, summary, level, status,
-        type, scope, domain.
+        Update scalar frontmatter fields: title, label, summary, status, type,
+        scope, domain, and the facets (intent, intent_basis, force, realization,
+        realization_refs, realization_verified, imposed_by).
 
         Resolves ref, loads doc, updates fields, writes back. Setting `summary`
         or `scope` to an empty string — or `domain` to an empty list — removes
@@ -1054,8 +1204,15 @@ class KB:
         naming a topological zone, applying to this doc and its whole
         belongs_to subtree (see effective_scope); `domain` is a flat LIST (NOT
         inherited) — a governed business-grouping facet.
+
+        A facet takes an empty string (or, for `realization_refs`, an empty
+        list) to clear it. When the call touches a facet or the type, the
+        resulting doc must satisfy its type's TYPE_TABLE entry, or this raises
+        ValueError; a type change must also supply every facet the new type
+        requires. Other edits never refuse a legacy doc for facets it predates.
         """
-        allowed = {"title", "label", "summary", "level", "status", "type", "scope", "domain"}
+        allowed = {"title", "label", "summary", "status", "type", "scope", "domain",
+                   *FACET_FIELDS}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"set() does not accept fields: {unknown}. Allowed: {allowed}")
@@ -1066,10 +1223,12 @@ class KB:
         for k, v in fields.items():
             if k == "domain" and v is not None:
                 v = normalize_tag_list(v if isinstance(v, list) else [])
-            if k in ("summary", "scope", "domain") and not v:
+            if k in ("summary", "scope", "domain", *FACET_FIELDS) and not v:
                 fm.pop(k, None)
             else:
                 fm[k] = v
+        if "type" in fields or any(k in fields for k in FACET_FIELDS):
+            _refuse_facet_violations(fm, complete="type" in fields)
         self._write_doc(doc_id, fm, body)
 
     def link(
@@ -1386,8 +1545,10 @@ class KB:
         Returns a dict with:
           total              — total doc count
           by_type            — {type: count}
-          by_level           — {level: count}
           by_status          — {status: count}
+          by_intent          — {intent: count}
+          by_force           — {force: count}
+          by_realization     — {realization: count}
           requires_count     — total requires edge count (cascade-hard)
           belongs_to_count   — total belongs_to edge count (cascade-hard)
           relates_count      — total relates edge count (navigation)
@@ -1395,8 +1556,10 @@ class KB:
           superseded_by_count— total superseded_by edge count
         """
         by_type: dict[str, int] = {}
-        by_level: dict[str, int] = {}
         by_status: dict[str, int] = {}
+        by_intent: dict[str, int] = {}
+        by_force: dict[str, int] = {}
+        by_realization: dict[str, int] = {}
         requires_count = 0
         belongs_to_count = 0
         relates_count = 0
@@ -1407,11 +1570,15 @@ class KB:
             t = doc.get("type") or "(none)"
             by_type[t] = by_type.get(t, 0) + 1
 
-            lv = doc.get("level") or "(none)"
-            by_level[lv] = by_level.get(lv, 0) + 1
-
             ss = doc.get("status") or "(none)"
             by_status[ss] = by_status.get(ss, 0) + 1
+
+            # "(none)" is absent: a legacy doc not yet assessed, or a type that
+            # forbids the facet. Both read the same as "no value" here.
+            for tally, field in ((by_intent, "intent"), (by_force, "force"),
+                                 (by_realization, "realization")):
+                v = doc.get(field) or "(none)"
+                tally[v] = tally.get(v, 0) + 1
 
             requires_count += len(doc.get("requires", []))
             belongs_to_count += len(doc.get("belongs_to", []))
@@ -1422,8 +1589,10 @@ class KB:
         return {
             "total": len(self._docs),
             "by_type": dict(sorted(by_type.items())),
-            "by_level": dict(sorted(by_level.items())),
             "by_status": dict(sorted(by_status.items())),
+            "by_intent": dict(sorted(by_intent.items())),
+            "by_force": dict(sorted(by_force.items())),
+            "by_realization": dict(sorted(by_realization.items())),
             "requires_count": requires_count,
             "belongs_to_count": belongs_to_count,
             "relates_count": relates_count,

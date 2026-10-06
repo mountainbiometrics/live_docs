@@ -13,9 +13,9 @@ Exits 0 if no errors, 1 if any errors found.
 Stdlib only. No external dependencies.
 
 Checks performed:
-  1. Required baseline fields present (id, title, label, type, status, level, created)
+  1. Required baseline fields present (id, title, label, type, status)
   2. label: present, trimmed, UNIQUE across store (case-insensitive)
-  3. Valid enum values (type, status, level)
+  3. Valid enum values (type, status, intent, force, realization, imposed_by)
   4. id == filename
   5a. requires ids resolve to existing docs (cascade graph — errors blocking)
   5b. belongs_to ids resolve to existing docs (cascade graph — errors blocking)
@@ -28,7 +28,12 @@ Checks performed:
   8. domain is a list; scope is a single string (topological zone)
   9. Per-edge-type acyclicity: belongs_to (a DAG) must have NO cycles (blocking)
  10. summary presence + length guideline for non-reference docs (warnings)
- 11. reference doc with superseded_by but not deprecated (staged-incomplete retirement)
+ 11. facets against the type table (TYPE_TABLE): a facet the type forbids, and
+     intent requested/chosen without intent_basis, are errors
+14. facets and why-chain the type expects but the doc lacks (warnings, since existing
+     docs are read loosely): realization, force, imposed_by, intent, a tradeoff
+     with no upstream decision/component, none of the expected `requires` types
+15. obsolete `level` key and retired `status: target` (warnings naming the migration)
  12. body [[id]] wikilinks not present in any edge field (prose-not-edged)
  13. malformed body wikilinks ([[id|label]], [[id]] (label)) — canonical form is bare [[id]]
 
@@ -49,7 +54,10 @@ import argparse
 
 from livedocs import (
     load_all, dangling_edges, dangling_references, doc_prefix,
-    VALID_TYPES, VALID_STATUSES, VALID_LEVELS, VALID_REFERENCE_KINDS,
+    VALID_TYPES, VALID_STATUSES, RETIRED_STATUSES, VALID_REFERENCE_KINDS,
+    VALID_INTENTS, VALID_FORCES, VALID_REALIZATIONS, VALID_IMPOSITIONS,
+    TYPE_TABLE, TRADEOFF_UPSTREAM, FACET_FIELDS,
+    facet_forbidden, facet_required, intent_needs_basis,
     is_archived,
 )
 from livedocs.lint import prose_links_not_edged, malformed_body_wikilinks
@@ -65,7 +73,13 @@ from livedocs.cli_entry import run_cli
 # Edge fields (belongs_to, requires, relates, provenance, superseded_by) are
 # optional and may be absent — absence == empty list, which is valid.
 REQUIRED_BASELINE_FIELDS = {
-    "id", "title", "label", "type", "status", "level",
+    "id", "title", "label", "type", "status",
+}
+
+# Enum-valued facets, for check 3. Which types may carry them is TYPE_TABLE's.
+FACET_ENUMS = {
+    "intent": VALID_INTENTS, "force": VALID_FORCES,
+    "realization": VALID_REALIZATIONS, "imposed_by": VALID_IMPOSITIONS,
 }
 
 # Edge fields the model treats as DAGs (no cycles permitted). belongs_to is the
@@ -78,10 +92,14 @@ DAG_EDGE_FIELDS = ("belongs_to",)
 # Per-doc check
 # ---------------------------------------------------------------------------
 
-def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | None = None) -> tuple[list, list]:
+def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | None = None,
+              types: dict[str, str] | None = None) -> tuple[list, list]:
     """
     Return (errors, warnings) for one parsed doc dict.
     Each item is a string describing the violation.
+
+    `types` maps every doc id to its type, for the why-chain checks that look at
+    what a doc requires.
     """
     errors = []
     warnings = []
@@ -110,12 +128,13 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
         errors.append(f"{prefix}  invalid `type` value `{doc_type}`")
 
     status = doc.get("status", "")
-    if status and status not in VALID_STATUSES:
+    if status and status not in VALID_STATUSES and status not in RETIRED_STATUSES:
         errors.append(f"{prefix}  invalid `status` value `{status}`")
 
-    level = doc.get("level", "")
-    if level and level not in VALID_LEVELS:
-        errors.append(f"{prefix}  invalid `level` value `{level}`")
+    for facet, allowed in FACET_ENUMS.items():
+        val = doc.get(facet)
+        if val and (not isinstance(val, str) or val not in allowed):
+            errors.append(f"{prefix}  invalid `{facet}` value `{val}`")
 
     # Tags: `domain` is a flat top-level list; `scope` is a single
     # STRING naming a topological zone (per the scope-as-topology reframe).
@@ -181,11 +200,76 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
                 f"add a superseded_by edge pointing to the replacement doc(s)"
             )
 
-    # 11. staged-incomplete retirement: superseded_by set but status is not deprecated
-    if superseded_by and status != "deprecated":
+    # (`superseded_by` on a living doc is valid: it points at the planned
+    # successor of a current path. Only deprecated REQUIRES it, per check 7.)
+
+    # 11. facets against the type table: what the type forbids is an error;
+    # a claimed intent without its evidence is an error.
+    spec = TYPE_TABLE.get(doc_type)
+    if spec is not None:
+        for facet in FACET_FIELDS:
+            if doc.get(facet) and facet_forbidden(doc_type, facet):
+                errors.append(
+                    f"{prefix}  `{facet}` is not allowed on a {doc_type} doc "
+                    f"(the {doc_type} type forbids it)"
+                )
+    if intent_needs_basis(doc.get("intent")) and not doc.get("intent_basis"):
+        errors.append(
+            f"{prefix}  `intent: {doc['intent']}` without `intent_basis` — "
+            f"record the quote or citation that shows it"
+        )
+
+    # 14. facets and why-chain the type expects. Warnings, not errors: an
+    # existing doc that predates the facets still has to read fine; the tool
+    # refuses to WRITE a doc missing them (kb.new / kb.set).
+    if spec is not None:
+        if facet_required(doc_type, "intent") and not doc.get("intent"):
+            warnings.append(f"{prefix}  no `intent` (requested|chosen|incidental expected)")
+        if facet_required(doc_type, "force") and not doc.get("force"):
+            warnings.append(
+                f"{prefix}  a {doc_type} expects `force` (must|should|may)"
+            )
+        if facet_required(doc_type, "realization") and not doc.get("realization"):
+            warnings.append(
+                f"{prefix}  a {doc_type} expects `realization` "
+                f"(whether it {spec.realization_verb})"
+            )
+        if facet_required(doc_type, "imposed_by"):
+            if not doc.get("imposed_by"):
+                warnings.append(
+                    f"{prefix}  a {doc_type} expects `imposed_by` "
+                    f"({'|'.join(sorted(spec.imposed_by_values))})"
+                )
+            elif doc["imposed_by"] in VALID_IMPOSITIONS \
+                    and doc["imposed_by"] not in spec.imposed_by_values:
+                warnings.append(
+                    f"{prefix}  a {doc_type} expects `imposed_by` "
+                    f"{'|'.join(sorted(spec.imposed_by_values))}, not `{doc['imposed_by']}`"
+                )
+
+        required_types = [(types or {}).get(t) for t in doc.get("requires", []) or []]
+        if doc.get("imposed_by") == "tradeoff" \
+                and not any(t in TRADEOFF_UPSTREAM for t in required_types):
+            warnings.append(
+                f"{prefix}  `imposed_by: tradeoff` but no `requires` edge to a "
+                f"{' or '.join(TRADEOFF_UPSTREAM)} it follows from"
+            )
+        if spec.expected_requires \
+                and not any(t in spec.expected_requires for t in required_types):
+            warnings.append(
+                f"{prefix}  a {doc_type} expects a `requires` edge to a "
+                f"{' or '.join(spec.expected_requires)} (its why-chain)"
+            )
+
+    # 15. obsolete / retired schema: warn with the migration, keep working.
+    if "level" in doc:
         warnings.append(
-            f"{prefix}  has `superseded_by` but status is `{status}` — "
-            f"staged retirement incomplete (add `status: deprecated` or remove the edge)"
+            f"{prefix}  obsolete field `level`; migrate to `intent`/`force`"
+        )
+    if status in RETIRED_STATUSES:
+        warnings.append(
+            f"{prefix}  retired status `{status}`; migrate to `living` plus a "
+            f"`realization` (planned or deferred)"
         )
 
     # Summary: non-reference docs should carry a tight summary — 1–3 sentences,
@@ -230,10 +314,9 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
 
     # NOTE: empty edge lists and empty history are valid; no check here.
     #
-    # The former "provenance rule" warning (level ∈ {trial,preference,requirement}
-    # with no requires/belongs_to/provenance/source) was intentionally REMOVED:
-    # the model's rule is "no grounding ⇒ classify as incidental", which is
-    # authoring guidance, not a validation concern.
+    # The former "provenance rule" warning (a claimed level with no
+    # requires/belongs_to/provenance/source) was intentionally REMOVED; the
+    # evidence for a claimed intent is now the required `intent_basis` (check 11).
 
     return errors, warnings
 
@@ -361,8 +444,10 @@ def main() -> int:
     all_errors = []
     all_warnings = []
 
+    types = {did: d.get("type", "") for did, d in docs.items()}
+
     for doc in doc_files_sorted:
-        errs, warns = check_doc(doc, all_ids, children_of=children_of)
+        errs, warns = check_doc(doc, all_ids, children_of=children_of, types=types)
         all_errors.extend(errs)
         all_warnings.extend(warns)
 
