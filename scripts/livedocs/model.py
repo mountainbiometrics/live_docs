@@ -163,6 +163,24 @@ def is_archived(doc: dict | None) -> bool:
     return doc.get("type") == "reference" or doc.get("status") == "reference"
 
 
+# Listing order: how much a doc should be trusted to be current, then how much a
+# person stood behind it. A doc with no intent is legacy, not incidental, so it
+# sits between chosen and incidental; a retired status ranks with living.
+_STATUS_RANK = {"living": 0, "deprecated": 1, "reference": 2}
+_INTENT_RANK = {"requested": 0, "chosen": 1, None: 2, "incidental": 3}
+
+
+def rank_key(doc: dict | None) -> tuple[int, int]:
+    """Sort key every listing shares: status, then intent; relevance and id break ties.
+
+    Archived (reference type or status) ranks as reference so a `type: reference`
+    doc that is still `living` lands last, as `find` has always put it.
+    """
+    doc = doc or {}
+    status = "reference" if is_archived(doc) else doc.get("status")
+    return (_STATUS_RANK.get(status, 0), _INTENT_RANK.get(doc.get("intent"), 2))
+
+
 # Clear message when porcelain refuses to mutate a reference snapshot.
 ARCHIVED_IMMUTABLE_MSG = (
     "refusing to mutate reference/archived doc {ref!r} "
@@ -365,11 +383,31 @@ def unique_label(base: str, existing_labels) -> str:
 # ---------------------------------------------------------------------------
 
 def display_label(doc: dict) -> str:
-    """Return the '<Type>: <Title>' display string for a doc dict."""
+    """Return the '<Intent> <type>: <Title>' display string for a doc dict.
+
+    The intent leads so a reader sees how much a claim weighs before its title:
+    'Requested decision: X' reads as binding where 'Incidental decision: X' does
+    not. A doc with no intent is 'Unattributed', not silently promoted. A
+    reference carries no intent by type, so it keeps 'Reference: <Title>'.
+    Force, realization and lifecycle are not here: they trail the display (see
+    ``facet_tags``) so a '[[id|display]]' alias stays a readable name.
+    """
     t = doc.get("type", "?")
     title = doc.get("title", doc.get("id", "?"))
-    return f"{t.capitalize()}: {title}"
+    if t == "reference":
+        return f"Reference: {title}"
+    intent = (doc.get("intent") or "unattributed").capitalize()
+    return f"{intent} {t}: {title}"
 
+
+def facet_tags(doc: dict) -> str:
+    """The ' · must · planned' tail naming how hard a doc binds and whether it exists.
+
+    Empty when the doc carries neither, so the facets a type forbids never show.
+    Takes any mapping with `force` / `realization` keys, so a record and a parsed
+    doc render the same tail.
+    """
+    return "".join(f" · {v}" for v in (doc.get("force"), doc.get("realization")) if v)
 
 
 # A stored reference is a bare wiki-link to a doc id: [[20260616181719]].
@@ -392,7 +430,7 @@ def ref_token(doc_or_id) -> str:
 
 def render_ref_token(doc_id: str, doc: dict | None) -> str:
     """
-    Render a stored '[[<id>]]' for human display as '[[<id>|<Type>: <Title>]]'.
+    Render a stored '[[<id>]]' for human display as '[[<id>|<Intent> <type>: <Title>]]'.
 
     The label is resolved live from the current doc, so display always reflects
     the doc's present title. A missing target renders explicitly rather than
@@ -401,6 +439,18 @@ def render_ref_token(doc_id: str, doc: dict | None) -> str:
     if doc is None:
         return f"[[{doc_id}|(missing)]]"
     return f"[[{doc_id}|{display_label(doc)}]]"
+
+
+def successor_displays(doc: dict, docs: dict) -> list[dict]:
+    """The docs a deprecated doc points at, as [{id, display}] for its line.
+
+    A successor missing from `docs` shows as its bare id: the line stays honest
+    about a replacement it cannot name.
+    """
+    return [
+        {"id": sid, "display": display_label(docs[sid]) if sid in docs else sid}
+        for sid in doc.get("superseded_by", [])
+    ]
 
 
 def doc_prefix(doc: dict) -> str:

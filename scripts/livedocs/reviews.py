@@ -36,11 +36,15 @@ Stdlib only. No external dependencies.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import generate_id, ref_token, render_ref_token, session_start_iso, WIKILINK_RE
+from .model import (
+    facet_tags, generate_id, is_archived, ref_token, render_ref_token,
+    session_start_iso, successor_displays, WIKILINK_RE,
+)
 
 
 def _normalize_ref(token: str) -> str:
@@ -61,17 +65,12 @@ from .serialize import _yaml_str, _yaml_wikilink_list, _parse_frontmatter_text
 # Edge fields counted for review integration. Provenance is excluded — linking
 # at raw/reference material is not store integration.
 _INTEGRATION_EDGE_FIELDS = ("requires", "belongs_to", "relates", "superseded_by")
-_INTEGRATION_STATUSES = frozenset({"living", "target"})
-
-
-def _is_reference_type(doc: dict | None) -> bool:
-    """True when the doc is a normalized reference (type: reference)."""
-    return bool(doc) and doc.get("type") == "reference"
+_INTEGRATION_STATUSES = frozenset({"living"})
 
 
 def _is_integration_target(doc: dict | None) -> bool:
-    """True when an edge target counts as store integration (living|target, not reference)."""
-    if not doc or _is_reference_type(doc):
+    """True when an edge target counts as store integration (living, not reference)."""
+    if not doc or is_archived(doc):
         return False
     return doc.get("status", "") in _INTEGRATION_STATUSES
 
@@ -99,13 +98,13 @@ def compute_integration_stats(
     new_to_existing = 0
     for nid in new_ids:
         doc = docs.get(nid)
-        if not doc or _is_reference_type(doc):
+        if not doc or is_archived(doc):
             continue
         for field in _INTEGRATION_EDGE_FIELDS:
             for target in doc.get(field, []) or []:
                 if target in new_ids:
                     tdoc = docs.get(target)
-                    if tdoc and not _is_reference_type(tdoc):
+                    if tdoc and not is_archived(tdoc):
                         new_to_new += 1
                 elif _is_integration_target(docs.get(target)):
                     new_to_existing += 1
@@ -116,7 +115,7 @@ def compute_integration_stats(
             ref = entry.get("ref", "")
             if not ref or ref in new_ids:
                 continue
-            if _is_reference_type(docs.get(ref)):
+            if is_archived(docs.get(ref)):
                 continue
             added = entry.get("edges_added") or {}
             for field, n in added.items():
@@ -233,6 +232,10 @@ def _doc_created_at(doc: dict) -> str:
     if hist and "addition" in (hist[0].get("change_type") or []):
         return hist[0].get("at", "")
     return doc.get("created", "")
+
+
+# A wiki-link, with group 1 set when it opens a top-level list item (an entry).
+_ENTRY_REF_RE = re.compile(r"(^- )?" + WIKILINK_RE.pattern, re.MULTILINE)
 
 
 def _format_addition_entry(link: str, doc: dict) -> list[str]:
@@ -578,7 +581,7 @@ class ReviewLedger:
             ref for ref in order
             if agg[ref].get("dominant") == "addition"
             and ref in docs
-            and not _is_reference_type(docs[ref])
+            and not is_archived(docs[ref])
         }
         return compute_integration_stats(new_ids, docs, wal)
 
@@ -599,7 +602,7 @@ class ReviewLedger:
             m = WIKILINK_RE.search(line)
             if m:
                 rid = m.group(1)
-                if rid in docs and not _is_reference_type(docs[rid]):
+                if rid in docs and not is_archived(docs[rid]):
                     new_ids.add(rid)
         return compute_integration_stats(new_ids, docs, wal=None)
 
@@ -627,7 +630,7 @@ class ReviewLedger:
         }
         for ref in order:
             dom = agg[ref].get("dominant", "")
-            if dom == "addition" and ref in docs and _is_reference_type(docs[ref]):
+            if dom == "addition" and ref in docs and is_archived(docs[ref]):
                 buckets["reference"].append(ref)
             elif dom in buckets:
                 buckets[dom].append(ref)
@@ -702,7 +705,7 @@ class ReviewLedger:
         for doc_id, doc in sorted(docs.items()):
             created = _doc_created_at(doc)
             if created >= since:
-                if _is_reference_type(doc):
+                if is_archived(doc):
                     references.append(doc_id)
                 else:
                     additions.append(doc_id)
@@ -773,7 +776,7 @@ class ReviewLedger:
 
         for doc_id, doc in sorted(docs.items()):
             if start and doc.get("created", "") >= start:
-                if _is_reference_type(doc):
+                if is_archived(doc):
                     references.append(doc_id)
                 else:
                     additions.append(doc_id)
@@ -817,8 +820,8 @@ class ReviewLedger:
 
     def _build_body_from_touched(self, touched: list[str], docs: dict) -> str:
         """Build a skeleton summary body from an explicit touched list."""
-        additions = [d for d in touched if d in docs and not _is_reference_type(docs[d])]
-        references = [d for d in touched if d in docs and _is_reference_type(docs[d])]
+        additions = [d for d in touched if d in docs and not is_archived(docs[d])]
+        references = [d for d in touched if d in docs and is_archived(docs[d])]
 
         lines = []
         lines.append("## Additions")
@@ -893,7 +896,7 @@ class ReviewLedger:
 
     def render_body(self, body: str) -> str:
         """
-        Expand stored '[[<id>]]' refs into '[[<id>|<Type>: <Title>]]' using the
+        Expand stored '[[<id>]]' refs into '[[<id>|<Intent> <type>: <Title>]]' using the
         docs' *current* labels. This is the read-time presentation step that
         keeps the on-disk ledger normalized while display stays human-readable.
 
@@ -905,10 +908,20 @@ class ReviewLedger:
         docs = self._load_docs()
 
         def repl(m) -> str:
-            doc_id = m.group(1)
-            return render_ref_token(doc_id, docs.get(doc_id))
+            doc_id = m.group(2)
+            doc = docs.get(doc_id)
+            token = render_ref_token(doc_id, doc)
+            if not m.group(1) or doc is None:
+                return token
+            # A top-level entry's head is a doc line, so it carries what every
+            # other surface's line does. Tags are read live, not minted into the
+            # ledger, so an old review shows a doc's present force and lifecycle.
+            if doc.get("status") == "deprecated":
+                token = f"~~{token}~~" + "".join(
+                    f" → {s['display']}" for s in successor_displays(doc, docs))
+            return f"{m.group(1)}{token}{facet_tags(doc)}"
 
-        return WIKILINK_RE.sub(repl, body)
+        return _ENTRY_REF_RE.sub(repl, body)
 
     # ------------------------------------------------------------------
     # sign

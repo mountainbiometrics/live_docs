@@ -104,7 +104,7 @@ from livedocs import (
 from livedocs import ReviewLedger, generate_id, build_raw_frontmatter
 from livedocs.cli_entry import run_cli
 from livedocs.kb import churn_count, field_values
-from livedocs.model import change_types_for_fields
+from livedocs.model import change_types_for_fields, facet_tags
 from livedocs.store import StoreEntry
 
 
@@ -120,25 +120,38 @@ def _err(msg: str) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
 
 
-def _fmt_edge_list(edges: list[dict], plain: bool = False) -> str:
-    """
-    Format [{id, label, display}] for human display.
+def _doc_line(r: dict, plain: bool = False) -> str:
+    """The one-line form of a doc record, shared by every surface that lists docs.
 
-    plain=False (default): typed wiki-link format '[<Type>: <Title>](<id>.md)'
-    plain=True: '<id> [<label>] <Type>: <Title>'
+    A reader decides from this line alone whether a doc binds them, so it must
+    carry what the title cannot: the display leads with intent and type, a
+    deprecated doc is struck through and points at its replacement, and force
+    and realization trail as tags. Surfaces add their own layout around it
+    (depth, arrows, counts, summaries) but never rebuild this part.
+
+    plain=False (default): '[<display>](<id>.md)'
+    plain=True: '<id> [<label>]  <display>'
     """
+    name = r.get("display", "")
+    deprecated = r.get("status") == "deprecated"
+    if deprecated:
+        name = f"~~{name}~~"
+    if plain:
+        label_part = f" [{r['label']}]" if r.get("label") else ""
+        line = f"{r['id']}{label_part}  {name}"
+    else:
+        line = f"[{name}]({r['id']}.md)"
+    if deprecated:
+        for successor in r.get("superseded_by", []):
+            line += f" → {successor['display']}"
+    return line + facet_tags(r)
+
+
+def _fmt_edge_list(edges: list[dict], plain: bool = False) -> str:
+    """Format a list of doc records, one `_doc_line` per doc, for human display."""
     if not edges:
         return "  (none)"
-    lines = []
-    for e in edges:
-        if plain:
-            label_part = f" [{e['label']}]" if e.get("label") else ""
-            lines.append(f"  {e['id']}{label_part}  {e.get('display', '')}")
-        else:
-            doc_id = e["id"]
-            display = e.get("display", "")
-            lines.append(f"  [{display}]({doc_id}.md)")
-    return "\n".join(lines)
+    return "\n".join(f"  {_doc_line(e, plain)}" for e in edges)
 
 
 def _fields_row(doc: dict, doc_id: str, fields: list[str]) -> str:
@@ -166,11 +179,8 @@ def _count_only(results: list, args) -> bool:
 def _print_result(r: dict, fields: list[str] | None, plain: bool, snippet: bool = False) -> None:
     if fields:
         print("\t".join(r["fields"]))
-    elif plain:
-        label_part = f" [{r['label']}]" if r.get("label") else ""
-        print(f"{r['id']}{label_part}  {r.get('display', '')}")
     else:
-        print(f"[{r.get('display', '')}]({r['id']}.md)")
+        print(_doc_line(r, plain))
     if snippet and r.get("snippet") and not fields:
         print(f"  {r['snippet']}")
 
@@ -630,13 +640,12 @@ def cmd_map(kb: KB, args) -> int:
         print("## Entry points (signpost roots, biggest first)\n")
         for s in signposts:
             scope = f"  scope: {', '.join(s['scope'])}" if s["scope"] else ""
-            print(f"[{s['display']}]({s['id']}.md)  "
-                  f"({s['descendants']} descendants){scope}")
+            print(f"{_doc_line(s)}  ({s['descendants']} descendants){scope}")
             if s["summary"]:
                 print(f"  {s['summary']}")
             for c in s["children"]:
                 tail = f" ({c['descendants']} below)" if c["descendants"] else ""
-                print(f"    → [{c['display']}]({c['id']}.md){tail}")
+                print(f"    → {_doc_line(c)}{tail}")
                 if c["summary"]:
                     print(f"        {c['summary']}")
             print()
@@ -644,7 +653,7 @@ def cmd_map(kb: KB, args) -> int:
     if floating:
         print("## Floating (roots with no descendants — orphans & standalone)\n")
         for f in floating:
-            print(f"[{f['display']}]({f['id']}.md)")
+            print(_doc_line(f))
             if f["summary"]:
                 print(f"  {f['summary']}")
         print()
@@ -754,8 +763,7 @@ def cmd_graph(kb: KB, args) -> int:
     print()
     print("NODES:")
     for n in result["nodes"]:
-        label_part = f" [{n['label']}]" if n.get("label") else ""
-        print(f"  depth={n['depth']}  {n['id']}{label_part}  {n.get('display', '')}")
+        print(f"  depth={n['depth']}  {_doc_line(n, plain=True)}")
     print()
     print("EDGES (from → to):")
     for edge in result["edges"]:
@@ -784,13 +792,11 @@ def cmd_log(kb: KB, args) -> int:
         return 0
 
     for ev in events:
-        doc_id = ev["id"]
-        display = ev.get("display", "")
         at = ev.get("at", "")
         event = ev.get("event", "")
         summary = ev.get("summary", "")
 
-        link = f"[{display}]({doc_id}.md)"
+        link = _doc_line(ev)
         if summary:
             print(f"{at}  {event}  {link} — {summary}")
         else:
@@ -2937,7 +2943,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="id | label | title; or '-' to read from stdin.")
 
     # --- label ---
-    p = sub.add_parser("label", help="Print '<Type>: <Title>' for ref(s).")
+    p = sub.add_parser("label", help="Print '<Intent> <type>: <Title>' for ref(s).")
     p.add_argument("refs", nargs="+", metavar="ref",
                    help="id | label | title; or '-' to read from stdin.")
 

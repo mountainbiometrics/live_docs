@@ -65,7 +65,6 @@
     background: var(--tag-bg); color: var(--muted); margin-left: 4px; vertical-align: middle;
   }
   .pill.deprecated { background: #f3e0e0; color: var(--broken); }
-  .pill.target { background: var(--warn-bg); color: var(--warn); }
   .pill.reference { background: #e4ecf3; color: var(--accent); }
 
   /* type icon — a small inline Lucide glyph rendered immediately BEFORE a label.
@@ -135,7 +134,6 @@
     padding: 1px 7px; border-radius: 10px; border: none; vertical-align: middle;
   }
   button.cat-facet.pill.deprecated { background: #f3e0e0; color: var(--broken); }
-  button.cat-facet.pill.target { background: var(--warn-bg); color: var(--warn); }
   button.cat-facet.pill.reference { background: #e4ecf3; color: var(--accent); }
   button.cat-facet.pill.living { background: var(--tag-bg); color: var(--muted); }
 
@@ -687,9 +685,23 @@ function titleCaseEnum(s) {
 }
 function enumDisplay(field, val) {
   if (!val || val === "(none)") return val === "(none)" ? "(none)" : "";
-  if (field === "type" || field === "status" || field === "level") return titleCaseEnum(val);
+  if (field === "type" || field === "status" || FACET_FIELDS.includes(field)) return titleCaseEnum(val);
   return String(val);
 }
+
+// The facets that replaced `level`; each is a catalog column, filter and grouping.
+const FACET_FIELDS = ["intent", "force", "realization"];
+// A doc with no intent is legacy, not incidental, so it reads Unattributed as
+// display_label does; a reference carries none by type.
+function intentOf(d) { return d.intent || (d.type === "reference" ? "" : "unattributed"); }
+function facetOf(d, field) { return field === "intent" ? intentOf(d) : d[field]; }
+// '<Intent> <type>' so a doc's weight reads before its title, as in the CLI line.
+function kindLabel(d) {
+  const t = enumDisplay("type", d.type), i = intentOf(d);
+  return i ? `${titleCaseEnum(i)} ${t.toLowerCase()}` : t;
+}
+// ' · must · planned': how hard the doc binds and whether the thing exists.
+function facetTags(d) { return [d.force, d.realization].filter(Boolean).join(" · "); }
 
 const _domainColorCache = new Map();
 function domainColor(name) {
@@ -738,7 +750,7 @@ function facetDisplay(id, opts) {
   const dt = domainTags(id, opts);
   return [sb, dt].filter(Boolean).join(" ");
 }
-// catalog cell: clickable facet chip for type/status/level
+// catalog cell: clickable facet chip for type/status/intent/force/realization
 function catEnumFacet(field, value) {
   if (!value) return '<span class="sub">—</span>';
   const label = enumDisplay(field, value);
@@ -749,7 +761,7 @@ function catEnumFacet(field, value) {
 }
 function groupKeyLabel(field, k) {
   if (k === "(none)") return "(none)";
-  if (field === "type" || field === "status" || field === "level") return enumDisplay(field, k);
+  if (field === "type" || field === "status" || FACET_FIELDS.includes(field)) return enumDisplay(field, k);
   return k;
 }
 
@@ -809,6 +821,20 @@ const EDGE_TYPES = GRAPH_EDGE_TYPES;
 // immediately BEFORE the label (the icon now carries the `type`, replacing the
 // old trailing pill). Default is no icon so inline prose links stay clean; the
 // connections/member/home/catalog/tree/reader surfaces opt in explicitly.
+// A deprecated doc reads struck through with its replacement after it, as the
+// CLI line does, so a reader sees it is not current without opening it.
+function nameHtml(d, text) {
+  const t = escapeHtml(text);
+  return d.status === "deprecated" ? `<s>${t}</s>` : t;
+}
+function successorsHtml(d) {
+  if (d.status !== "deprecated") return "";
+  return edgeList(d, "superseded_by").map(sid => {
+    const o = byId.get(String(sid));
+    return ` <span class="sub">→ ${escapeHtml(o ? `${kindLabel(o)}: ${o.title || o.label || sid}` : String(sid))}</span>`;
+  }).join("");
+}
+
 function linkHtml(id, overrideText, opts) {
   opts = opts || {};
   const sid = String(id);
@@ -818,7 +844,10 @@ function linkHtml(id, overrideText, opts) {
   }
   const text = overrideText || d.label || d.title || sid;
   const ic = opts.icon ? typeIcon(d.type) : "";
-  return `<a class="dl" data-ref="${sid}" tabindex="0">${ic}${escapeHtml(text)}</a>`;
+  // Only a doc line (the icon form) names the successor; an inline prose link
+  // is struck but stays a name.
+  const tail = opts.icon && opts.successors !== false ? successorsHtml(d) : "";
+  return `<a class="dl" data-ref="${sid}" tabindex="0">${ic}${nameHtml(d, text)}</a>${tail}`;
 }
 
 function escapeHtml(s) {
@@ -945,12 +974,23 @@ function compareDocsByTypeThenLabel(a, b) {
   if (ta !== tb) return ta.localeCompare(tb);
   return docSortKey(a).localeCompare(docSortKey(b));
 }
+/* Same order as the CLI's rank_key: status (living, deprecated, reference), then
+   intent (requested, chosen, unattributed, incidental), then type and label. */
+const STATUS_RANK = { living: 0, deprecated: 1, reference: 2 };
+const INTENT_RANK = { requested: 0, chosen: 1, unattributed: 2, incidental: 3 };
+function rankOf(d) {
+  const st = isArchived(d) ? "reference" : d.status;
+  return (STATUS_RANK[st] ?? 0) * 10 + (INTENT_RANK[intentOf(d) || "unattributed"] ?? 2);
+}
+function compareDocsByRank(a, b) {
+  return rankOf(a) - rankOf(b) || compareDocsByTypeThenLabel(a, b);
+}
 function compareIdsByTypeThenLabel(a, b) {
   const da = byId.get(String(a)), db = byId.get(String(b));
   if (!da && !db) return String(a).localeCompare(String(b));
   if (!da) return 1;
   if (!db) return -1;
-  return compareDocsByTypeThenLabel(da, db);
+  return compareDocsByRank(da, db);
 }
 function sortTypes(arr) {
   return arr.slice().sort((a, b) => typeRank(a) - typeRank(b) || String(a).localeCompare(String(b)));
@@ -1085,8 +1125,8 @@ function showTip(el) {
   const facets = facetDisplay(d.id);
   // type icon before the label; the type name still reads in the meta line
   tooltip.innerHTML =
-    `<div class="tt-label">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)} ${idBadge(id)}</div>` +
-    `<div class="tt-meta">${escapeHtml(enumDisplay("type", d.type))} ${status} ${facets} ${count}</div>` +
+    `<div class="tt-label">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || id)}${successorsHtml(d)} ${idBadge(id)}</div>` +
+    `<div class="tt-meta">${escapeHtml(kindLabel(d))} ${status} ${escapeHtml(facetTags(d))} ${facets} ${count}</div>` +
     `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
   tooltip.style.display = "block";
 }
@@ -1179,10 +1219,10 @@ function openSidepanel(id) {
   const d = byId.get(String(id));
   if (!d) return;
   expandId = String(id);
-  spTitle.innerHTML = `${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)} ${idBadge(id)}`;
-  spMeta.innerHTML = [enumDisplay("type", d.type),
+  spTitle.innerHTML = `${typeIcon(d.type)}${nameHtml(d, d.label || d.title || id)}${successorsHtml(d)} ${idBadge(id)}`;
+  spMeta.innerHTML = [kindLabel(d),
     d.status ? `<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>` : "",
-    facetDisplay(id)].filter(Boolean).join(" · ");
+    escapeHtml(facetTags(d)), facetDisplay(id)].filter(Boolean).join(" · ");
   spPreview.innerHTML = expandContentHtml(id);
   previewDrawer.classList.add("open");
 }
@@ -1314,16 +1354,16 @@ function renderHome() {
   // orphans — belongs_to roots that bear no descendants (unplaced by curation)
   html += `<div class="card"><h3>Orphans — no belongs_to, no descendants (${orphans.length})</h3><ul class="tight">`;
   if (!orphans.length) html += `<li class="sub">none</li>`;
-  orphans.slice().sort(compareDocsByTypeThenLabel).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)}</li>`);
+  orphans.slice().sort(compareDocsByRank).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)}</li>`);
   html += `</ul></div>`;
 
   // deprecated -> superseded_by
   html += `<div class="card"><h3>Deprecated → superseded by (${deprecated.length})</h3><ul class="tight">`;
   if (!deprecated.length) html += `<li class="sub">none</li>`;
-  deprecated.slice().sort(compareDocsByTypeThenLabel).forEach(d => {
+  deprecated.slice().sort(compareDocsByRank).forEach(d => {
     const sup = edgeList(d, "superseded_by");
     const supHtml = sup.length ? sup.map(s => linkHtml(s, null, {icon:1})).join(", ") : `<span class="dl broken">(no superseded_by!)</span>`;
-    html += `<li>${linkHtml(d.id, null, {icon:1})} → ${supHtml}</li>`;
+    html += `<li>${linkHtml(d.id, null, {icon:1, successors:false})} → ${supHtml}</li>`;
   });
   html += `</ul></div>`;
   html += `</div>`;
@@ -1337,7 +1377,7 @@ function buildTree() {
   // members with no descendants are leaves. Tree roots = signposts with no
   // resolving belongs_to parent. Siblings sort type → label; depth is visual.
   const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0 && !isArchived(d))
-    .sort(compareDocsByTypeThenLabel);
+    .sort(compareDocsByRank);
 
   function renderNode(idx, seen, depth) {
     seen = seen || new Set();
@@ -1345,10 +1385,10 @@ function buildTree() {
     seen = new Set(seen); seen.add(idx.id);
     const memberIds = (children.get(idx.id) || []).filter(mid => !isArchived(byId.get(mid)));
     const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean)
-      .sort(compareDocsByTypeThenLabel);
+      .sort(compareDocsByRank);
     const leaves = memberIds.filter(m => !isSignpost(m))
       .map(lid => byId.get(lid)).filter(Boolean)
-      .sort(compareDocsByTypeThenLabel);
+      .sort(compareDocsByRank);
     const nKids = childSignposts.length + leaves.length;
     const countHint = nKids ? `<span class="tree-count">${nKids}</span>` : "";
     const openAttr = depth === 0 ? " open" : "";
@@ -1357,7 +1397,7 @@ function buildTree() {
       + `<div class="tree-children">`;
     childSignposts.forEach(ci => h += renderNode(ci, seen, depth + 1));
     leaves.forEach(d => {
-      h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`;
+      h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || d.id)}${successorsHtml(d)}</div>`;
     });
     h += `</div></details></div>`;
     return h;
@@ -1369,10 +1409,10 @@ function buildTree() {
   // Ungrouped catch-all: docs that belong to nothing AND bear no descendants
   // (a signpost with no parent is already a root above, so exclude those).
   const ungrouped = belongsRoots.filter(d => !isSignpost(d.id) && !isArchived(d))
-    .sort(compareDocsByTypeThenLabel);
+    .sort(compareDocsByRank);
   if (ungrouped.length) {
     h += `<div class="tree-node"><details open><summary>Ungrouped <span class="tree-count">${ungrouped.length}</span></summary><div class="tree-children">`;
-    ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${escapeHtml(d.label || d.title || d.id)}</div>`);
+    ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || d.id)}${successorsHtml(d)}</div>`);
     h += `</div></details></div>`;
   }
   return h;
@@ -1476,9 +1516,9 @@ function renderReader(focusId) {
 
 function metaLine(d) {
   const bits = [];
-  if (d.type) bits.push(enumDisplay("type", d.type));
+  if (d.type) bits.push(kindLabel(d));
   if (d.status) bits.push(`<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>`);
-  if (d.level) bits.push("level: " + enumDisplay("level", d.level));
+  if (facetTags(d)) bits.push(escapeHtml(facetTags(d)));
   if (d.created) bits.push("created " + String(d.created).slice(0, 10));
   bits.push(idBadge(d.id, { title: 1 }));
   let line = bits.join(" · ");
@@ -1565,7 +1605,7 @@ function renderFocusDoc(content, id) {
   const d = byId.get(String(id));
   if (!d) { content.innerHTML = `<div class="sub">No doc with id ${escapeHtml(id)}.</div>`; return; }
 
-  let html = `<h1 class="doctitle">${typeIcon(d.type)}${escapeHtml(d.label || d.title || id)}</h1>`;
+  let html = `<h1 class="doctitle">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || id)}${successorsHtml(d)}</h1>`;
   html += `<div class="meta-line">${metaLine(d)}</div>`;
   if (d.summary) html += `<div class="doc-summary">${escapeHtml(d.summary)}</div>`;
 
@@ -2040,7 +2080,7 @@ function mountGraph(container, focusId) {
 }
 
 /* ===== CATALOG ===== */
-const catalogState = { type: "", status: "living", level: "", scope: "", domain: "", q: "", group: "", sort: "", dir: 1 };
+const catalogState = { type: "", status: "living", intent: "", force: "", realization: "", scope: "", domain: "", q: "", group: "", sort: "", dir: 1 };
 let catalogFacetBound = false;
 function applyCatalogFilter(field, value) {
   if (!(field in catalogState)) return;
@@ -2051,7 +2091,7 @@ function renderCatalog() {
   const el = document.getElementById("page-catalog");
   const types = sortTypes([...new Set(DOCS.map(d => d.type).filter(Boolean))]);
   const statuses = [...new Set(DOCS.map(d => d.status).filter(Boolean))].sort();
-  const levels = [...new Set(DOCS.map(d => d.level).filter(Boolean))].sort();
+  const facetValues = f => [...new Set(DOCS.map(d => facetOf(d, f)).filter(Boolean))].sort();
   const scopes = [...new Set(DOCS.flatMap(d => effectiveScopes(d.id)))].sort();
   const domains = [...new Set(DOCS.flatMap(d => ownDomains(d)))].sort();
   const optEnum = (arr, sel, field) => `<option value="">all</option>`
@@ -2067,11 +2107,13 @@ function renderCatalog() {
   html += `<span class="preset" data-preset="clear">Clear</span>`;
   html += `&nbsp; type <select id="f-type">${optEnum(types, catalogState.type, "type")}</select>`;
   html += ` status <select id="f-status">${optEnum(statuses, catalogState.status, "status")}</select>`;
-  html += ` level <select id="f-level">${optEnum(levels, catalogState.level, "level")}</select>`;
+  FACET_FIELDS.forEach(f => {
+    html += ` ${f} <select id="f-${f}">${optEnum(facetValues(f), catalogState[f], f)}</select>`;
+  });
   if (scopes.length) html += ` scope <select id="f-scope">${optRaw(scopes, catalogState.scope)}</select>`;
   if (domains.length) html += ` domain <select id="f-domain">${optRaw(domains, catalogState.domain)}</select>`;
   html += ` group by <select id="f-group"><option value="">none</option>`
-    + ["type","status","level"].concat(scopes.length ? ["scope"] : []).concat(domains.length ? ["domain"] : [])
+    + ["type","status",...FACET_FIELDS].concat(scopes.length ? ["scope"] : []).concat(domains.length ? ["domain"] : [])
         .map(g => `<option ${g===catalogState.group?"selected":""}>${g}</option>`).join("") + `</select>`;
   html += ` <input id="f-q" placeholder="search label/title/id…" value="${escapeHtml(catalogState.q)}">`;
   html += `</div>`;
@@ -2083,7 +2125,7 @@ function renderCatalog() {
   html += `<th data-sort="id">id${sortMark("id")}</th>`;
   html += `<th data-sort="type">type${sortMark("type")}</th>`;
   html += `<th>scope</th><th>domain</th>`;
-  html += `<th data-sort="level">level${sortMark("level")}</th>`;
+  FACET_FIELDS.forEach(f => { html += `<th data-sort="${f}">${f}${sortMark(f)}</th>`; });
   html += `<th data-sort="status">status${sortMark("status")}</th>`;
   html += `</tr></thead><tbody id="cat-body"></tbody></table>`;
   el.innerHTML = html;
@@ -2092,13 +2134,13 @@ function renderCatalog() {
     let rows = DOCS.filter(d =>
       (!catalogState.type || d.type === catalogState.type) &&
       (!catalogState.status || d.status === catalogState.status) &&
-      (!catalogState.level || d.level === catalogState.level) &&
+      FACET_FIELDS.every(f => !catalogState[f] || facetOf(d, f) === catalogState[f]) &&
       (!catalogState.scope || effectiveScopes(d.id).includes(catalogState.scope)) &&
       (!catalogState.domain || ownDomains(d).includes(catalogState.domain)) &&
       (!catalogState.q || ((d.label||"")+" "+(d.title||"")+" "+(d.id||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
     const s = catalogState.sort;
     if (!s) {
-      rows.sort((a, b) => compareDocsByTypeThenLabel(a, b) * catalogState.dir);
+      rows.sort((a, b) => compareDocsByRank(a, b) * catalogState.dir);
     } else if (s === "type") {
       rows.sort((a, b) => (compareDocsByTypeThenLabel(a, b)) * catalogState.dir);
     } else if (s === "label") {
@@ -2106,7 +2148,7 @@ function renderCatalog() {
     } else if (s === "id") {
       rows.sort((a, b) => String(a.id).localeCompare(String(b.id)) * catalogState.dir);
     } else {
-      rows.sort((a,b) => String(a[s]||"").localeCompare(String(b[s]||"")) * catalogState.dir);
+      rows.sort((a,b) => String(facetOf(a, s)||"").localeCompare(String(facetOf(b, s)||"")) * catalogState.dir);
     }
     document.getElementById("cat-count").textContent = `${rows.length} of ${DOCS.length} docs`;
     const body = document.getElementById("cat-body");
@@ -2116,7 +2158,7 @@ function renderCatalog() {
       + `<td>${catEnumFacet("type", d.type)}</td>`
       + `<td>${scopeBreadcrumbs(d.id, { catalog: 1, title: 1 }) || '<span class="sub">—</span>'}</td>`
       + `<td>${domainTags(d.id, { catalog: 1, title: 1 }) || '<span class="sub">—</span>'}</td>`
-      + `<td>${catEnumFacet("level", d.level)}</td>`
+      + FACET_FIELDS.map(f => `<td>${catEnumFacet(f, facetOf(d, f))}</td>`).join("")
       + `<td>${catEnumFacet("status", d.status)}</td>`;
     if (catalogState.group) {
       const groups = {};
@@ -2128,10 +2170,10 @@ function renderCatalog() {
         } else if (catalogState.group === "domain") {
           const ds = ownDomains(d);
           if (!ds.length) push("(none)", d); else ds.forEach(z => push(z, d));
-        } else push(d[catalogState.group]||"(none)", d);
+        } else push(facetOf(d, catalogState.group)||"(none)", d);
       });
       body.innerHTML = sortGroupKeys(catalogState.group, Object.keys(groups)).map(k =>
-        `<tr class="grouphdr"><td colspan="8">${escapeHtml(catalogState.group)}: ${escapeHtml(groupKeyLabel(catalogState.group, k))} (${groups[k].length})</td></tr>`
+        `<tr class="grouphdr"><td colspan="10">${escapeHtml(catalogState.group)}: ${escapeHtml(groupKeyLabel(catalogState.group, k))} (${groups[k].length})</td></tr>`
         + groups[k].map(d => `<tr>${cell(d)}</tr>`).join("")).join("");
     } else {
       body.innerHTML = rows.map(d => `<tr>${cell(d)}</tr>`).join("");
@@ -2140,7 +2182,9 @@ function renderCatalog() {
 
   el.querySelector("#f-type").addEventListener("change", e => { catalogState.type = e.target.value; draw(); });
   el.querySelector("#f-status").addEventListener("change", e => { catalogState.status = e.target.value; draw(); });
-  el.querySelector("#f-level").addEventListener("change", e => { catalogState.level = e.target.value; draw(); });
+  FACET_FIELDS.forEach(f => {
+    el.querySelector(`#f-${f}`).addEventListener("change", e => { catalogState[f] = e.target.value; draw(); });
+  });
   const scopeSel = el.querySelector("#f-scope");
   if (scopeSel) scopeSel.addEventListener("change", e => { catalogState.scope = e.target.value; draw(); });
   const domainSel = el.querySelector("#f-domain");
@@ -2154,7 +2198,7 @@ function renderCatalog() {
   }));
   el.querySelectorAll(".preset").forEach(p => p.addEventListener("click", () => {
     const k = p.getAttribute("data-preset");
-    Object.assign(catalogState, { type: "", status: "living", level: "", scope: "", domain: "", q: "", group: "" });
+    Object.assign(catalogState, { type: "", status: "living", intent: "", force: "", realization: "", scope: "", domain: "", q: "", group: "" });
     if (k === "decisions") catalogState.type = "decision";
     else if (k === "principles") catalogState.type = "principle";
     else if (k === "living") catalogState.status = "living";
