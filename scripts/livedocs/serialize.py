@@ -69,9 +69,16 @@ REFERENCE_EXTRA_FIELDS = ["kind", "source", "origin", "medium", "authored_at", "
 # ---------------------------------------------------------------------------
 
 def _strip_quotes(s: str) -> str:
-    """Remove surrounding single or double quotes from a scalar string."""
+    """Remove surrounding single or double quotes from a scalar string.
+
+    A double-quoted scalar is unescaped, the inverse of ``_yaml_str``; without
+    that, a value holding a quote (an `intent_basis` quoting the owner) gains a
+    backslash every time its doc is rewritten.
+    """
     s = s.strip()
-    if len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+    if len(s) >= 2 and s[0] == '"' and s[-1] == '"':
+        return re.sub(r'\\(["\\])', r'\1', s[1:-1])
+    if len(s) >= 2 and s[0] == "'" and s[-1] == "'":
         return s[1:-1]
     return s
 
