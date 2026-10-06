@@ -974,12 +974,23 @@ function compareDocsByTypeThenLabel(a, b) {
   if (ta !== tb) return ta.localeCompare(tb);
   return docSortKey(a).localeCompare(docSortKey(b));
 }
+/* Same order as the CLI's rank_key: status (living, deprecated, reference), then
+   intent (requested, chosen, unattributed, incidental), then type and label. */
+const STATUS_RANK = { living: 0, deprecated: 1, reference: 2 };
+const INTENT_RANK = { requested: 0, chosen: 1, unattributed: 2, incidental: 3 };
+function rankOf(d) {
+  const st = isArchived(d) ? "reference" : d.status;
+  return (STATUS_RANK[st] ?? 0) * 10 + (INTENT_RANK[intentOf(d) || "unattributed"] ?? 2);
+}
+function compareDocsByRank(a, b) {
+  return rankOf(a) - rankOf(b) || compareDocsByTypeThenLabel(a, b);
+}
 function compareIdsByTypeThenLabel(a, b) {
   const da = byId.get(String(a)), db = byId.get(String(b));
   if (!da && !db) return String(a).localeCompare(String(b));
   if (!da) return 1;
   if (!db) return -1;
-  return compareDocsByTypeThenLabel(da, db);
+  return compareDocsByRank(da, db);
 }
 function sortTypes(arr) {
   return arr.slice().sort((a, b) => typeRank(a) - typeRank(b) || String(a).localeCompare(String(b)));
@@ -1343,13 +1354,13 @@ function renderHome() {
   // orphans — belongs_to roots that bear no descendants (unplaced by curation)
   html += `<div class="card"><h3>Orphans — no belongs_to, no descendants (${orphans.length})</h3><ul class="tight">`;
   if (!orphans.length) html += `<li class="sub">none</li>`;
-  orphans.slice().sort(compareDocsByTypeThenLabel).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)}</li>`);
+  orphans.slice().sort(compareDocsByRank).forEach(d => html += `<li>${linkHtml(d.id, null, {icon:1})} ${facetDisplay(d.id)}</li>`);
   html += `</ul></div>`;
 
   // deprecated -> superseded_by
   html += `<div class="card"><h3>Deprecated → superseded by (${deprecated.length})</h3><ul class="tight">`;
   if (!deprecated.length) html += `<li class="sub">none</li>`;
-  deprecated.slice().sort(compareDocsByTypeThenLabel).forEach(d => {
+  deprecated.slice().sort(compareDocsByRank).forEach(d => {
     const sup = edgeList(d, "superseded_by");
     const supHtml = sup.length ? sup.map(s => linkHtml(s, null, {icon:1})).join(", ") : `<span class="dl broken">(no superseded_by!)</span>`;
     html += `<li>${linkHtml(d.id, null, {icon:1, successors:false})} → ${supHtml}</li>`;
@@ -1366,7 +1377,7 @@ function buildTree() {
   // members with no descendants are leaves. Tree roots = signposts with no
   // resolving belongs_to parent. Siblings sort type → label; depth is visual.
   const roots = DOCS.filter(d => isSignpost(d.id) && parentsOf(d.id).length === 0 && !isArchived(d))
-    .sort(compareDocsByTypeThenLabel);
+    .sort(compareDocsByRank);
 
   function renderNode(idx, seen, depth) {
     seen = seen || new Set();
@@ -1374,10 +1385,10 @@ function buildTree() {
     seen = new Set(seen); seen.add(idx.id);
     const memberIds = (children.get(idx.id) || []).filter(mid => !isArchived(byId.get(mid)));
     const childSignposts = memberIds.filter(m => isSignpost(m)).map(m => byId.get(m)).filter(Boolean)
-      .sort(compareDocsByTypeThenLabel);
+      .sort(compareDocsByRank);
     const leaves = memberIds.filter(m => !isSignpost(m))
       .map(lid => byId.get(lid)).filter(Boolean)
-      .sort(compareDocsByTypeThenLabel);
+      .sort(compareDocsByRank);
     const nKids = childSignposts.length + leaves.length;
     const countHint = nKids ? `<span class="tree-count">${nKids}</span>` : "";
     const openAttr = depth === 0 ? " open" : "";
@@ -1398,7 +1409,7 @@ function buildTree() {
   // Ungrouped catch-all: docs that belong to nothing AND bear no descendants
   // (a signpost with no parent is already a root above, so exclude those).
   const ungrouped = belongsRoots.filter(d => !isSignpost(d.id) && !isArchived(d))
-    .sort(compareDocsByTypeThenLabel);
+    .sort(compareDocsByRank);
   if (ungrouped.length) {
     h += `<div class="tree-node"><details open><summary>Ungrouped <span class="tree-count">${ungrouped.length}</span></summary><div class="tree-children">`;
     ungrouped.forEach(d => h += `<div class="leaf" data-id="${d.id}">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || d.id)}${successorsHtml(d)}</div>`);
@@ -2129,7 +2140,7 @@ function renderCatalog() {
       (!catalogState.q || ((d.label||"")+" "+(d.title||"")+" "+(d.id||"")).toLowerCase().includes(catalogState.q.toLowerCase())));
     const s = catalogState.sort;
     if (!s) {
-      rows.sort((a, b) => compareDocsByTypeThenLabel(a, b) * catalogState.dir);
+      rows.sort((a, b) => compareDocsByRank(a, b) * catalogState.dir);
     } else if (s === "type") {
       rows.sort((a, b) => (compareDocsByTypeThenLabel(a, b)) * catalogState.dir);
     } else if (s === "label") {
