@@ -26,6 +26,7 @@ porcelain. Use `--include-reference` only when you deliberately want the archive
     - [ingest-reference](#ingest-reference)
     - [shard-clipping](#shard-clipping)
     - [revise-doc](#revise-doc)
+    - [sync-realization](#sync-realization)
     - [cascade-check](#cascade-check)
     - [garden](#garden)
   - [Schema rules an agent must respect](#schema-rules-an-agent-must-respect)
@@ -93,6 +94,7 @@ Skills are in `.claude/skills/*/SKILL.md`. Each skill owns a specific operating 
 | External material needs to be brought in (meeting notes, RFC, article, research, URL content) | **ingest-reference** |
 | A raw clipping carries more concepts than one ingest pass can synthesize (≳50) | **shard-clipping** (gate 1.5 — invoked automatically by ingest-reference; rarely run by hand) |
 | An existing doc needs to be edited, corrected, or updated | **revise-doc** |
+| You need to know whether the docs' claims are built — after a build, after migrating or ingesting, before trusting the `planned` backlog | **sync-realization** |
 | A doc was changed and you need to know what else is now stale | **cascade-check** |
 | The store feels cluttered; a doc has many history entries; cascade was wide; periodic maintenance | **garden** |
 | You want a structural integrity report (no fixes) | **validate** |
@@ -136,6 +138,17 @@ Use for any targeted edit to an existing doc. It:
 5. Validates the store after all writes
 
 **Provenance-only changes** (`provenance` or `relates` edges only) do not cascade and may not need a history entry (backfilling initial provenance is not history-worthy; adding a new reference later is).
+
+### sync-realization
+
+Use to keep the `realization` facet true of the code. Given one or more code roots (a store may document several repositories), an optional scope, and an optional "since", it:
+1. Gathers every living realizable doc in scope, `unassessed` ones first
+2. Checks each against the implementation in a read-only pass — the code decides realization, never the doc's own prose or history
+3. Surveys the change surface for things built with no doc
+4. Writes `realization`, `realization_refs`, `realization_verified` (and an `## Implementation` section only where anchors are not enough) in one batch, each with a `--note`
+5. Reports drift — planned docs still unbuilt, realized claims the code no longer honors, claims the code contradicts — and hands built-but-undocumented things to reconcile-changes
+
+It never alters a claim, so its changes do not cascade.
 
 ### cascade-check
 
