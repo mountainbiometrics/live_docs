@@ -33,6 +33,7 @@ from .model import (
     generate_id,
     intent_needs_basis,
     is_archived,
+    successor_displays,
 )
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
 from .graph import (reverse_edges, reverse_requires, reverse_belongs_to,
@@ -396,32 +397,46 @@ class KB:
             raise ValueError(f"No doc found for edge ref: {ref!r}")
 
     def display_label(self, doc_id: str) -> str:
-        """Return '<Type>: <Title>' display string for a doc id."""
+        """Return '<Intent> <type>: <Title>' display string for a doc id."""
         return display_label(self._docs.get(doc_id, {"id": doc_id}))
 
     def label(self, ref: str) -> str:
-        """Print '<Type>: <Title>' for a doc.
+        """Print '<Intent> <type>: <Title>' for a doc.
 
         ref -- id, label, title, or a unique substring of either.
         """
         return self.display_label(self.resolve(ref))
 
-    def _edge_list(self, ids: list[str]) -> list[dict]:
-        """
-        Convert a list of ids to [{id, label, display}] dicts.
+    def doc_record(self, doc_id: str) -> dict:
+        """The one shape every surface gives a doc: what a reader needs from the
+        line itself, so nobody opens the doc to learn whether it matters.
 
-        `label` is the doc's frontmatter label; `display` is the
-        '<Type>: <Title>' string used for human-readable rendering.
+        {id, label, display, type, status} always; `intent`, `force` and
+        `realization` when the doc carries them (a type forbids some); a
+        deprecated doc also carries `superseded_by` as [{id, display}] so its
+        line can point at the replacement. Every read builds its rows from this
+        so a new facet is added in one place.
         """
-        result = []
-        for eid in ids:
-            doc = self._docs.get(eid, {})
-            result.append({
-                "id": eid,
-                "label": doc.get("label", ""),
-                "display": self.display_label(eid) if eid in self._docs else f"(missing) {eid}",
-            })
-        return result
+        doc = self._docs.get(doc_id)
+        if doc is None:
+            return {"id": doc_id, "label": "", "display": f"(missing) {doc_id}"}
+        rec = {
+            "id": doc_id,
+            "label": doc.get("label", ""),
+            "display": display_label(doc),
+            "type": doc.get("type", ""),
+            "status": doc.get("status", ""),
+        }
+        for facet in ("intent", "force", "realization"):
+            if doc.get(facet):
+                rec[facet] = doc[facet]
+        if rec["status"] == "deprecated":
+            rec["superseded_by"] = successor_displays(doc, self._docs)
+        return rec
+
+    def _edge_list(self, ids: list[str]) -> list[dict]:
+        """Convert a list of ids to doc records (see ``doc_record``)."""
+        return [self.doc_record(eid) for eid in ids]
 
     # -----------------------------------------------------------------------
     # Reads
@@ -450,15 +465,13 @@ class KB:
 
         ref -- id, label, title, or a unique substring of either.
 
-        Returns {id, label, display, frontmatter, body} for the resolved doc.
+        Returns the doc record plus {frontmatter, body} for the resolved doc.
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
         fm = {k: v for k, v in doc.items() if k != "body"}
         return {
-            "id": doc_id,
-            "label": doc.get("label", ""),
-            "display": self.display_label(doc_id),
+            **self.doc_record(doc_id),
             "frontmatter": fm,
             "body": doc.get("body", ""),
         }
@@ -485,7 +498,7 @@ class KB:
         ref -- id, label, title, or a unique substring of either.
 
         requires, belongs_to, relates, provenance, superseded_by are rendered
-        as [{id, label, display}] lists.  Reverse edges (required_by, children)
+        as doc-record lists.  Reverse edges (required_by, children)
         and reverse provenance (provenance_of) are also included.
         """
         doc_id = self.resolve(ref)
@@ -498,9 +511,7 @@ class KB:
         ref_by = referenced_by(self._docs)
 
         return {
-            "id": doc_id,
-            "label": doc.get("label", ""),
-            "display": self.display_label(doc_id),
+            **self.doc_record(doc_id),
             "frontmatter": fm,
             "body": doc.get("body", ""),
             # Forward edges
@@ -574,7 +585,7 @@ class KB:
     ) -> list[dict[str, Any]]:
         """Search and filter docs. Multiple terms are AND by default.
 
-        Returns [{id, label, display, snippet}], reference/archived hits last.
+        Returns doc records plus `snippet`, reference/archived hits last.
 
         query       — single query string; matches title + label + body (case-insensitive).
         type        — restrict to one doc type.
@@ -690,9 +701,7 @@ class KB:
                     snippet = body_raw[start:m.end() + 60].strip()[:120]
 
             results.append({
-                "id": doc_id,
-                "label": doc.get("label", ""),
-                "display": self.display_label(doc_id),
+                **self.doc_record(doc_id),
                 "snippet": snippet,
                 "archived": is_archived(doc),
             })
@@ -737,7 +746,7 @@ class KB:
         derived cache: callers query it FRESH (cf. cascade-check using
         `ldoc neighbors` rather than a stale dependents.json).
 
-        Returns [{id, label, display}], sorted by id.
+        Returns doc records, sorted by id.
         """
         all_ids = set(self._docs.keys())
 
@@ -754,11 +763,7 @@ class KB:
                 continue
             has_parent = any(t in all_ids for t in doc.get("belongs_to", []))
             if not has_parent and doc_id not in has_descendants:
-                results.append({
-                    "id": doc_id,
-                    "label": doc.get("label", ""),
-                    "display": self.display_label(doc_id),
-                })
+                results.append(self.doc_record(doc_id))
         return self._rows(results, limit, fields)
 
     def _children_map(self) -> dict[str, list[str]]:
@@ -846,19 +851,13 @@ class KB:
             ]
             if kids:
                 signposts.append({
-                    "id": doc_id,
-                    "label": doc.get("label", ""),
-                    "display": self.display_label(doc_id),
+                    **self.doc_record(doc_id),
                     "summary": _summary(doc),
-                    "type": doc.get("type", ""),
-                    "status": doc.get("status", ""),
                     "scope": self.effective_scope(doc_id),
                     "descendants": desc_count(doc_id),
                     "children": [
                         {
-                            "id": c,
-                            "label": self._docs[c].get("label", ""),
-                            "display": self.display_label(c),
+                            **self.doc_record(c),
                             "summary": _summary(self._docs[c]),
                             "descendants": desc_count(c),
                         }
@@ -867,12 +866,8 @@ class KB:
                 })
             else:
                 floating.append({
-                    "id": doc_id,
-                    "label": doc.get("label", ""),
-                    "display": self.display_label(doc_id),
+                    **self.doc_record(doc_id),
                     "summary": _summary(doc),
-                    "type": doc.get("type", ""),
-                    "status": doc.get("status", ""),
                 })
 
         # Biggest signposts first; floating sorted by id for stability.
@@ -899,7 +894,7 @@ class KB:
         limit: int | None = None,
         fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """List docs, optionally filtered by type. Returns [{id, label, display}].
+        """List docs, optionally filtered by type. Returns doc records.
 
         type -- restrict to one doc type.
         include_reference -- include type:reference / status:reference docs.
@@ -919,11 +914,7 @@ class KB:
                 continue
             if not include_reference and is_archived(doc):
                 continue
-            results.append({
-                "id": doc_id,
-                "label": doc.get("label", ""),
-                "display": self.display_label(doc_id),
-            })
+            results.append(self.doc_record(doc_id))
         return self._rows(results, limit, fields)
 
     # -----------------------------------------------------------------------
@@ -937,7 +928,7 @@ class KB:
         kind -- which edge lists to return. 'dependents' is the union of
             required_by and children; 'all' returns every list.
 
-        Returns a dict with the requested edge lists as [{id, label, display}].
+        Returns a dict with the requested edge lists as doc records.
         """
         doc_id = self.resolve(ref)
         doc = self._docs[doc_id]
@@ -982,7 +973,7 @@ class KB:
         depth -- how many hops to walk.
         direction -- walk dependencies ('up'), dependents ('down'), or 'both'.
 
-        Returns {nodes: [{id, label, display, depth}], edges: [[from_id, to_id], ...]}
+        Returns {nodes: [doc record + depth], edges: [[from_id, to_id], ...]}
         """
         root_id = self.resolve(ref)
         fwd = forward_edges(self._docs)
@@ -1014,12 +1005,7 @@ class KB:
                         queue.append((dep_id, d + 1))
 
         nodes = [
-            {
-                "id": nid,
-                "label": self._docs.get(nid, {}).get("label", ""),
-                "display": self.display_label(nid) if nid in self._docs else f"(missing) {nid}",
-                "depth": d,
-            }
+            {**self.doc_record(nid), "depth": d}
             for nid, d in sorted(visited.items(), key=lambda x: (x[1], x[0]))
         ]
 
@@ -1496,7 +1482,7 @@ class KB:
         limit -- maximum number of events to show.
 
         Each item represents a doc that was created or had a history entry added.
-        Items: {id, label, display, at, event, summary}
+        Items: doc record plus {at, event, summary}
 
         `event` is 'created' or 'history'.
         `at` is the ISO 8601 timestamp of the event.
@@ -1508,9 +1494,7 @@ class KB:
             created = doc.get("created", "")
             if not since or created >= since:
                 events.append({
-                    "id": doc_id,
-                    "label": doc.get("label", ""),
-                    "display": self.display_label(doc_id),
+                    **self.doc_record(doc_id),
                     "at": created,
                     "event": "created",
                     "summary": "",
@@ -1523,9 +1507,7 @@ class KB:
                 if since and at < since:
                     continue
                 events.append({
-                    "id": doc_id,
-                    "label": doc.get("label", ""),
-                    "display": self.display_label(doc_id),
+                    **self.doc_record(doc_id),
                     "at": at,
                     "event": "history",
                     "summary": h.get("summary", ""),

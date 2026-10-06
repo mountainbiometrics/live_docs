@@ -365,11 +365,31 @@ def unique_label(base: str, existing_labels) -> str:
 # ---------------------------------------------------------------------------
 
 def display_label(doc: dict) -> str:
-    """Return the '<Type>: <Title>' display string for a doc dict."""
+    """Return the '<Intent> <type>: <Title>' display string for a doc dict.
+
+    The intent leads so a reader sees how much a claim weighs before its title:
+    'Requested decision: X' reads as binding where 'Incidental decision: X' does
+    not. A doc with no intent is 'Unattributed', not silently promoted. A
+    reference carries no intent by type, so it keeps 'Reference: <Title>'.
+    Force, realization and lifecycle are not here: they trail the display (see
+    ``facet_tags``) so a '[[id|display]]' alias stays a readable name.
+    """
     t = doc.get("type", "?")
     title = doc.get("title", doc.get("id", "?"))
-    return f"{t.capitalize()}: {title}"
+    if t == "reference":
+        return f"Reference: {title}"
+    intent = (doc.get("intent") or "unattributed").capitalize()
+    return f"{intent} {t}: {title}"
 
+
+def facet_tags(doc: dict) -> str:
+    """The ' · must · planned' tail naming how hard a doc binds and whether it exists.
+
+    Empty when the doc carries neither, so the facets a type forbids never show.
+    Takes any mapping with `force` / `realization` keys, so a record and a parsed
+    doc render the same tail.
+    """
+    return "".join(f" · {v}" for v in (doc.get("force"), doc.get("realization")) if v)
 
 
 # A stored reference is a bare wiki-link to a doc id: [[20260616181719]].
@@ -392,7 +412,7 @@ def ref_token(doc_or_id) -> str:
 
 def render_ref_token(doc_id: str, doc: dict | None) -> str:
     """
-    Render a stored '[[<id>]]' for human display as '[[<id>|<Type>: <Title>]]'.
+    Render a stored '[[<id>]]' for human display as '[[<id>|<Intent> <type>: <Title>]]'.
 
     The label is resolved live from the current doc, so display always reflects
     the doc's present title. A missing target renders explicitly rather than
@@ -401,6 +421,18 @@ def render_ref_token(doc_id: str, doc: dict | None) -> str:
     if doc is None:
         return f"[[{doc_id}|(missing)]]"
     return f"[[{doc_id}|{display_label(doc)}]]"
+
+
+def successor_displays(doc: dict, docs: dict) -> list[dict]:
+    """The docs a deprecated doc points at, as [{id, display}] for its line.
+
+    A successor missing from `docs` shows as its bare id: the line stays honest
+    about a replacement it cannot name.
+    """
+    return [
+        {"id": sid, "display": display_label(docs[sid]) if sid in docs else sid}
+        for sid in doc.get("superseded_by", [])
+    ]
 
 
 def doc_prefix(doc: dict) -> str:
