@@ -4,7 +4,7 @@ user-invocable: true
 description: >
   Canonical store-agnostic reference for working in ANY live_docs store: the
   ldoc CLI command surface, the frontmatter schema (field order, required
-  fields, the three descriptors), the type/status/level enums, the typed edge
+  fields, the three descriptors), the type/status enums and the facets, the typed edge
   model and cascade semantics, scope vs domain, and the all-metadata creation
   recipe. Read this FIRST when you land in a repo with a .live_docs.toml and
   need to read or write docs — it replaces rediscovering the system from
@@ -42,8 +42,14 @@ Don't start from a cold `ldoc find`. Get the map first:
 
 ```bash
 ldoc map            # entry points (signpost roots) + their summaries, ranked
-ldoc count          # how big the store is, by type/level/status
+ldoc count          # how big the store is, by type, status, and facet
 ```
+
+Every doc line on every surface reads `<Intent> <type>: <Title>` followed by
+force and realization tags — e.g. "Requested decision: …", "Incidental
+component: …" — and lists rank by status, then intent (requested, chosen,
+Unattributed, incidental). Read the first word before deciding whether a doc
+binds you; what each value permits is `.claude/skills/_shared/facets.md`.
 
 `ldoc map` prints the topological roots of the `belongs_to` hierarchy — the
 biggest "signpost" docs first, each with its summary and its direct children.
@@ -56,9 +62,9 @@ That is your table of contents. From an entry point, follow edges
 default `ldoc map`, `ldoc ls`, `ldoc orphans`, and `ldoc validate` omit them;
 `ldoc find` still matches them but ranks them last. Pass `--include-reference`
 when you deliberately want the archive (validate's flag is opt-in because
-archive-link hygiene is **not** a requirement). `status: target` docs are
-**not** demoted. Reference snapshots are immutable via porcelain — do not
-`set`/`history`/non-provenance-`link` them; delete and re-ingest if wrong.
+archive-link hygiene is **not** a requirement). Reference snapshots are
+immutable via porcelain — do not `set`/`history`/non-provenance-`link` them;
+delete and re-ingest if wrong.
 
 ---
 
@@ -74,12 +80,12 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | Command | Purpose |
 |---|---|
 | `ldoc map [--include-reference] [--json]` | Entry points (signpost roots) with summaries — start here; omits reference/archived by default |
-| `ldoc find [terms] [--or] [--regex P] [--type] [--level] [--status] [--scope] [--domain] [--json]` | Full-text + faceted search; reference/archived hits ranked last |
+| `ldoc find [terms] [--or] [--regex P] [--type] [--status] [--intent] [--force] [--realization] [--imposed-by] [--scope] [--domain] [--json]` | Full-text + faceted search; reference/archived hits ranked last. `--intent incidental` is the ratification queue; `--realization planned` is the build backlog |
 | `ldoc ls [--type T] [--include-reference] [--json]` | List docs (optionally one type); omits reference/archived by default |
 | `ldoc orphans [--include-reference]` | Docs outside the belongs_to hierarchy (reference/archived omitted by default) |
 | `ldoc domains [--json]` | List in-use domain tags with doc counts (the domain registry) |
-| `ldoc count` / `ldoc log [--since ISO] [--limit N]` | Stats / recent-changes view |
-| `ldoc get <ref...>` | Frontmatter summary |
+| `ldoc count` / `ldoc log [--since ISO] [--limit N]` | Stats (tallies by type, status, and each facet) / recent-changes view |
+| `ldoc get <ref...>` | Frontmatter summary, including `intent_basis` and `imposed_by` |
 | `ldoc show <ref...>` | Frontmatter + resolved edges + body |
 | `ldoc body <ref...>` | Body only |
 | `ldoc neighbors <ref> --kind requires\|belongs_to\|relates\|provenance\|superseded_by\|dependents\|provenance_of\|all` | Edges in/out |
@@ -89,8 +95,8 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 
 | Command | Purpose |
 |---|---|
-| `ldoc new --type T --label "..." [--title "..."] [options]` | Create a doc (`--label` required; `--title` optional, defaults to label) |
-| `ldoc set <ref> [--title][--label][--summary][--level][--status][--type][--scope][--domain][--body -\|TEXT]` | Update fields/body (refused on reference/archived snapshots) |
+| `ldoc new --type T --label "..." [--title "..."] [options]` | Create a doc (`--label` required; `--title` optional, defaults to label). Refuses a doc that breaks the type's facet rules — a missing required facet, a forbidden one, or `--intent requested\|chosen` without `--intent-basis` |
+| `ldoc set <ref> [--title][--label][--summary][--status][--type][--intent][--intent-basis][--force][--realization][--realization-refs a,b][--realization-verified][--imposed-by][--scope][--domain][--body -\|TEXT]` | Update fields/body (refused on reference/archived snapshots) |
 | `ldoc link <ref> [--requires\|--belongs-to\|--relates\|--provenance\|--superseded-by a,b]` | Add edges (on reference/archived: provenance repair only) |
 | `ldoc unlink <ref> [same edge flags]` | Remove edges; accepts literal 14-digit dead ids as edge targets (on reference/archived: provenance repair only) |
 | `<mutate> ... --note "why"` | Explain a change inline — **preferred over `ldoc history`**. Auto-filled for obvious ops (new/re-parent/unlink/rm); required for a revision (body/label/title/summary), enforced at `session close` |
@@ -129,7 +135,9 @@ register its root, or run the command where the store lives. Set
 ### Canonical field order (the serializer enforces it — you don't hand-order)
 
 ```
-id, title, label, summary, type, status, level,
+id, title, label, summary, type, status,
+intent, intent_basis, force, realization, realization_refs,
+realization_verified, imposed_by,
 belongs_to, requires, relates, provenance, superseded_by,
 domain, scope, created, history
 ```
@@ -143,8 +151,12 @@ title, label, and body.
 
 ### Required vs optional
 
-**Required on every doc:** `id`, `title`, `label`, `type`, `status`, `level`,
-`created`. Everything else is optional.
+**Required on every doc:** `id`, `title`, `label`, `type`, `status`,
+`created`, and `intent` on every type except `reference`. Which of `force`,
+`realization`, and `imposed_by` a doc must, may, or must not carry depends on
+its type — the table in **`.claude/skills/_shared/doc-types.md`**.
+`intent_basis` is required when `intent` is `requested` or `chosen`.
+Everything else is optional.
 
 **Omit empty fields entirely.** Never write `[]`, never write an empty `scope:`
 or `domain:` or `history:`. Absence == empty; the tooling treats them
@@ -168,10 +180,18 @@ it; never rename files.
 ```
 type:   type | principle | goal | decision | constraint | requirement |
         use-case | guide | component | reference
-status: living (current reality) | target (intended, not yet built) |
-        deprecated (retired) | reference (frozen supporting material)
-level:  incidental (calcified, no decision) | trial | preference | requirement
+status:       living | deprecated | reference
+intent:       requested | chosen | incidental
+force:        must | should | may
+realization:  realized | partial | planned | deferred | unassessed
+imposed_by:   environment | tradeoff | choice
 ```
+
+`intent_basis` is a string (the quote or citation); `realization_refs` is a
+list of anchors (paths, symbols, URLs); `realization_verified` is a date or
+commit. What each value means and what it permits an agent to do:
+**`.claude/skills/_shared/facets.md`**. `level` and `status: target` are
+retired; `ldoc validate` warns when it finds them.
 
 reference-type `kind`: `brainstorm | plan | clipping | external`.
 
@@ -182,21 +202,22 @@ taxonomy collapses (it is already this store's most over-applied type). Ask
 **"what is this *most*?"** and pick the most specific:
 
 - `principle` bedrock value guiding many choices · `decision` one architectural
-  choice among alternatives (scope it) · `constraint` external force we didn't
-  choose · `requirement` property that must hold · `goal` outcome we're moving
+  choice among alternatives (scope it) · `constraint` a force we did not set
+  directly · `requirement` property that must hold · `goal` outcome we're moving
   toward · `use-case` workflow/scenario served · `component` a thing that exists
   (module / boundary / contract) · `guide` how to do or think · `reference`
   frozen source material · `type` defines a type (meta).
 
 Before typing anything `decision`: if it just says a thing *exists* →
-`component`; if it's *how to work* → `guide`; if it's *given, not chosen* →
-`constraint`; if it *must hold* → `requirement`/`goal`. Use `decision` only for a
+`component`; if it's *how to work* → `guide`; if it's *imposed, not set
+directly* → `constraint`; if it *must hold* → `requirement`/`goal`. Use `decision` only for a
 real choice among alternatives with a rationale — then **scope it** under the
 subtree it binds (no `belongs_to` = global, which is right only for genuinely
 cross-cutting decisions).
 
-The full classification ladder is **`.claude/skills/_shared/doc-types.md`** — the
-source `identify-key-concepts` and gardening apply.
+The full classification ladder, the typing test, the per-type facet table, and
+the why-chain are **`.claude/skills/_shared/doc-types.md`** — the source
+`identify-key-concepts` and gardening apply.
 
 ---
 
@@ -211,7 +232,7 @@ bare ids for you. There are five outbound edge types:
 | `belongs_to` | **hard** | This doc is structurally a child of the target (part-of / membership). Drives the hierarchy AND scope inheritance |
 | `relates` | soft | Symmetric see-also / topic kinship; not a dependency |
 | `provenance` | soft | "Derived from / informed by"; may point at a raw clipping id |
-| `superseded_by` | — | Required when `status: deprecated`; points at the replacement |
+| `superseded_by` | — | Required when `status: deprecated`; points at the replacement. Allowed on a `living` doc to point at its planned successor |
 
 - **Cascade-hard edges** (`requires` + `belongs_to`) are what `cascade-check`
   walks and what the reverse-dependency map is built from. `relates` and
@@ -275,8 +296,12 @@ ldoc new \
   --label "Short Noun Phrase" \
   --title "Sentence-length fuller name of the concept" \   # optional; defaults to label
   --summary "1–3 sentence gist that mirrors the doc's opening line." \
-  --level preference \
   --status living \
+  --intent requested \
+  --intent-basis "<the person's words, or session/review/clipping + date>" \
+  --force should \
+  --realization planned \
+  --realization-refs <path-or-symbol> \    # optional anchors
   --belongs-to <signpost-ref> \
   --requires <dep-ref> \
   --relates <sibling-ref> \
@@ -287,7 +312,7 @@ ldoc new \
   --dry-run            # preview without writing; drop it to commit
 ```
 
-`--label` is **required** — a 2–5 word Title-Case noun phrase naming the subject. `--title` is optional and defaults to the label. Edge refs accept id | label | title and are validated before anything is written. Membership points UP: the child declares `--belongs-to <parent>`, never the reverse.
+`--label` is **required** — a 2–5 word Title-Case noun phrase naming the subject. `--title` is optional and defaults to the label. The facet flags follow the type's row in `doc-types.md`; `ldoc new` refuses a doc that breaks it. Leave out `--intent` only when you mean `incidental` (the default); `--intent requested|chosen` needs `--intent-basis`. Edge refs accept id | label | title and are validated before anything is written. Membership points UP: the child declares `--belongs-to <parent>`, never the reverse.
 
 ---
 
@@ -324,6 +349,10 @@ When the plugin is installed, these are namespaced `/livedocs:<skill>`.
 
 The default is NOT to deprecate — that's the right choice only when history
 matters. When in doubt: if removing the doc loses no information, delete it.
+
+Planned succession is not deprecation: a still-living current doc may carry
+`superseded_by` pointing at the `planned` doc that will replace it, and is
+deprecated only once the successor is realized.
 
 Deprecation is a protocol, not a flag flip: add a `## Correction` section, set
 `--superseded-by`, then `--status deprecated`, then a history entry — or just let
