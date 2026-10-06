@@ -33,6 +33,7 @@ porcelain. Use `--include-reference` only when you deliberately want the archive
     - [Three descriptors](#three-descriptors)
     - [Canonical field order](#canonical-field-order)
     - [Valid enum values](#valid-enum-values)
+    - [Facets](#facets)
     - [Omit empty fields](#omit-empty-fields)
     - [`id` is the filename](#id-is-the-filename)
   - [Edge rules](#edge-rules)
@@ -177,7 +178,7 @@ summary. It never silently rewrites meaning.
 
 ### Required fields
 
-Every doc in `kb/02-docs/` must have: `id`, `title`, `label`, `type`, `status`, `level`, `created`.
+Every doc in `kb/02-docs/` must have: `id`, `title`, `label`, `type`, `status`, `created`, and `intent` on every type except `reference`. Which facets a type requires or forbids is the per-type table in [`.claude/skills/_shared/doc-types.md`](.claude/skills/_shared/doc-types.md); `ldoc new` and `ldoc set` refuse to write a doc that breaks it.
 
 ### Three descriptors
 
@@ -194,7 +195,9 @@ Every doc in `kb/02-docs/` must have: `id`, `title`, `label`, `type`, `status`, 
 Fields must appear in this order in the frontmatter:
 
 ```
-id, title, label, summary, type, status, level,
+id, title, label, summary, type, status,
+intent, intent_basis, force, realization, realization_refs,
+realization_verified, imposed_by,
 belongs_to, requires, relates, provenance, superseded_by,
 domain, scope, created, history
 ```
@@ -210,11 +213,18 @@ label, and body.
 ```
 type:   type | principle | goal | decision | constraint | requirement |
         use-case | guide | component | reference
-status: living | target | deprecated | reference
-level:  incidental | trial | preference | requirement
+status:       living | deprecated | reference
+intent:       requested | chosen | incidental
+force:        must | should | may
+realization:  realized | partial | planned | deferred | unassessed
+imposed_by:   environment | tradeoff | choice
 ```
 
-The old `state: actual|target` field is removed from the schema. If encountered, fold `state: target` into `status: target` and drop the `state` key.
+`level` and `status: target` are retired, as is the older `state` key; `ldoc validate` warns when it finds them, and [`facets.md`](.claude/skills/_shared/facets.md) says how each maps.
+
+### Facets
+
+Every doc line the tools print reads `<Intent> <type>: <Title>` with force and realization as trailing tags, so you can tell whether a doc binds you before opening it. The meaning of every value, the evidence rule for `intent`, and what an agent may do with a doc at each intent and force live in [`.claude/skills/_shared/facets.md`](.claude/skills/_shared/facets.md) — read it before writing or acting on a doc.
 
 ### Omit empty fields
 
@@ -234,7 +244,7 @@ The `id` field must match the filename stem exactly (a 14-digit UTC timestamp). 
 | `belongs_to` | hard (both ways) | **yes (DAG)** | This doc is a structural member of the target — the **hierarchy**. Orphan test: *if the target were removed, would this doc be homeless / meaningless as a standalone entry?* If yes, use `belongs_to`. |
 | `relates` | soft / nav | n/a (symmetric) | Symmetric clustering / see-also; topic kinship but not a dependency |
 | `provenance` | soft / nav | — | "Was derived from / informed by"; may point at `kb/01-raw/` (raw ids are not graph nodes) |
-| `superseded_by` | — | — | Required when `status: deprecated`; points at the replacement doc(s) |
+| `superseded_by` | — | — | Required when `status: deprecated`; points at the replacement doc(s). Allowed on a `living` doc to point at its planned successor |
 
 `belongs_to` is the acyclic hierarchy/lineage DAG (validate enforces acyclicity on it alone); `requires`/`relates` form the cyclic influence web. They are **different axes — never substitute one for the other**. When a cluster of docs elaborates one doc that states their over-arching concept, those docs `belongs_to` that defining doc (which becomes a descendant-bearing signpost), and it `belongs_to` the broader grouping — nest the hierarchy, don't flatten every member onto the top-level signpost. Reserve a bare `belongs_to` to a broad signpost for docs with no nearer defining parent. Authoritative: [Edge Type Vocabulary](kb/02-docs/20260617144634.md), [Graph Cycles Are Legal](kb/02-docs/20260617144556.md).
 
@@ -250,7 +260,7 @@ The `id` field must match the filename stem exactly (a 14-digit UTC timestamp). 
 
 - `history` is a **change-trail**, not a log of all activity.
 - **Never add a creation entry.** The `created` field records when the doc was made; no history entry is needed.
-- Append a history entry only when substantive content changes (title, body, type, level, status, requires, belongs_to, tags). Provenance-only changes (adding a `provenance` or `relates` edge) may or may not get an entry depending on intent — backfilling initial provenance is not history-worthy.
+- Append a history entry only when substantive content changes (title, body, type, intent, force, imposed_by, status, requires, belongs_to, tags). Provenance-only changes (adding a `provenance` or `relates` edge) may or may not get an entry depending on intent — backfilling initial provenance is not history-worthy.
 - Use `ldoc history <ref> --add "<description>"` — never edit history entries directly.
 - Existing history entries are immutable. Append only; never alter or delete prior entries.
 - A long history list on a doc is a "hot file" signal: consider running `garden single-responsibility`.
@@ -325,7 +335,7 @@ ldoc set <id> --status deprecated
 ldoc history <id> --add "deprecated — superseded by <replacement-id>: <one-line reason>"
 ```
 
-Both the `superseded_by` edge and the `## Correction` section are required. `validate` will flag a deprecated doc with no `superseded_by` edge as an error.
+Both the `superseded_by` edge and the `## Correction` section are required. `validate` will flag a deprecated doc with no `superseded_by` edge as an error. A `superseded_by` edge on a still-`living` doc is planned succession, not deprecation: that doc is deprecated by this protocol once its successor is realized.
 
 After deprecation, run `cascade-check` from the deprecated doc: all `requires`/`belongs_to` dependents need to know their upstream is now deprecated.
 
