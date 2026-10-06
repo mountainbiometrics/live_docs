@@ -45,10 +45,14 @@ def _yaml_wikilink_list(items: list) -> str:
 # ---------------------------------------------------------------------------
 
 # Canonical order for ALL doc types (baseline)
-# Spec: id, title, label, summary, type, status, level, belongs_to, requires,
-#       relates, provenance, superseded_by, domain, scope, created, history
+# Spec: id, title, label, summary, type, status, then the facets (intent,
+#       intent_basis, force, realization, realization_refs, realization_verified,
+#       imposed_by), belongs_to, requires, relates, provenance, superseded_by,
+#       domain, scope, created, history
 CANONICAL_FIELD_ORDER = [
-    "id", "title", "label", "summary", "type", "status", "level",
+    "id", "title", "label", "summary", "type", "status",
+    "intent", "intent_basis", "force",
+    "realization", "realization_refs", "realization_verified", "imposed_by",
     "belongs_to", "requires", "relates", "provenance", "superseded_by",
     "domain", "scope", "created", "history",
 ]
@@ -69,9 +73,16 @@ REFERENCE_EXTRA_FIELDS = ["kind", "source", "origin", "medium", "authored_at", "
 # ---------------------------------------------------------------------------
 
 def _strip_quotes(s: str) -> str:
-    """Remove surrounding single or double quotes from a scalar string."""
+    """Remove surrounding single or double quotes from a scalar string.
+
+    A double-quoted scalar is unescaped, the inverse of ``_yaml_str``; without
+    that, a value holding a quote (an `intent_basis` quoting the owner) gains a
+    backslash every time its doc is rewritten.
+    """
     s = s.strip()
-    if len(s) >= 2 and ((s[0] == '"' and s[-1] == '"') or (s[0] == "'" and s[-1] == "'")):
+    if len(s) >= 2 and s[0] == '"' and s[-1] == '"':
+        return re.sub(r'\\(["\\])', r'\1', s[1:-1])
+    if len(s) >= 2 and s[0] == "'" and s[-1] == "'":
         return s[1:-1]
     return s
 
@@ -245,7 +256,7 @@ def _normalize_edge_field(fm: dict, key: str) -> None:
 def parse_doc(path: Path) -> dict:
     """
     Parse a live_docs markdown file and return a dict with:
-      id, title, label, type, status, level
+      id, title, label, type, status
       belongs_to    — list of id strings (absent if empty; use .get(k, []))
       requires      — list of id strings (absent if empty)
       relates       — list of id strings (absent if empty)
@@ -362,6 +373,13 @@ def _emit_field(key: str, value: Any) -> list[str]:
             return []
         return [f"scope: {_yaml_str(str(value))}"]
 
+    # realization_refs: anchors (paths, symbols, URLs) as an inline list —
+    # omitted when empty like the other optional lists.
+    if key == "realization_refs" and isinstance(value, list):
+        if not value:
+            return []
+        return [f"{key}: {_yaml_list(value)}"]
+
     # History: block sequence of mappings — omit entirely when empty
     if key == "history" and isinstance(value, list):
         if not value:
@@ -404,8 +422,11 @@ def _emit_field(key: str, value: Any) -> list[str]:
     # Scalar — use quoted string for everything except simple unquoted values
     # (We quote all scalar values for consistency and safety.)
     if isinstance(value, str):
-        # Unquoted for type/status/level/kind values (simple identifiers)
-        if key in ("type", "status", "level", "kind") and value and \
+        # Unquoted for the enum-valued scalars (simple identifiers). `level` is
+        # no longer a field, but legacy docs still carry it and unknown fields
+        # round-trip untouched, so it keeps its bare form rather than churning.
+        if key in ("type", "status", "kind", "level", "intent", "force",
+                   "realization", "imposed_by") and value and \
                 re.match(r'^[a-z][a-z0-9_-]*$', value):
             return [f"{key}: {value}"]
         return [f"{key}: {_yaml_str(value)}"]
@@ -457,7 +478,9 @@ def dump_doc(frontmatter: dict, body: str) -> str:
     Serialize a doc back to its on-disk format.
 
     Emits frontmatter fields in canonical order:
-      id, title, label, summary, type, status, level,
+      id, title, label, summary, type, status,
+      intent, intent_basis, force, realization, realization_refs,
+      realization_verified, imposed_by,
       belongs_to, requires, relates, provenance, superseded_by,
       domain, scope, created, history
     Then appends reference-type extras (kind, source, imported) if present.

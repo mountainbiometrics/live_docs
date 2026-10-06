@@ -100,7 +100,7 @@ Emit exactly one verdict per neighbor:
 | `inconsequential` | Neighbor's claim is unaffected by the new intent. The norm. |
 | `cascade-extend` | Neighbor is downstream of a changed doc; its content is now stale or misleading and needs revision. |
 | `cascade-full` | Neighbor's entire claim is rendered obsolete by the changed upstream. |
-| `conflict-unresolved` | Neighbor makes a claim incompatible with the new intent, needing human judgment. |
+| `conflict-unresolved` | Neighbor makes a claim incompatible with the new intent **and a why it rests on argues against the intent** — apply `_shared/conflict-test.md` first. A neighbor that only records the prior design is `cascade-extend` / `cascade-full`. |
 
 **Frozen-doc rule**: docs with `status: deprecated` or `status: reference` are
 frozen — never mark them `cascade-extend` or `cascade-full`. Mark them
@@ -117,7 +117,9 @@ unless the change description states its reason for departing, which goes in
 the verdict's reason.
 
 **Bias rule**: prefer `inconsequential` when the relationship is weak or
-tangential; prefer `conflict-unresolved` over a low-confidence guess.
+tangential; prefer `conflict-unresolved` over a low-confidence guess about
+*impact* — but settle whether a competing why exists by walking the graph
+(`_shared/conflict-test.md`), never by flagging.
 
 ---
 

@@ -103,7 +103,7 @@ relationship of the concept's claim to that doc's claim:
 | `compatible` | Existing doc **already asserts** the new concept's claim — no write needed. |
 | `partial-supersession` | Existing doc asserts a thinner, partial, narrower, or staler version of the claim (or changes only part of it); REVISE it to carry the fuller claim. |
 | `full-supersession` | New concept renders the entire existing doc's claim obsolete. |
-| `conflict-unresolved` | The two claims are incompatible and need human judgment. |
+| `conflict-unresolved` | The two claims are incompatible **and a why the existing claim rests on argues against the new one** — apply `_shared/conflict-test.md` before issuing this. A doc that merely records the current design is a supersession, not a conflict. |
 
 **Protected matches.** Read each match's `intent` (the first word of its doc
 line) and apply the permission table in `.claude/skills/_shared/facets.md`. A
@@ -131,7 +131,10 @@ silent drift.
 already present; when the existing doc is only topically related, weak, or
 partial, prefer `partial-supersession` over `compatible`, and prefer surfacing a
 `conflict-unresolved` over silently accepting a weak match — silent drift is
-worse than a flagged conflict or a surfaced revision.
+worse than a flagged conflict or a surfaced revision. But a contradiction
+with the new intent is a conflict only when a why-doc argues against it;
+run the test in `_shared/conflict-test.md` before flagging, so the owner is
+not asked to re-rule on what a stale doc says.
 
 **Sibling / back-reference scan.** When a concept is classified
 `full-supersession` against doc X, the OLDER victim the new concept contradicts

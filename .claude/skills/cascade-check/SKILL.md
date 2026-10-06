@@ -166,12 +166,14 @@ Emit exactly one verdict per neighbor edge:
 |---------|------|--------|
 | `inconsequential` | The change in the source doc does not affect the meaning, correctness, or completeness of the neighbor. **This is the norm.** | Record, stop propagation. |
 | `cascade` | The neighbor is *living*, the permission rule lets an agent rewrite it, it relies on something that changed, and its content is now incorrect, stale, or misleading without an update. | Record, enqueue for neighbor collection. Do NOT write yet. |
-| `incompatible` | The change conflicts with something in the neighbor in a way that cannot be resolved without human judgment. | Record, HALT that branch. Surface to user with specifics before proceeding to Pass 2. |
+| `incompatible` | The change conflicts with a **why** the neighbor rests on, so it cannot be resolved without human judgment — apply `_shared/conflict-test.md`; a `must` conflict is always `incompatible`, a `should` conflict is `context-request` unless a reason is stated. A neighbor that only restates the prior design is `cascade`, not `incompatible`. | Record, HALT that branch. Surface to user with both reasons quoted before proceeding to Pass 2. |
 | `context-request` | You cannot determine the impact with confidence from the text alone. | Ask the user one targeted question, await answer, continue. |
 
 **Bias rule**: Prefer `inconsequential` when the relationship is weak or
 tangential. Prefer `context-request` over a low-confidence `inconsequential`
-— silent drift is worse than a question. Prefer `incompatible` over a guess.
+— silent drift is worse than a question. Prefer `incompatible` over a guess
+about impact; whether a competing why exists is settled by the graph walk in
+`_shared/conflict-test.md`, not by flagging.
 
 **Descendant-summary rule**: if a changed doc `belongs_to` a descendant-bearing
 parent (any `belongs_to` parent, regardless of its `type`), that parent's

@@ -114,9 +114,11 @@ Act on the map before writing:
 - **Duplication** — if the proposed content already lives, in substance, in
   another doc, prefer linking (`requires`/`relates`) or proposing a merge
   (surface to the user; do not merge silently) over editing this doc.
-- **Conflict** — if the change contradicts a principle/decision/constraint/
-  requirement elsewhere (`conflict-unresolved`), surface specifics and ask how
-  to resolve. Do not apply the edit silently.
+- **Conflict** — if the change contradicts a why elsewhere
+  (`conflict-unresolved` per `_shared/conflict-test.md`), surface both
+  reasons and ask how to resolve. Do not apply the edit silently. A doc that
+  merely records the prior design is superseded, not a conflict — revise it
+  and let cascade carry the change.
 
 If neither duplication nor conflict is found, proceed.
 
