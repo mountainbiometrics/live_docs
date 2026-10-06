@@ -34,9 +34,10 @@ and trains the pass to defend the status quo instead of converging on intent.
      reasons, quoted, so the owner rules between two arguments.
    - No reason found, or the why-doc agrees with the new intent →
      supersession. Revise the stale doc and cascade.
-4. **Weigh the level, not the status.** A `level: requirement` why outweighs
-   a `preference`. But a requirement that only restates the what is still not
-   a reason.
+4. **Weigh intent and force, not the status.** A `requested` or `chosen` why
+   outweighs an `incidental` one, and a `must` binds where a `should` yields
+   to a stated reason. But a why that only restates the what is still not a
+   reason.
 
 ## What is never a competing why
 
