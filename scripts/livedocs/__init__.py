@@ -29,7 +29,7 @@ _EXPORT_MAP = [
                    "DocImposition",
                    "TypeSpec", "TYPE_TABLE", "TRADEOFF_UPSTREAM", "FACET_FIELDS",
                    "facet_forbidden", "facet_required", "intent_needs_basis",
-                   "is_archived", "ARCHIVED_IMMUTABLE_MSG",
+                   "is_archived", "rank_key", "ARCHIVED_IMMUTABLE_MSG",
                    "generate_id", "generate_session_id", "session_start_iso",
                    "change_types_for_fields", "dominant_change_type",
                    "title_to_label", "unique_label", "display_label", "facet_tags", "successor_displays",

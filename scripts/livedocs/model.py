@@ -163,6 +163,24 @@ def is_archived(doc: dict | None) -> bool:
     return doc.get("type") == "reference" or doc.get("status") == "reference"
 
 
+# Listing order: how much a doc should be trusted to be current, then how much a
+# person stood behind it. A doc with no intent is legacy, not incidental, so it
+# sits between chosen and incidental; a retired status ranks with living.
+_STATUS_RANK = {"living": 0, "deprecated": 1, "reference": 2}
+_INTENT_RANK = {"requested": 0, "chosen": 1, None: 2, "incidental": 3}
+
+
+def rank_key(doc: dict | None) -> tuple[int, int]:
+    """Sort key every listing shares: status, then intent; relevance and id break ties.
+
+    Archived (reference type or status) ranks as reference so a `type: reference`
+    doc that is still `living` lands last, as `find` has always put it.
+    """
+    doc = doc or {}
+    status = "reference" if is_archived(doc) else doc.get("status")
+    return (_STATUS_RANK.get(status, 0), _INTENT_RANK.get(doc.get("intent"), 2))
+
+
 # Clear message when porcelain refuses to mutate a reference snapshot.
 ARCHIVED_IMMUTABLE_MSG = (
     "refusing to mutate reference/archived doc {ref!r} "
