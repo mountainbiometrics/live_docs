@@ -101,6 +101,13 @@ def skip_content_advisories(doc: dict) -> bool:
 # Per-doc check
 # ---------------------------------------------------------------------------
 
+def _any_of(names: tuple) -> str:
+    """List type names as alternatives: "a or b", "a, b, or c"."""
+    if len(names) <= 2:
+        return " or ".join(names)
+    return ", ".join(names[:-1]) + f", or {names[-1]}"
+
+
 def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | None = None,
               types: dict[str, str] | None = None) -> tuple[list, list]:
     """
@@ -256,19 +263,19 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
                 and not any(t in TRADEOFF_UPSTREAM for t in required_types):
             warnings.append(
                 f"{prefix}  `imposed_by: tradeoff` but no `requires` edge to a "
-                f"{' or '.join(TRADEOFF_UPSTREAM)} it follows from"
+                f"{_any_of(TRADEOFF_UPSTREAM)} it follows from"
             )
         if doc.get("imposed_by") == "choice" \
                 and not any(t in CHOICE_UPSTREAM for t in required_types):
             warnings.append(
                 f"{prefix}  `imposed_by: choice` but no `requires` edge to a "
-                f"{' or '.join(CHOICE_UPSTREAM)} that motivates it"
+                f"{_any_of(CHOICE_UPSTREAM)} that motivates it"
             )
         if spec.expected_requires \
                 and not any(t in spec.expected_requires for t in required_types):
             warnings.append(
                 f"{prefix}  a {doc_type} expects a `requires` edge to a "
-                f"{' or '.join(spec.expected_requires)} (its why-chain)"
+                f"{_any_of(spec.expected_requires)} (its why-chain)"
             )
 
     # 14. A heading is the claimless parent, not every doc with children. Any

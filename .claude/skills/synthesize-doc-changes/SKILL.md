@@ -229,14 +229,14 @@ choice). Do not blanket-stamp a batch with one basis the source does not
 support for each claim.
 
 **Wire the why-chain.** Each new doc gets the `requires` edges its type is
-expected to have (`doc-types.md`, the why-chain): a decision or component
-requires the norm it serves, a norm requires the goal or use-case that
-motivates it. When this batch creates both a why-root and a doc that
-instantiates it, the thin doc **`requires`** the root (and often `belongs_to`
-it when membership holds). Do not leave the root only as prose inside the
-decision body. When no upstream doc exists and the source does not state one,
-leave the edge missing rather than invent a purpose; validate's warning is
-the gardening signal.
+expected to have (`doc-types.md`, the why-chain). A norm requires the goal or
+use-case that motivates it. A decision, component, or guide requires the root
+the plan gives it — a norm, a purpose, or both when both are stated. When this
+batch creates both a why-root and a doc that instantiates it, the thin doc
+**`requires`** the root (and often `belongs_to` it when membership holds). Do
+not leave a stated root only as prose inside the decision body. When no
+upstream doc exists and the source does not state one, leave the edge missing
+rather than invent one; validate's warning is the gardening signal.
 
 **Dedup shortcut**: if a concept merely DUPLICATES or STRENGTHENS an existing
 living doc, do NOT create a new doc — instead link the anchor to that doc's

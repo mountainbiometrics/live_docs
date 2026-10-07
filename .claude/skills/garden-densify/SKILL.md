@@ -82,15 +82,14 @@ relationship is actually existential.
 
 ### 3. Close the why-chain
 
-Each type is expected to `requires` certain types above it — shapes require
-norms, norms require purposes, purposes require nothing (the table and the
+Each type is expected to `requires` certain types above it (the table and the
 why-chain in `.claude/skills/_shared/doc-types.md`). `ldoc validate` warns on
-each doc missing its expected edge; those warnings are this phase's primary
+each doc with none of them above it; those warnings are this phase's primary
 work list. Work them in this order, loudest first:
 
 1. **A norm (principle, constraint, requirement) with no goal or use-case
    above it** — the loudest gardening signal: a rule nobody can weigh.
-2. **A shape (decision, component) with no norm above it.**
+2. **A decision, component, or guide with no root above it.**
 3. **An `imposed_by: tradeoff` doc with no `requires` to the decision or
    component it follows from**, and an `imposed_by: choice` doc with nothing
    that motivates it (`.claude/skills/_shared/facets.md`, imposed_by).

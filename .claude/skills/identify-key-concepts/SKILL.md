@@ -62,9 +62,11 @@ When the input asserts (or clearly depends on) such a root claim *and* a
 concrete choice that instantiates it, extract **both** as separate concepts:
 the root typed as a norm (`principle` | `constraint` | `requirement`) or a
 purpose (`goal` | `use-case`), and the choice as a thinner `decision` |
-`component`. The roots follow the why-chain in `doc-types.md` — shapes require
-norms, norms require purposes — so for each norm, also look for the goal or
-use-case it serves; those two types are the ones extraction misses most. Do **not** collapse them into one
+`component`. The roots follow the why-chain in `doc-types.md`: a norm requires
+the goal or use-case it serves — those two types are the ones extraction
+misses most — and a choice requires the root the input actually gives it. A
+purpose is enough when that is the reason given. Do **not** collapse a stated
+root into one
 decision concept whose `Asserts` buries the root as rationale prose. A concept
 list that is mostly `decision`s restating what was chosen, with the driving
 reasons only implied inside those Asserts, has failed this step.

@@ -114,10 +114,10 @@ may be set when they are known. `intent` is required on every type except
 | `principle` | required | forbidden | optional | a goal or use-case |
 | `constraint` | required | forbidden | required: `environment`, `tradeoff`, or `choice` | a decision or component, when `tradeoff`; a goal, use-case, or principle, when `choice` |
 | `requirement` | required | required ("met") | optional | a goal or use-case |
-| `decision` | required | required ("in effect") | optional | a principle, constraint, or requirement |
-| `component` | forbidden | required ("exists") | optional | a decision or requirement |
+| `decision` | required | required ("in effect") | optional | a principle, constraint, requirement, goal, or use-case |
+| `component` | forbidden | required ("exists") | optional | a decision, principle, constraint, requirement, goal, or use-case |
 | `heading` | forbidden | forbidden | forbidden | none |
-| `guide` | required | forbidden | optional | a principle or decision |
+| `guide` | required | forbidden | optional | a decision, principle, constraint, requirement, goal, or use-case |
 | `reference` | forbidden | forbidden | forbidden | none; no `intent` either |
 | `type` | forbidden | forbidden | optional | none |
 
@@ -126,13 +126,21 @@ property of its type, read from this table.
 
 ## The why-chain
 
-The expected `requires` edges form one chain, read bottom-up: **shapes require
-norms, norms require purposes, purposes require nothing.** Decisions and
-components (shapes) require the principles, constraints, and requirements
-(norms) they serve; norms require the goals and use-cases (purposes) that
-motivate them. A heading expects nothing: the grouping is its justification.
-The chain is what lets a later reader re-weigh a shape against
-the reason for it, and what lets cascade reach a shape when its reason changes.
+The expected `requires` edges form one chain, read bottom-up: **shapes rest on
+norms, norms rest on purposes, purposes rest on nothing.** Decisions and
+components are the shapes; principles, constraints, and requirements are the
+norms; goals and use-cases are the purposes. A norm requires the purpose that
+motivates it. A shape or a guide requires whichever root its source actually
+gives it: usually a norm, but a purpose is a root too, and a component or a
+guide may instead require the decision it carries out. A heading expects
+nothing: the grouping is its justification. The chain is what lets a later
+reader re-weigh a doc against the reason for it, and what lets cascade reach
+the doc when that reason changes.
+
+**Do not write a norm to fill the middle of the chain.** A norm is written
+when a source states it, or the choice is unintelligible without it. A doc
+that rests on both a norm and a purpose `requires` both: the norm edge is how
+a change to the rule reaches the doc.
 
 **A norm with no goal or use-case above it is the loudest gardening signal**:
 it is a rule nobody can weigh, because the purpose it serves was never

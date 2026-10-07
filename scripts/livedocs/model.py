@@ -70,8 +70,8 @@ class TypeSpec:
     on this type ("is reached", "exists"); a message uses it to ask the
     question in the type's own terms.
     ``expected_requires`` are the types a doc of this type should depend on, any
-    one of which satisfies it; the chain reads goal/use-case, then norm, then
-    decision/component.
+    one of which satisfies it; the chain reads purpose, then norm, then
+    decision/component, and a purpose is a root for any type below it.
     """
 
     intent: Presence = "required"
@@ -82,6 +82,11 @@ class TypeSpec:
     expected_requires: tuple = ()
 
 
+# The layers of the why-chain above a decision or component. A purpose is why
+# a norm exists; either one is a root a choice can rest on.
+PURPOSE_TYPES = ("goal", "use-case")
+NORM_TYPES = ("principle", "constraint", "requirement")
+
 # The one copy of the per-type rules. Everything that writes or checks a doc
 # reads this; nothing restates it. `type` is the meta-type that defines types and
 # carries no facets beyond intent.
@@ -89,8 +94,7 @@ TYPE_TABLE: dict[str, TypeSpec] = {
     "goal": TypeSpec(realization="required", realization_verb="is reached"),
     "use-case": TypeSpec(realization="required", realization_verb="is supported",
                          expected_requires=("goal",)),
-    "principle": TypeSpec(force="required",
-                          expected_requires=("goal", "use-case")),
+    "principle": TypeSpec(force="required", expected_requires=PURPOSE_TYPES),
     # What an imposed_by value expects upstream (TRADEOFF_UPSTREAM,
     # CHOICE_UPSTREAM) is checked off imposed_by itself, since it applies to any
     # type that carries it. A constraint admits every value: `environment` for an
@@ -99,17 +103,18 @@ TYPE_TABLE: dict[str, TypeSpec] = {
     "constraint": TypeSpec(force="required", imposed_by="required"),
     "requirement": TypeSpec(force="required", realization="required",
                             realization_verb="is met",
-                            expected_requires=("goal", "use-case")),
+                            expected_requires=PURPOSE_TYPES),
     "decision": TypeSpec(force="required", realization="required",
                          realization_verb="is in effect",
-                         expected_requires=("principle", "constraint", "requirement")),
+                         expected_requires=NORM_TYPES + PURPOSE_TYPES),
     "component": TypeSpec(realization="required", realization_verb="exists",
-                          expected_requires=("decision", "requirement")),
+                          expected_requires=("decision",) + NORM_TYPES + PURPOSE_TYPES),
     # A heading asserts nothing but the grouping of its children. It is one
     # kind of signpost, not the signpost role: any other type may still have
     # children and still owes its why. Scope and domain stay optional.
     "heading": TypeSpec(imposed_by="forbidden"),
-    "guide": TypeSpec(force="required", expected_requires=("principle", "decision")),
+    "guide": TypeSpec(force="required",
+                      expected_requires=("decision",) + NORM_TYPES + PURPOSE_TYPES),
     "reference": TypeSpec(intent="forbidden", imposed_by="forbidden"),
     "type": TypeSpec(),
 }
