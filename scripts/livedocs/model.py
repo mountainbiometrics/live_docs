@@ -168,11 +168,12 @@ def is_archived(doc: dict | None) -> bool:
     return doc.get("type") == "reference" or doc.get("status") == "reference"
 
 
-# Listing order: how much a doc should be trusted to be current, then how much a
-# person stood behind it. A doc with no intent is legacy, not incidental, so it
-# sits between chosen and incidental; a retired status ranks with living.
+# Listing order: how much a doc should be trusted to be current, then how
+# explicitly a person stood behind it. A missing intent is incidental, so it
+# ranks with incidental; the line still reads Unattributed. A retired status
+# ranks with living.
 _STATUS_RANK = {"living": 0, "deprecated": 1, "reference": 2}
-_INTENT_RANK = {"requested": 0, "chosen": 1, None: 2, "incidental": 3}
+_INTENT_RANK = {"requested": 0, "chosen": 1, "incidental": 2, None: 2}
 
 
 def rank_key(doc: dict | None) -> tuple[int, int]:
@@ -390,10 +391,10 @@ def unique_label(base: str, existing_labels) -> str:
 def display_label(doc: dict) -> str:
     """Return the '<Intent> <type>: <Title>' display string for a doc dict.
 
-    The intent leads so a reader sees how much a claim weighs before its title:
-    'Requested decision: X' reads as binding where 'Incidental decision: X' does
-    not. A doc with no intent is 'Unattributed', not silently promoted. A
-    reference carries no intent by type, so it keeps 'Reference: <Title>'.
+    The intent leads so a reader sees how explicitly a person stood behind the
+    claim before its title. A doc with no intent is shown as 'Unattributed'
+    so the gap is visible, and it weighs as incidental. A reference carries
+    no intent by type, so it keeps 'Reference: <Title>'.
     Force, realization and lifecycle are not here: they trail the display (see
     ``facet_tags``) so a '[[id|display]]' alias stays a readable name.
     """

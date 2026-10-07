@@ -45,7 +45,7 @@ writing the claim itself.
 
 1. **Never alter a claim.** The claim is the body (outside `## Implementation`),
    `title`, `type`, `force`, `imposed_by`, `intent`, `intent_basis`, and
-   `status` (`facets.md`, the permission table). This skill writes only
+   `status` (`facets.md`). This skill writes only
    `realization`, `realization_refs`, `realization_verified`, and the
    `## Implementation` section — the fields `facets.md` lets an agent update on
    any living doc, whatever its intent. A claim the code contradicts is drift
@@ -294,12 +294,11 @@ counts as evidence only if you verified it in this episode.
 
 **When the code contradicts the claim.** Report it with the doc's intent and
 force, and set realization from what exists (the claim is not in effect, or
-only partly). A `must` is the person's to resolve: the code is wrong or the
-doc is, and only they can say which. A `should` the code departs from may be a
-sanctioned deviation — look for a stated reason near the code or in its
-history and quote it in the finding. Against an `incidental` doc the code may
-well be right; say so, and name revise-doc as the route if the doc should
-change. In every case the doc's claim stays as it is.
+only partly). Report the doc's intent and force with the finding: they say
+how much stood behind the claim the code departs from. Against an
+`incidental` doc the code may well be right; say so, and name revise-doc as
+the route if the doc should change. In every case this skill leaves the
+claim as it is.
 
 **Whether a pointer list is enough.** Refs answer "where." Write an
 `## Implementation` section only when "how" is something a reader cannot

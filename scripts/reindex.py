@@ -133,8 +133,8 @@ def write_hierarchy_md(docs: dict, bt_rev: dict, index_dir: Path) -> None:
                 c_title = child.get("title", c_id)
                 c_type = child.get("type", "")
                 c_status = child.get("status", "")
-                # A doc with no intent is legacy, so it reads `unattributed` as in
-                # every other surface; a reference has none by type and stays blank.
+                # A missing intent is shown as unattributed and weighs as incidental.
+                # A reference has none by type and stays blank.
                 c_intent = child.get("intent") or ("" if c_type == "reference" else "unattributed")
                 c_facets = " | ".join(
                     [c_intent, child.get("force", ""), child.get("realization", "")])

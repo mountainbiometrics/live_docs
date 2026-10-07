@@ -140,7 +140,7 @@ collected into `session["verdicts"]` before any write occurs.
 **is_living check first.** Before issuing any verdict, check the neighbor's
 `status`:
 - `status: living` — the doc is *living* and may be rewritten to track new
-  reality, subject to the permission rule below. Apply verdicts normally.
+  reality, subject to the intent comparison below. Apply verdicts normally.
 - `status: deprecated` or `status: reference` — the doc is *frozen*. Cascade-
   check may still flag it as `incompatible` (to surface the conflict to the
   user), but it is **never rewritten** to track current state. The only allowed
@@ -148,25 +148,18 @@ collected into `session["verdicts"]` before any write occurs.
   `superseded_by` edge. Skip `cascade` verdicts for frozen docs; emit
   `incompatible` instead and surface to user.
 
-**Permission and force second** — read and apply
-`.claude/skills/_shared/facets.md`:
-- **Intent gates the write.** A living neighbor whose `intent` is `requested`,
-  `chosen`, or absent (Unattributed) is never rewritten by an agent: if
-  tracking the change would alter its claim, emit `incompatible` instead of
-  `cascade` and surface it — unless the change came in the person's own words
-  directing exactly that. An `incidental` neighbor takes `cascade` normally.
-- **Force sets severity** when the change conflicts with the neighbor's claim:
-  against a `must` → `incompatible`; against a `should` → `context-request`
-  (or `cascade` with the reason recorded, when the change states why it
-  departs from the guideline).
+**Intent comparison second** — `_shared/conflict-test.md` maps the
+comparison in `_shared/facets.md` onto these verdicts: a neighbor at or
+below the change's intent is `cascade`; a same-claim neighbor above it is
+`incompatible`. Neither halts the walk.
 
 Emit exactly one verdict per neighbor edge:
 
 | Verdict | When | Action in Pass 1 |
 |---------|------|--------|
 | `inconsequential` | The change in the source doc does not affect the meaning, correctness, or completeness of the neighbor. **This is the norm.** | Record, stop propagation. |
-| `cascade` | The neighbor is *living*, the permission rule lets an agent rewrite it, it relies on something that changed, and its content is now incorrect, stale, or misleading without an update. | Record, enqueue for neighbor collection. Do NOT write yet. |
-| `incompatible` | The change conflicts with a **why** the neighbor rests on, so it cannot be resolved without human judgment — apply `_shared/conflict-test.md`; a `must` conflict is always `incompatible`, a `should` conflict is `context-request` unless a reason is stated. A neighbor that only restates the prior design is `cascade`, not `incompatible`. | Record, HALT that branch. Surface to user with both reasons quoted before proceeding to Pass 2. |
+| `cascade` | The neighbor is *living*, its intent is at or below the change's, it relies on something that changed, and its content is now incorrect, stale, or misleading without an update. | Record, enqueue for neighbor collection. Do NOT write yet. |
+| `incompatible` | The neighbor states the same claim at a higher intent than the change carries, or is frozen — apply `_shared/conflict-test.md`. A neighbor that only restates the prior design is `cascade`. | Record. Leave that doc's assertion; the new claim is written beside it. Continue the walk. Name both sides in the episode report. |
 | `context-request` | You cannot determine the impact with confidence from the text alone. | Ask the user one targeted question, await answer, continue. |
 
 **Bias rule**: Prefer `inconsequential` when the relationship is weak or
@@ -190,10 +183,9 @@ prefer `inconsequential`.)
 
 ## PASS 2 — Batch write (Steps 5–6)
 
-**Before beginning Pass 2**, review the full verdicts map. If any
-`incompatible` branches were found, surface them to the user and confirm before
-proceeding. Do not write anything until all `incompatible` cases are either
-resolved or explicitly accepted by the user.
+**Before beginning Pass 2**, review the full verdicts map. An `incompatible`
+entry does not block the batch; it is named in the episode report with both
+sides.
 
 ---
 
@@ -263,9 +255,9 @@ cascade-check session — changed: [<ids>]
 neighbor id    direction    verdict            action taken
 20260615...    downstream   cascade            updated body
 20260615...    upstream     inconsequential    no change
-20260615...    downstream   incompatible       HALTED — <reason>
+20260615...    downstream   incompatible       left standing — <reason>
 ─────────────────────────────────────────────────────
-Total evaluated: N   Cascaded: N   Inconsequential: N   Blocked: N
+Total evaluated: N   Cascaded: N   Inconsequential: N   Left standing: N
 ```
 
 ---

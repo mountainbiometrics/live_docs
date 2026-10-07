@@ -3,8 +3,9 @@ name: apply-to-docs
 description: >
   Run a request or plan against the live_docs knowledge base before acting on
   it: extract key concepts, map them to existing docs, walk the full impact
-  graph to identify the blast radius, pause only for unresolved conflicts or
-  unintended side-effects (not merely because many docs will change), then
+  graph to identify the blast radius, pause only for unintended side-effects
+  (not for a supersession the request settles, and not merely because many
+  docs will change), then
   batch-synthesize a coherent new state for all affected docs in one pass. Use
   whenever a user request or design plan should be durably recorded — the skill
   ensures live_docs converges to the new intent rather than silently drifting
@@ -24,8 +25,8 @@ byte.** Two passes, cleanly separated:
 This skill is a **thin orchestrator**. The shared phases live in four sub-skills
 it invokes in order — `identify-key-concepts`, `map-concepts-to-docs`,
 `assess-blast-radius`, `synthesize-doc-changes` — keeping only apply-to-docs's
-own request-archival and restate steps, and its pause-for-conflicts /
-unintended-side-effects gate.
+own request-archival and restate steps, and its unintended-side-effects
+gate.
 
 ---
 
@@ -151,74 +152,60 @@ rule applied. (Read-only.)
 
 ---
 
-## Step 5 — Pause gate: conflicts and unintended side-effects
+## Step 5 — Pause gate: unintended side-effects
 
 This pause is apply-to-docs's own discipline. The blast-radius survey (Steps 3–4)
 always runs — it informs a coherent synthesis. The pause is **not** a
 permission-slip for doing the work the user asked for.
 
-**Pause when (and only when) either holds:**
+**Pause when (and only when)** the impact set reaches docs or deprecations
+that look *outside* what the request implies — e.g. full supersession of a
+living doc the request never touched, or cascade into an unrelated cluster.
+Weigh: is this the coherent consequence of the stated intent, or a surprise
+the user has not had a chance to catch?
 
-1. **Invariant — unresolved conflicts.** Any `conflict-unresolved` docs are
-   present (frozen/deprecated clash, or a contradiction the synthesis cannot
-   mechanically reconcile). The user must address something the conversation
-   has not settled yet.
-   *Unresolved* means authority is genuinely contested — a why the existing
-   claim rests on argues against the request's reason
-   (`_shared/conflict-test.md`). A `requested`, `chosen`, or Unattributed
-   doc is settled only by the request's own stated intent: when the impact
-   set would alter one on an agent's inference (as a consequence, or from
-   another doc), the permission table in `_shared/facets.md` forbids it, so
-   it is `conflict-unresolved`. Any other doc the survey turns up that is
-   contradicted by **settled** authority — the request's stated intent, or
-   an in-force doc that intent reaffirms — is not a
-   conflict, and not a side-effect to weigh under trigger 2: it is cruft
-   found in the blast radius, whatever subsystem it lives in. It joins the
-   impact set and is resolved in this same pass per
-   `_shared/cruft-verdicts.md` (deprecate with `## Correction` +
-   `superseded_by` for overturned history; REMOVE when nothing durable
-   remains). Never hand it back as "out of scope" or "worth a separate
-   look": deferring settled cleanup re-opens what is already decided — the
-   episode review records it for post-hoc signoff like every other write.
-2. **Judgment — unintended side-effects.** The impact set reaches docs or
-   deprecations that look *outside* what the request implies — e.g. full
-   supersession of a living doc the request never touched, or cascade into an
-   unrelated cluster. Weigh: is this the coherent consequence of the stated
-   intent, or a surprise the user has not had a chance to catch? Large counts
-   of `partial-supersession` / `cascade-extend` on docs that clearly belong to
-   the request are **not** a pause reason by themselves.
+**Not a pause reason:**
 
-**Do not pause** solely because many docs will change, or because the impact
-set is "large." That rubber-stamps expected work and trains the user to type
-"yes" without reading.
+- Many docs changing, or a "large" impact set. That rubber-stamps expected
+  work and trains the user to type "yes" without reading.
+- A supersession the request itself settles, including of an earlier request
+  or a `must`. The request carries `requested` intent and updates those docs
+  (`_shared/facets.md`, the comparison); the reply names the supersession as
+  context.
+- A `conflict-unresolved` entry. It is a report: a frozen doc that cannot be
+  rewritten, or a neighbor of higher intent than the change, each named in
+  the reply while the writes proceed.
+- Cruft the survey turns up that is contradicted by **settled** authority —
+  the request's stated intent, or an in-force doc that intent reaffirms. It
+  joins the impact set and is resolved in this same pass per
+  `_shared/cruft-verdicts.md` (deprecate with `## Correction` +
+  `superseded_by` for overturned history; REMOVE when nothing durable
+  remains). Never hand it back as "out of scope" or "worth a separate
+  look": deferring settled cleanup re-opens what is already decided — the
+  episode review records it for post-hoc signoff like every other write.
 
 If pausing, **stop and present before writing anything:**
 
 ```
-⚠  apply-to-docs: pause — <conflicts | unintended side-effects | both>
+⚠  apply-to-docs: pause — unintended side-effects
 
 Why this is not just "proceeding with your request":
-  <one or two sentences: what is unresolved or surprising>
+  <one or two sentences: what is surprising>
 
-conflict-unresolved (if any):
-  <id>  "<title>"
-      Conflict: <one sentence describing the incompatibility>
-
-Surprising / out-of-scope impact (if any):
+Surprising / out-of-scope impact:
   <id>  "<title>"  verdict: <…>  — <why this looks unintended>
 
 Expected impact (informational, not a gate): N docs will be revised/created
 as the coherent consequence of the request.
 
-Continue? (yes / no / resolve conflicts first)
+Continue? (yes / no)
 ```
 
-Do not proceed until the user confirms. If they say "resolve conflicts first",
-address those docs via clarifying questions before continuing. If "no", exit
-with no further writes (archival from Step 1b may already exist — leave it).
+Do not proceed until the user confirms. If "no", exit with no further writes
+(archival from Step 1b may already exist — leave it).
 
-If neither trigger holds, proceed directly to Step 6 — even when the expected
-impact set is large.
+If the trigger does not hold, proceed directly to Step 6 — even when the
+expected impact set is large.
 
 ---
 

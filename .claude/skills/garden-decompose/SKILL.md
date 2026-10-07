@@ -49,11 +49,9 @@ it is a split candidate.
    ```
    Each piece carries the original's `intent` and `intent_basis` (the person's
    act covered the claim the pieces split), and the facets its type takes per
-   `.claude/skills/_shared/doc-types.md`. Splitting a `requested`, `chosen`, or
-   Unattributed doc must leave every part of its claim unchanged across the
-   pieces; a split that would reword or drop any of it alters the claim, which
-   the permission table in `.claude/skills/_shared/facets.md` reserves for the
-   person — flag it instead.
+   `.claude/skills/_shared/doc-types.md`. A split that leaves every part of
+   the assertion stated retires the original at any intent
+   (`.claude/skills/_shared/facets.md`).
    Add `## Correction` to the original body (via `ldoc set <original-id> --body -`), then
    deprecate — two-part operation; `ldoc set` has no `--superseded-by` flag:
    ```bash

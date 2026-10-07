@@ -21,11 +21,9 @@ Gardening is a **thin dispatcher** over single-purpose phases. You own the **who
 Phases are `user-invocable: false` — invoke them via the Skill tool, never tell
 the user to run them directly.
 
-Every phase obeys the agent permission table in
-`.claude/skills/_shared/facets.md`: gardening applies judgment directly to
-`incidental` docs, but never alters the claim of a `requested`, `chosen`, or
-Unattributed doc — it flags those for the person in the review. Setting an
-Unattributed doc's `intent` from evidence is assessment, not a claim change.
+Gardening judgments carry `incidental` intent (`.claude/skills/_shared/facets.md`,
+the comparison). Setting a missing `intent` from evidence is assessment, not
+an assertion change.
 
 ---
 

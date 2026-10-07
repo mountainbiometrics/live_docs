@@ -75,15 +75,11 @@ Step 7).
    ```
 3. State in plain language: (a) the doc's current content, and (b) exactly what
    the caller wants to change.
-4. **Check the permission table** in `.claude/skills/_shared/facets.md` against
-   the doc's `intent` (shown first on its doc line). An `incidental` doc may be
-   revised freely, with a note. A `requested`, `chosen`, or Unattributed doc's
-   claim is never altered by an agent: unless the change comes in the person's
-   own words (which then become the basis), do not edit the claim — record the
-   alternative as a new `incidental` doc that `relates` to this one, and flag
-   the conflict to the person. Realization, its companions, the
-   `## Implementation` section, provenance, relates, and placement are not the
-   claim and may be updated on any living doc.
+4. **Compare intents** (`.claude/skills/_shared/facets.md`): the intent this
+   change carries against the doc's (the first word of its doc line). At or
+   above it, the change updates the doc, assertion included. Below it, the
+   assertion stays and the change is written as its own doc that `relates`
+   to this one. Neither is a refusal.
 5. **Extract the concepts the revision introduces** — run **`/identify-key-concepts`**
    on the proposed change (don't stop after it; its concept list is the input to
    Step 2). A revision usually introduces just one or a few concepts:
@@ -114,11 +110,9 @@ Act on the map before writing:
 - **Duplication** — if the proposed content already lives, in substance, in
   another doc, prefer linking (`requires`/`relates`) or proposing a merge
   (surface to the user; do not merge silently) over editing this doc.
-- **Conflict** — if the change contradicts a why elsewhere
-  (`conflict-unresolved` per `_shared/conflict-test.md`), surface both
-  reasons and ask how to resolve. Do not apply the edit silently. A doc that
-  merely records the prior design is superseded, not a conflict — revise it
-  and let cascade carry the change.
+- **Conflict** — apply `_shared/conflict-test.md`. A doc that merely
+  records the prior design is superseded, not a conflict — revise it and let
+  cascade carry the change.
 
 If neither duplication nor conflict is found, proceed.
 
@@ -323,8 +317,8 @@ serializer's.
 
 **Raise intent** (e.g. `incidental` → `chosen`): substantive — only with a
 basis showing the person's act for this claim (`facets.md`, the evidence
-rule); append history, run cascade. Lowering a `requested` or `chosen` intent
-is altering it, which an agent never does.
+rule); append history, run cascade. Lowering intent is a change to the
+claim and follows the comparison like any other.
 
 **Change force** (e.g. `should` → `must`): substantive — run cascade; a
 stronger force can turn a neighbor's tolerated departure into a conflict.

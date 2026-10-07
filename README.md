@@ -50,7 +50,7 @@ requires: ["[[20260615182358]]"]
 
 **Facets say how much a claim binds, before anyone opens it.** Every listing prints a doc as `<Intent> <type>: <Title>` with force and realization tags — "Requested decision: …", "Incidental component: …" — so an agent can tell what it must respect from the list alone:
 
-- **`intent`** records what the person did: *requested* it, *chose* it from options, or let it happen (*incidental*). `requested` and `chosen` need an `intent_basis` — the quote or citation — so authority can be checked, not assumed. Agents never alter a requested or chosen claim; incidental ones they revise freely, with a note.
+- **`intent`** records what the person did: *requested* it, *chose* it from options, or let it happen (*incidental*). `requested` and `chosen` need an `intent_basis` — the quote or citation — so the act can be checked, not assumed. A missing intent is incidental. A stored claim informs the next change; it does not restrict it: a change carrying intent at or above the doc's updates it, and one below it is written beside it.
 - **`force`** separates a rule (`must`) from a guideline (`should`) and an allowance (`may`).
 - **`realization`** records whether the implementation has the thing yet — `planned` docs are the build backlog, `deferred` ones are put off on purpose — so "decided" and "built" stop being confused.
 - **`imposed_by`** says whether a claim is set by us (`choice`), follows from a trade-off recorded elsewhere (`tradeoff`), or comes from the world (`environment`).

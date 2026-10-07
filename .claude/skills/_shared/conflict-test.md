@@ -1,73 +1,85 @@
-# Conflict test — when a contradiction needs the owner
+# Conflict test — same claim, then compare intent
 
 Single source of truth for every actor that issues a `conflict-unresolved`
 verdict (map-concepts-to-docs, assess-blast-radius, revise-doc) or an
-`incompatible` verdict (cascade-check), and for apply-to-docs's pause gate.
-Read and apply this; do not paraphrase from memory.
+`incompatible` verdict (cascade-check). Read and apply this; do not
+paraphrase from memory. The intent comparison it applies is defined once, in
+`facets.md`; this file says how to reach it and what verdict each outcome
+gets.
 
 ## The rule
 
-A doc that contradicts the new intent is a **conflict only if a why the
-existing claim rests on argues against the intent.** Otherwise the doc is
-stale, and the verdict is a supersession (partial or full): it is revised or
-deprecated in the same pass, and the report says so.
-
-Why: a `component` records what was designed and a `decision` records what
-was chosen; neither is a reason on its own. "The store currently says X" is
-never an argument against an owner who says "it should be Y, because Z."
-Flagging that as a conflict hands the owner a question they already answered,
-and trains the pass to defend the status quo instead of converging on intent.
+A doc that contradicts the new claim is **stale, not in conflict**, unless it
+states the same claim at a higher intent than the change carries. "The store
+currently says X" is never an argument against someone who now says "Y":
+flagging that hands the person a question they already answered and trains
+the pass to defend the status quo instead of converging on intent. Neither
+verdict here refuses or pauses anything; both are a record of what the
+change touched.
 
 ## The test — run before every conflict verdict
 
-1. **Name the reason on the new side.** The owner's or the request's stated
-   intent, with its reason. If the request states a rule with no reason at
-   all, ask for the reason (`context-request` / a clarifying question); that
-   is not yet a conflict either.
-2. **Walk upward from the contradicting doc.** Its `requires` and
-   `belongs_to` chain, plus any `constraint`, `requirement`, `goal`, or
-   `principle` its body cites as its why (`ldoc neighbors <id>`,
-   `ldoc show` on each).
-3. **For each why-doc found, ask whether its reason argues against the new
-   intent.** Quote the sentence that does.
-   - A reason found → `conflict-unresolved` / `incompatible`. Surface both
-     reasons, quoted, so the owner rules between two arguments.
-   - No reason found, or the why-doc agrees with the new intent →
-     supersession. Revise the stale doc and cascade.
-4. **Weigh intent and force, not the status.** A `requested` or `chosen` why
-   outweighs an `incidental` one, and a `must` binds where a `should` yields
-   to a stated reason. But a why that only restates the what is still not a
-   reason.
+1. **Same claim?** A use-case, goal, or outcome beside a decision, principle,
+   or component is two docs. Record both and `relates` them. That is the
+   usual shape of "I want abc" next to "we should build xyz." Stop here when
+   they differ: the verdict is `compatible` / `inconsequential`, with the new
+   doc created.
+2. **Which intent does the change carry?** The table in `facets.md`: the
+   person's words in this episode are `requested`, a proposal they went along
+   with is `chosen`, an agent's own judgment is `incidental`.
+3. **Compare with the doc's intent** (the first word of its doc line; a
+   missing intent is `incidental`).
+   - **At or above it → supersession.** `partial-supersession` or
+     `full-supersession` in a survey, `cascade-extend` / `cascade-full` in a
+     blast-radius walk, `cascade` in cascade-check. Revise or deprecate the
+     doc in the same pass. The reply conveys what changed (`facets.md`, "How
+     to convey it").
+   - **Below it → write beside.** `conflict-unresolved` in a survey,
+     `incompatible` in cascade-check. The doc's assertion stays; the new
+     claim becomes its own doc at the change's intent, `relates` to the doc,
+     and the report names both. The pass continues.
+   - **Frozen** (`deprecated` or `reference`) → the same verdict as "below",
+     whatever the intents: a frozen doc is never rewritten.
+4. **Name force in the reason.** `must` or `should` says how large the
+   departure is. It never picks the verdict.
 
-## What is never a competing why
+Walking upward from the contradicting doc (`ldoc neighbors <id>`, its
+`requires` and `belongs_to`) is still how you find what else the change
+touches, so that those docs are updated or named too. A why-doc found there
+is more blast radius, not a vote. If the change states a rule with no reason
+at all, ask for the reason (`context-request` / a clarifying question): that
+is about grounding the new claim, not about the old one.
+
+## What is never a reason to leave an assertion
 
 - The contradicting doc's own body or summary.
 - A signpost or component summary that inherited the wording.
 - "The code does it this way" or "it has always been this way."
 - A `decision` whose body names no alternatives and no rationale (that doc
   is a `component` in disguise, per `doc-types.md`).
+- A `must` the person never set.
 
 ## Worked example (illustrative, not a template)
 
-Owner: "retries must back off exponentially; a fixed interval hammers a
+Person: "retries must back off exponentially; a fixed interval hammers a
 dependency that is already struggling." Store: a `decision` titled "Retry
-Every Two Seconds", and the component summary above it restating that.
-Walking up: the constraint the decision rests on says "the upstream service
-rate-limits bursts from a single client." No why argues against the owner;
-the constraint is the very reason the owner gives, and the decision's fixed
-interval was one way of honoring it. Verdict: full-supersession of the
-decision, cascade to the component summary. No conflict, no pause.
+Every Two Seconds", `chosen`, and the component summary above it restating
+that. Same claim (how retries are timed); the change is `requested`, the doc
+`chosen`. Supersession: revise the decision so the new timing and the goal
+it had left unstated (spare a struggling dependency) are both visible,
+cascade to the component summary. The reply mentions that this replaces the
+earlier two-second choice. No pause.
 
-Contrast: the same owner request, but the decision rests on a requirement
-saying "recovery must complete within five seconds of the dependency
-returning." Exponential backoff can exceed that. Two reasons now argue, so
-the verdict is `conflict-unresolved`, surfaced with both sentences quoted.
+Contrast: a gardening pass finds the same decision stale against a newer
+`incidental` component doc. The change is `incidental`, the doc `chosen`:
+write beside. The component doc `relates` to the decision, the report names
+both, and the walk continues. "Retries that spare a struggling dependency"
+beside "retry every two seconds" is a goal and a decision, two docs, not a
+conflict either way.
 
 ## Bias
 
-Prefer supersession over conflict when no why-doc gives a reason: a flagged
-non-conflict costs the owner a re-ruling. Prefer conflict over supersession
-when a why-doc gives a reason, even a weak one: silently overriding a reason
-is drift. This narrows the calling skills' "prefer conflict over a guess"
-bias: a guess about *whether a why exists* is settled by walking the graph,
-not by flagging.
+Prefer two docs over a conflict when the statements are different claims.
+Prefer updating over defending: a doc is a signpost for what was said, not a
+reason to refuse what is being said now. A guess about *whether it is the
+same claim* is settled by reading the doc, not by flagging.

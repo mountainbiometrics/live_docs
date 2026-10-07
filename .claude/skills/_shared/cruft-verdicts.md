@@ -92,11 +92,11 @@ Assign each doc exactly one verdict (the compounds below are the only stacks).
 the implementation cruft is stripped. It operationalizes docs-lead-code-aligns:
 the doc keeps the *why* the code must align to, never a snapshot of the *what*.
 
-**Whose doc it is.** Every verdict except KEEP and RE-PARENT changes the doc's
-claim or retires it, so it follows the permission table in `facets.md`: on an
-`incidental` doc, apply it; on a `requested`, `chosen`, or Unattributed doc,
-apply only an EXCAVATE that leaves the claim itself unchanged, and flag every
-other verdict for the person.
+**Whose doc it is.** A cruft verdict carries `incidental` intent
+(`facets.md`, the comparison). EXCAVATE, ADD-WHY, RE-PARENT, and a REMOVE or
+MERGE whose assertion survives elsewhere leave the assertion as it was, so
+they apply at any intent. RECLASSIFY on a `chosen` or `requested` doc changes
+what it asserts: write the retyped claim beside it and name both.
 
 ## Applying the verdicts (existing ldoc only)
 

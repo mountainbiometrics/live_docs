@@ -29,9 +29,10 @@ built, tested, and committed is evidence for the former, never for the latter
 — an implementer's own convenience choice is `incidental` no matter how solid
 the code behind it is (`.claude/skills/_shared/facets.md`, the evidence rule).
 This distinction matters because a claim recorded above its real intent does
-not sit inert: the permission rule protects it, and future work has to argue
-against it. The worst case is a convenience nobody asked for, recorded as
-`chosen`, quietly obstructing a direction the person has actually asked for.
+not sit inert: later changes compare against it, and one carrying lower
+intent is written beside it instead of updating it. The worst case is a
+convenience nobody asked for, recorded as `chosen`, sitting in the way of a
+direction the person has actually asked for.
 Read every "already real" instinct in this file as scoped to `realization`;
 carrying it into `intent` is this skill's most common failure.
 
@@ -220,11 +221,9 @@ Run — but do not stop after — **`/synthesize-doc-changes`**, handing it:
   person-stated claim landing `incidental` while the convenience built in its
   place lands `chosen` inverts the record, which this test exists to catch.
 
-A new claim that contradicts an existing doc the agent may not alter is caught
-by `map-concepts-to-docs` as `conflict-unresolved` (the permission table in
-`facets.md`); a freshly built convenience does not overturn the person's
-claim by being newer. Surface it to the person, the same way Step 4 surfaces
-`conflict-unresolved` docs.
+Each claim carries the intent Step 5 gave it, and `map-concepts-to-docs`
+compares that against the existing docs: a freshly built convenience does
+not overturn what the person asked for by being newer.
 
 It writes deprecations → revisions → new docs in one coherent batch, upstream →
 downstream, and returns the list of writes performed in context for the report.
@@ -287,10 +286,8 @@ the source digest — these are process smells, not a truth oracle:
   what the person did — everything shipped `chosen`, everything unbuilt
   `incidental` — that correlation is itself the smell; re-run the intent test
   (Step 5) per claim, not per batch.
-- **Protected-doc conflicts:** if a new doc's claim was never checked against
-  existing `requested`, `chosen`, or Unattributed docs for contradiction, do
-  that now, before closing — an `incidental` claim does not get to silently
-  overrule them.
+- **Intent comparison skipped:** a new claim was written over an existing
+  doc without `map-concepts-to-docs` comparing their intents.
 - **Source string:** if the digest was agent-authored, its `--source` must not
   claim `user-request`.
 

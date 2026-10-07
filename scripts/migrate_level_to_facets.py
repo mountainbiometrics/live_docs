@@ -19,8 +19,9 @@ For every doc in <docs_dir>:
 * A type whose table entry requires `force` gets one: `must` when the old level was
   `requirement`, else `should` (the default when the source never said a rule).
 * `intent` is `incidental` when the old level was `incidental`. Any other old level
-  says nothing about what the person did, so intent is left absent (Unattributed)
-  for a person to assess; reference docs carry none.
+  says nothing about what the person did, so intent is left absent for a person
+  to assess. A missing intent is shown as Unattributed and weighs as incidental.
+  Reference docs carry none.
 * A type whose table entry requires `realization` gets `unassessed`, since nobody
   has checked the implementation. A doc at the retired `status: target` is left
   alone: what its status and realization become is a judgment, not a mapping.

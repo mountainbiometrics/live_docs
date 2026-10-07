@@ -30,13 +30,14 @@ Singular ownership — a claim should have exactly one responsible doc; a claim 
    restate a *slice* of the same claim; a claim you cannot point a single owner
    at. This is the headline signal for diffuse ownership — the half of the work
    that gets skipped when an agent only deduplicates and de-crufts. Do not skip it.
-3. **Cruft** — `intent: incidental`, no dependents, thin body, not navigationally
-   useful alone — candidate to **fold** into parent without overloading parent.
+3. **Cruft** — thin body, no dependents, not navigationally useful alone, and
+   its claim is already stated by its parent — candidate to **fold** into the
+   parent without overloading it.
 
-A merge or fold changes what the loser claims and retires it, so it follows the
-permission table in `.claude/skills/_shared/facets.md`: a `requested`, `chosen`,
-or Unattributed doc is never folded or merged away by an agent; when it
-duplicates another doc, flag the pair for the person instead.
+A merge or fold retires a doc whose assertion survives in the survivor, which
+`.claude/skills/_shared/facets.md` allows at any intent; the survivor carries
+the highest intent absorbed and every basis. Two docs whose assertions
+disagree are not duplicates.
 
 ---
 

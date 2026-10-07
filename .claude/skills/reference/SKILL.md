@@ -48,8 +48,10 @@ ldoc count          # how big the store is, by type, status, and facet
 Every doc line on every surface reads `<Intent> <type>: <Title>` followed by
 force and realization tags — e.g. "Requested decision: …", "Incidental
 component: …" — and lists rank by status, then intent (requested, chosen,
-Unattributed, incidental). Read the first word before deciding whether a doc
-binds you; what each value permits is `.claude/skills/_shared/facets.md`.
+then incidental). A missing intent is shown as Unattributed and weighs as
+incidental. The first word says how much the person stood behind the claim;
+it is context for the next change, not a lock. How a change's intent compares
+with a doc's is `.claude/skills/_shared/facets.md`.
 
 `ldoc map` prints the topological roots of the `belongs_to` hierarchy — the
 biggest "signpost" docs first, each with its summary and its direct children.

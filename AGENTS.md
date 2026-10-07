@@ -106,8 +106,9 @@ Run this before acting on any request or plan that should be durably recorded. I
 1. Archives the request as a raw clipping and a normalized reference doc
 2. Extracts key concepts and maps them to existing docs
 3. Walks the blast radius across the graph (read-only pass first)
-4. Pauses only for unresolved conflicts or unintended side-effects — not
-   merely because many docs will change as the coherent consequence of the request
+4. Pauses only for unintended side-effects — not for a supersession the
+   request settles, and not merely because many docs will change as the
+   coherent consequence of the request
 5. Batch-synthesizes all changes in one coherent batch
 
 Do not skip Step 3 (blast-radius walk) or interleave reads and writes.

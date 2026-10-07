@@ -43,8 +43,7 @@ it.
 - `status: living`.
 - `force`, `realization`, and `imposed_by` have no default: assess each claim
   on the tests below. When the source does not say a normative claim is a
-  rule, it is `should` — a `must` the person never set blocks agents exactly as
-  inflated intent does.
+  rule, it is `should`.
 
 ## `intent` — what the person did to make this claim exist
 
@@ -84,10 +83,8 @@ with one shared basis the source does not support for each claim.
 ### Absent intent
 
 A doc with no `intent` (legacy, not yet assessed) is shown as
-**Unattributed** and is treated as `chosen` for the permission rule below
-until someone assesses it. Nobody can yet tell an agent's suggestion from the
-person's choice, and wrongly rewriting the person's choice costs more than
-leaving an agent's suggestion alone for a while.
+**Unattributed** so a reader can see that nobody has assessed it, and it
+weighs as `incidental`: unknown intent is not evidence that the person asked.
 
 Assessing a doc means setting its `intent` from evidence: search its
 provenance, history, and the raw clippings behind it for the person's act. If
@@ -110,41 +107,72 @@ of intent: an `incidental` `must` is a rule an agent proposed; a `requested`
 guideline is often subtle and always matters, so choose it per claim from the
 source's own words.
 
-## What an agent may do — intent × force
+## Intent compares — what the store is for
 
-Intent decides whether an agent may change the **doc**. Force decides whether
-an agent may depart from the claim **in code or in another doc**.
+The store conveys intent so that the side-effects and blast radius of a
+change can be seen. It does not enforce anything. The facets exist to lower
+the guardrail that the bulk of the store used to present: a claim nobody
+asked for, a constraint with no reason above it, is marked `incidental` so
+that it is easy to weigh and easy to change. They do not raise a guardrail
+around the rest. A stored claim is a signpost: what was said, how much the
+person stood behind it, and what else it touches. It is never a reason to
+refuse or to pause the next change.
 
-| | May an agent change the doc's claim? |
+**The chain.** `requested` > `chosen` > `incidental`. A missing intent is
+`incidental`. `chosen` sits only a little above `incidental`: the person
+went along with a proposal, and that is thin.
+
+**Which intent a change carries.** The same chain, read from where the
+change comes from:
+
+| The change is… | It carries |
 |---|---|
-| `requested`, `chosen`, Unattributed | **Never.** Record the agent's alternative as a new `incidental` doc, `relates` it to the doc it conflicts with, and flag the conflict to the person in the episode report. |
-| `incidental` | **Yes, freely,** with a history note (`--note`) saying what changed and why. |
+| the person's own words in this episode: a request, an answer, a correction | `requested` |
+| a proposal the person went along with in this episode | `chosen` |
+| an agent's own judgment: gardening, cascade inference, a realization check, a convenience built without being asked | `incidental` |
 
-| | May an agent depart from the claim? |
+**The comparison.** One rule, applied to the same claim:
+
+| | The change does |
 |---|---|
-| `must` | **Never without the person.** Stop and ask. |
-| `should` | **Yes, with a stated reason** — in the change's note and the episode report. |
-| `may` | Nothing to depart from; it grants an option. |
+| change intent ≥ doc intent | **Update the doc, assertion included.** Say what changed. |
+| change intent < doc intent | **Leave the assertion. Write the new claim beside it** as its own doc at the change's intent, `relates` it, and name both in the report. |
 
-The two rules stack. On an `incidental` `must`, an agent may revise the doc
-(the revision is visible in its history and the review) but may not let code
-depart from a `must` the doc still states.
+Neither row refuses, pauses, or asks permission; the second row is still a
+write. Everything a skill says about intent follows from this table. An
+unguided pass needs no rule telling it that it cannot invent a request: its
+changes carry `incidental`, and the table already says what that does.
 
-**The claim** is what the doc asserts and how it stands: its body claim,
-title, type, `force`, `imposed_by`, `intent`, and `status` (deprecating a doc
-alters it). An agent may update these on any living doc
-without altering the claim: `realization` and its companions, the
-`## Implementation` section, `provenance`, `relates`, and placement. A change
-the person's own words direct — the request in an apply-to-docs episode, an
-answer they gave — is the person altering the doc, with those words as the
-basis.
+**How to convey it** (the reasoning, not a script):
 
-**Severity when something conflicts with a doc.** A conflict with a `must` is
-one only the person can resolve: cascade-check marks it `incompatible`, a
-pre-write survey marks it `conflict-unresolved`. A conflict with a `should`
-needs clarification: ask one targeted question (cascade-check's
-`context-request`), unless the input already states the reason for departing
-from it, which is then recorded with the change.
+- When a later clarification changes a plan, the usual reason is a goal that
+  had not been articulated. Update the doc so the clarification and that goal
+  are both visible, rather than recording the new plan as though the old one
+  had been a mistake.
+- When the person's words supersede something they asked for earlier, say so
+  as context, not as a check: you read this as superseding the earlier
+  request for abc, and if the two should be merged in a way you are not
+  seeing, they can say. Then write.
+
+**Same claim, or two claims.** Compare only when the two statements are the
+same claim. "I want abc" and "we should build xyz" are usually a use-case or
+goal beside a decision or principle: two docs, related, not a conflict.
+
+**The claim** is what the doc asserts: its body claim, title, type, `force`,
+`imposed_by`, and `intent`. Not the claim, and so updatable on any living
+doc at any intent: `realization` and its companions, the `## Implementation`
+section, `provenance`, `relates`, placement, and an elaboration that leaves
+the assertion as it was.
+
+**Retiring a doc whose assertion survives.** A merge, fold, faithful split,
+or removal of something already captured leaves the assertion stated by a
+living doc, so it is allowed at any intent. The survivor carries the highest
+intent of what it absorbed and every `intent_basis` (record each). Two docs
+whose assertions disagree are not duplicates; the comparison decides.
+
+**Force is weight.** `must`, `should`, and `may` say how hard a claim presents
+itself, so a departure's size is visible in a report. Force never picks the
+outcome of the comparison.
 
 ## `realization` — does the thing the doc claims exist in the implementation
 
@@ -187,7 +215,7 @@ store gives them two places that keep them apart from the claim. Anchors go in
 goes in a `## Implementation` section of the body. That section is volatile:
 it is refreshed whenever realization is re-checked, it is exempt from the
 rule that bodies state the why and not the what, and it is never a truth claim
-— cascade, conflict detection, and the permission rule read the claim, not
+— cascade, conflict detection, and the intent comparison read the claim, not
 this section.
 
 ## `imposed_by` — what makes this claim hold
@@ -242,9 +270,10 @@ way: `living`, with realization set from the evidence.
   it. Realization comes from the material's evidence or a check; `unassessed`
   is allowed when neither settles it. Forces from outside are
   `imposed_by: environment`.
-- **revise-doc** — the permission table gates what a revision may touch.
-- **cascade-check** and **assess-blast-radius** — force sets conflict
-  severity; the permission table decides whether a `cascade` write is allowed
-  or the neighbor is flagged instead.
-- **garden** — every phase obeys the permission table; assessing Unattributed
-  docs is assessment, not a claim change.
+- **revise-doc** and **apply-to-docs** — the person's words carry
+  `requested`; the comparison says what they update.
+- **cascade-check** and **assess-blast-radius** — walk the graph and report
+  what the change touches; the comparison picks between updating a neighbor
+  and writing beside it, and the walk never halts on it.
+- **garden** — assessing a missing intent from evidence is assessment, not
+  an assertion change.

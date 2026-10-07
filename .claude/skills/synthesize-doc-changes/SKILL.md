@@ -146,11 +146,10 @@ decide each facet per claim before writing:
   it follows from, and a `choice` claim its edge to the goal, use-case, or
   principle that motivates it.
 - **Intent and basis** — the evidence rule below.
-- **Revisions** obey the permission table in `facets.md`: a doc whose intent is
-  `requested`, `chosen`, or absent has its claim left as it is unless the
-  caller's input is the person's own words directing the change; otherwise
-  write the alternative as a new `incidental` doc, `relates` it to the
-  protected doc, and return the conflict to the caller.
+- **Revisions** follow the comparison in `facets.md`: the plan's verdicts
+  already encode it. A `conflict-unresolved` verdict means write the new
+  claim as its own doc that `relates` to the existing one; it never aborts
+  the batch.
 
 Use `--belongs-to` per the shared placement policy whenever a visible coherent
 signpost exists in the concepts/edges already in hand. Omit only when no good

@@ -65,7 +65,7 @@ the part of the system it names exists, judged from its members
 
 Recategorize: `ldoc unlink` old + `ldoc link` new. Split: create narrower
 signposts, reassign, deprecate over-broad signpost with `## Correction` +
-`--superseded-by`.
+`--superseded-by`. Re-homing members is placement.
 
 ---
 

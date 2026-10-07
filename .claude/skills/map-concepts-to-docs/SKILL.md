@@ -103,16 +103,12 @@ relationship of the concept's claim to that doc's claim:
 | `compatible` | Existing doc **already asserts** the new concept's claim — no write needed. |
 | `partial-supersession` | Existing doc asserts a thinner, partial, narrower, or staler version of the claim (or changes only part of it); REVISE it to carry the fuller claim. |
 | `full-supersession` | New concept renders the entire existing doc's claim obsolete. |
-| `conflict-unresolved` | The two claims are incompatible **and a why the existing claim rests on argues against the new one** — apply `_shared/conflict-test.md` before issuing this. A doc that merely records the current design is a supersession, not a conflict. |
+| `conflict-unresolved` | The existing doc states the same claim at a higher intent than the concept carries — apply `_shared/conflict-test.md` before issuing this. Plan `create-new` beside it. A doc that merely records the current design is a supersession, not a conflict. |
 
-**Protected matches.** Read each match's `intent` (the first word of its doc
-line) and apply the permission table in `.claude/skills/_shared/facets.md`. A
-`requested`, `chosen`, or Unattributed doc is revised or deprecated only on the
-person's own words. When a concept whose `Basis` is "none" would partially or
-fully supersede such a doc, classify the match `conflict-unresolved` and plan
-`create-new` — an `incidental` doc that `relates` to the protected one — so the
-person can decide. An agent's claim does not overturn the person's by being
-newer or freshly built.
+**Compare intents.** Read each match's `intent` (the first word of its doc
+line) against the intent the concept carries (its `Basis`; "none" is
+`incidental`), per `_shared/conflict-test.md`. A match that already states
+the same claim is `compatible`: do not create a second doc.
 
 The source rarely says "doc 1234 is wrong" outright — it just asserts a concept
 that contradicts an existing claim. Judge the substance, not the wording.

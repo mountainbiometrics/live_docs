@@ -100,26 +100,20 @@ Emit exactly one verdict per neighbor:
 | `inconsequential` | Neighbor's claim is unaffected by the new intent. The norm. |
 | `cascade-extend` | Neighbor is downstream of a changed doc; its content is now stale or misleading and needs revision. |
 | `cascade-full` | Neighbor's entire claim is rendered obsolete by the changed upstream. |
-| `conflict-unresolved` | Neighbor makes a claim incompatible with the new intent **and a why it rests on argues against the intent** — apply `_shared/conflict-test.md` first. A neighbor that only records the prior design is `cascade-extend` / `cascade-full`. |
+| `conflict-unresolved` | The neighbor states the same claim at a higher intent than the change carries, or is frozen — apply `_shared/conflict-test.md` first. Its assertion is left and the new claim is written beside it. A neighbor that only records the prior design is `cascade-extend` / `cascade-full`. |
 
 **Frozen-doc rule**: docs with `status: deprecated` or `status: reference` are
 frozen — never mark them `cascade-extend` or `cascade-full`. Mark them
 `conflict-unresolved` if their claim now contradicts the new intent, and surface
 to the user.
 
-**Permission and force rule** (`.claude/skills/_shared/facets.md`): a living
-neighbor whose `intent` is `requested`, `chosen`, or absent is never marked
-`cascade-extend` or `cascade-full` on an agent's inference — mark it
-`conflict-unresolved` unless the change description is the person's own words
-directing that change. A conflict with a `must` neighbor is
-`conflict-unresolved`; with a `should` neighbor it is `conflict-unresolved`
-unless the change description states its reason for departing, which goes in
-the verdict's reason.
+**Intent comparison**: `_shared/conflict-test.md` maps the comparison in
+`_shared/facets.md` onto these verdicts. A `conflict-unresolved` entry never
+blocks the rest of the impact set.
 
 **Bias rule**: prefer `inconsequential` when the relationship is weak or
-tangential; prefer `conflict-unresolved` over a low-confidence guess about
-*impact* — but settle whether a competing why exists by walking the graph
-(`_shared/conflict-test.md`), never by flagging.
+tangential; when unsure whether a neighbor is the same claim, read it
+(`ldoc show`) rather than guessing either way.
 
 ---
 
