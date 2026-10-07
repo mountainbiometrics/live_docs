@@ -10,9 +10,9 @@ paraphrase from memory.
 The *why* behind this pass: docs capture the *why* (decisions, rationale,
 constraints, use-cases), not the *what* the code already encodes — docs lead,
 code aligns; design knowledge is atomic and precisely editable like
-well-factored code, not a replace-the-whole-blob snapshot; every non-signpost
-doc must carry its why, and a what stated with no why is repaired or removed
-(signposts excepted); gardening's real value is evaluative — judging when
+well-factored code, not a replace-the-whole-blob snapshot; every doc that
+makes a claim must carry its why, and a what stated with no why is repaired or
+removed (headings excepted); gardening's real value is evaluative — judging when
 something is redundant, idiotic, or no longer earning its place; and deletion is
 the default retirement path when a doc's content is fully captured elsewhere,
 with deprecation reserved for overturned beliefs worth preserving. This file is
@@ -30,7 +30,7 @@ that. In a scan, the signals that surface it (each routes to a verdict below):
   class / function / module that was renamed or never built. The most common
   shape.
 - **Wrong type** — e.g. a "have a module that does X" doc typed as a `decision`.
-- **A *what* with no *why*** on a non-signpost doc.
+- **A *what* with no *why*** on a doc that is not a heading.
 - **Refactor-task-as-doc** — a chore step ("reorganize the tests", "delete the
   old names", "create these module files"); see the pre-filter below.
 - **Cross-cluster duplication** — the same durable decision recorded once per
@@ -82,7 +82,7 @@ Assign each doc exactly one verdict (the compounds below are the only stacks).
 | **EXCAVATE** | The architectural decision is **still current** but the doc is buried under removed/renamed implementation detail. | Strip the dead *what*; keep the *why*; move still-true detail to `realization_refs` or `## Implementation`. **Status was never wrong** — do not deprecate. |
 | **EXCAVATE(rename)** | Sub-case of EXCAVATE: the doc's subject is named after a class / function / module that was renamed or never built. | Strip the dead symbol noun-phrase; keep the decision. Status was never wrong. |
 | **RECLASSIFY→type** | The doc is the wrong type (e.g. a "have a module that does X" decision is really a `component` named "module for X"). | Re-type per `doc-types.md` and its "is this really a decision?" ladder, and set the facets the new type's row requires while dropping the ones it forbids (a decision retyped as a component loses `force`). |
-| **ADD-WHY** | A **non-signpost** doc states a *what* with no *why*. | Add the why (may cite its provenance doc); every non-signpost doc must carry its why. Signposts are the allowed exception. |
+| **ADD-WHY** | A doc that is not a **heading** states a *what* with no *why*. | Add the why (may cite its provenance doc); every claim must carry its why. A heading is the allowed exception. A parent of any other type still owes a why. |
 | **REMOVE** | No durable content not already captured elsewhere. | `ldoc rm` — deletion is the default retirement path when content is fully captured elsewhere. **Especially:** a doc that is a step in a *completed* refactor plan whose durable why already lives in the plan's `reference` doc → default REMOVE. |
 | **MERGE→id** | Folds wholly into a sibling/target. | Port unique content into the target, deprecate or `ldoc rm` the loser. |
 | **EXCAVATE→MERGE→id** | A doc that is *both* an excavate target *and* redundant with a sibling. | Distill the durable clause first, **then** fold it into the target and delete. |

@@ -38,7 +38,7 @@ id:      "20260615100017"
 title:   "live_docs is the portable system; a consuming store is a specific instance"
 label:   "Portable System vs Instance"
 summary: "live_docs is a portable, reusable system; a store that consumes it is a specific instance…"
-type:    decision        # principle | goal | decision | constraint | requirement | use-case | guide | component | reference
+type:    decision        # principle | goal | decision | constraint | requirement | use-case | guide | component | heading | reference
 status:  living          # living | deprecated | reference
 intent:  incidental      # requested | chosen | incidental — what the person did to make this claim exist
 # intent_basis: "<quote or citation>"   — required when intent is requested or chosen

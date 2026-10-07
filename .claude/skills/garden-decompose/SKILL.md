@@ -43,6 +43,8 @@ it is a split candidate.
    entries with mixed-topic summaries.
 4. For each split, decide new doc A/B (title, type, ownership), rewire plan,
    and whether the original becomes a signpost over A/B or is deprecated.
+   If what remains of the original asserts nothing but that grouping, retype
+   it to `heading`. If it still makes a claim, it keeps its type.
 5. Apply each split. Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
    ```bash
    ldoc new --type <type> --label "<2–5 word Title-Case handle>" [--title "<title>"] --status living <facet flags for the type> --requires <dep-id>,<dep-id>

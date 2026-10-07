@@ -30,13 +30,16 @@ Checks performed:
  10. summary presence + length guideline for non-reference docs (warnings)
  11. facets against the type table (TYPE_TABLE): a facet the type forbids, and
      intent requested/chosen without intent_basis, are errors
-14. facets and why-chain the type expects but the doc lacks (warnings, since existing
+ 12. facets and why-chain the type expects but the doc lacks (warnings, since existing
      docs are read loosely): realization, force, imposed_by, intent, a tradeoff
      with no upstream decision/component, a choice with no upstream
      goal/use-case/principle, none of the expected `requires` types
-15. obsolete `level` key and retired `status: target` (warnings naming the migration)
- 12. body [[id]] wikilinks not present in any edge field (prose-not-edged)
- 13. malformed body wikilinks ([[id|label]], [[id]] (label)) — canonical form is bare [[id]]
+ 13. obsolete `level` key and retired `status: target` (warnings naming the migration)
+ 14. a heading has at least one child (error). Status does not matter, on the
+     heading or the child. Having children does not excuse any other type from
+     its why-chain. The body need not link them.
+ 15. body [[id]] wikilinks not present in any edge field (prose-not-edged)
+ 16. malformed body wikilinks ([[id|label]], [[id]] (label)) — canonical form is bare [[id]]
 
 Note: empty edge fields and empty history are VALID (absent == empty).
 Human output always carries the label (and title), never a bare id.
@@ -220,7 +223,7 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
             f"record the quote or citation that shows it"
         )
 
-    # 14. facets and why-chain the type expects. Warnings, not errors: an
+    # 12. facets and why-chain the type expects. Warnings, not errors: an
     # existing doc that predates the facets still has to read fine; the tool
     # refuses to WRITE a doc missing them (kb.new / kb.set).
     if spec is not None:
@@ -261,7 +264,16 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
                 f"{' or '.join(spec.expected_requires)} (its why-chain)"
             )
 
-    # 15. obsolete / retired schema: warn with the migration, keep working.
+    # 14. A heading is the claimless parent, not every doc with children. Any
+    # child counts. The edge lives on the child, so this is a store check,
+    # not a condition of `ldoc new`.
+    if doc_type == "heading" and not (children_of or {}).get(doc["id"]):
+        errors.append(
+            f"{prefix}  a heading needs at least one child — "
+            f"without one it is not a signpost, so remove it"
+        )
+
+    # 13. obsolete / retired schema: warn with the migration, keep working.
     if "level" in doc:
         warnings.append(
             f"{prefix}  obsolete field `level`; migrate to `intent`/`force`"
@@ -288,7 +300,7 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
                     f"(1–3 tight sentences, not a run-on)"
                 )
 
-    # 12. body wikilinks not mirrored in edge fields (report only)
+    # 15. body wikilinks not mirrored in edge fields (report only)
     body = doc.get("body", "") or ""
     unedged = prose_links_not_edged(doc)
     if children_of:
@@ -299,7 +311,7 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
             f"(requires/belongs_to/relates/provenance/superseded_by)"
         )
 
-    # 13. malformed body wikilink syntax
+    # 16. malformed body wikilink syntax
     for kind, token in malformed_body_wikilinks(body):
         if kind == "pipe":
             warnings.append(

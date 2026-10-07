@@ -181,7 +181,7 @@ it; never rename files.
 
 ```
 type:   type | principle | goal | decision | constraint | requirement |
-        use-case | guide | component | reference
+        use-case | guide | component | heading | reference
 status:       living | deprecated | reference
 intent:       requested | chosen | incidental
 force:        must | should | may
@@ -207,7 +207,8 @@ taxonomy collapses (it is already this store's most over-applied type). Ask
   choice among alternatives (scope it) · `constraint` a limit that must not be
   crossed · `requirement` property that must hold · `goal` outcome we're moving
   toward · `use-case` workflow/scenario served · `component` a thing that exists
-  (module / boundary / contract) · `guide` how to do or think · `reference`
+  (module / boundary / contract) · `heading` a claimless parent over its
+  children (a signpost may still be any type) · `guide` how to do or think · `reference`
   frozen source material · `type` defines a type (meta).
 
 Before typing anything `decision`: if it just says a thing *exists* →

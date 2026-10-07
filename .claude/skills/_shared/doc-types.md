@@ -24,12 +24,15 @@ Decision".
 | `requirement` | A **must-have property or behavior** the system has to satisfy. | It's the *choice of how* to satisfy it → `decision`. |
 | `use-case` | A **user story, workflow, or deployment scenario** the system serves. | It's a capability that serves the scenario → `component`. |
 | `goal` | A **desired end-state or outcome** the system is trying to reach. | It's a fixed property that must always hold → `requirement`. |
-| `component` | A **thing that exists in the system** — a capability, module, subsystem, boundary, or contract. | It's a *choice about* the thing rather than the thing → `decision`. |
+| `component` | A **thing that exists in the system** — a capability, module, subsystem, boundary, or contract. | It's a *choice about* the thing rather than the thing → `decision`. It only heads its children → `heading`. |
+| `heading` | A **claimless parent**. Its only assertion is the grouping of its children. One kind of signpost, not the signpost role. | It also makes a claim → that claim's type, which may still have children. |
 | `guide` | **How to do or think about** something when working with the system — a how-to, procedure framing, or orientation. | It records a design choice the system embodies → `decision`. |
 | `reference` | **Frozen source material** — clippings, brainstorms, external docs, session digests. Never a truth-claim. | It's a distilled claim *extracted from* the source → its proper type above. |
 | `type` | The **definition of a type itself** (meta / self-defining). Rare. | — |
 
 ## The typing test
+
+A doc that only heads its children is a **heading**. The questions below are for a claim.
 
 Two properties of a claim decide most types, and `facets.md` defines both:
 **realizable** (the implementation can have it or lack it — it carries
@@ -113,6 +116,7 @@ may be set when they are known. `intent` is required on every type except
 | `requirement` | required | required ("met") | optional | a goal or use-case |
 | `decision` | required | required ("in effect") | optional | a principle, constraint, or requirement |
 | `component` | forbidden | required ("exists") | optional | a decision or requirement |
+| `heading` | forbidden | forbidden | forbidden | none |
 | `guide` | required | forbidden | optional | a principle or decision |
 | `reference` | forbidden | forbidden | forbidden | none; no `intent` either |
 | `type` | forbidden | forbidden | optional | none |
@@ -126,7 +130,8 @@ The expected `requires` edges form one chain, read bottom-up: **shapes require
 norms, norms require purposes, purposes require nothing.** Decisions and
 components (shapes) require the principles, constraints, and requirements
 (norms) they serve; norms require the goals and use-cases (purposes) that
-motivate them. The chain is what lets a later reader re-weigh a shape against
+motivate them. A heading expects nothing: the grouping is its justification.
+The chain is what lets a later reader re-weigh a shape against
 the reason for it, and what lets cascade reach a shape when its reason changes.
 
 **A norm with no goal or use-case above it is the loudest gardening signal**:
@@ -138,10 +143,12 @@ one — a purpose the source does not state is a question for the person.
 
 ## Cross-cutting: every doc carries its why
 
-Regardless of type, a non-signpost doc must carry its *why* (the rationale,
+Regardless of type, a doc that makes a claim must carry its *why* (the rationale,
 constraint, use-case, or decision it serves). A doc that states only a *what*,
 with no why, is repaired or removed — docs capture the *why*, not the *what* the
 code already encodes. The why is carried twice: in the body, and as the
-`requires` edges of the why-chain above. Signposts (docs that exist to group
-their children) are the one exception. A body's `## Implementation` section is
+`requires` edges of the why-chain above. A **heading** is the one exception:
+it asserts nothing but the grouping of its children. A parent of any other
+type still carries a why, children or not. Having children is the signpost
+role, and it is not this exception. A body's `## Implementation` section is
 exempt from this rule (`facets.md`, realization).

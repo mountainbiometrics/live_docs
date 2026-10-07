@@ -54,14 +54,18 @@ members. Leave ungrouped rather than force a bad home.
 Read and apply `.claude/skills/_shared/label-title-summary.md` — `--label` is required and must name the subject (not a fragment); `--title` is optional.
 
 ```bash
+ldoc new --type heading --label "<2–5 word Title-Case handle>" [--title "<theme>"] --belongs-to <parent> --body "…"
 ldoc new --type component --label "<2–5 word Title-Case handle>" [--title "<theme>"] --realization <value> --belongs-to <parent> --body "…"
 ldoc link <member-id> --belongs-to <SIGNPOST_ID>
 ```
 
 A signpost you create is your proposal, so it takes the default
-`intent: incidental`. A `component` signpost requires `realization`: whether
-the part of the system it names exists, judged from its members
-(`.claude/skills/_shared/facets.md`).
+`intent: incidental`. If it asserts nothing but the grouping, it is a
+`heading`: no `--force`, `--realization`, or `--imposed-by`. Link its members
+in the same pass; validate requires a heading to have one child.
+If it names a part of the system that exists, it is a `component` and requires
+`realization`, judged from its members (`.claude/skills/_shared/facets.md`).
+Having children does not make a claim into a heading.
 
 Recategorize: `ldoc unlink` old + `ldoc link` new. Split: create narrower
 signposts, reassign, deprecate over-broad signpost with `## Correction` +
@@ -73,7 +77,7 @@ signposts, reassign, deprecate over-broad signpost with `## Correction` +
 
 *(Former garden Pass 5 Part A.)*
 
-Scope is a topology-derived facet: set on an "anchor" doc, it applies to that doc and its entire `belongs_to` subtree; effective scope is the union of `scope` values along the full `belongs_to` genealogy. Most docs inherit; only anchor docs (typically `component`) explicitly declare a `scope` value. Find descendant-bearing structural docs (typically `component`) that should declare a distinct `scope` anchor:
+Scope is a topology-derived facet: set on an "anchor" doc, it applies to that doc and its entire `belongs_to` subtree; effective scope is the union of `scope` values along the full `belongs_to` genealogy. Most docs inherit; an anchor is typically a `component` or a `heading`. A heading may set a scope, and most inherit. Find descendant-bearing structural docs that should declare a distinct `scope` anchor:
 
 - Bears descendants but declares **no** own `scope` (inherits coarser parent
   zone the subtree should specialize), **or**
@@ -113,7 +117,7 @@ both rules serve the same goal: a reader can scan and orient at each level.
 
 When splitting is warranted:
 1. Cluster direct children by sub-theme.
-2. Create intermediate signposts one level down; re-home children via `belongs_to`.
+2. Create intermediate headings one level down (they assert the grouping, not a new part); re-home children via `belongs_to`.
 3. Recurse if a new signpost is still hard to scan (rare).
 
 This is the structural analogue of decompose: "in the tree" ≠ navigable tree.

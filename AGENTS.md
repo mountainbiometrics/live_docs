@@ -226,7 +226,7 @@ label, and body.
 
 ```
 type:   type | principle | goal | decision | constraint | requirement |
-        use-case | guide | component | reference
+        use-case | guide | component | heading | reference
 status:       living | deprecated | reference
 intent:       requested | chosen | incidental
 force:        must | should | may

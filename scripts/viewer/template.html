@@ -943,6 +943,9 @@ const TYPE_ICONS = {
   // component — a buildable unit/part: box
   "component":   { color: "#5b6e8c", label: "component",
     svg: `<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>` },
+  // heading — a claimless parent over its children: the letter H
+  "heading":     { color: "#3d7a8c", label: "heading",
+    svg: `<path d="M6 12h12"/><path d="M6 20V4"/><path d="M18 20V4"/>` },
   // reference — external/linked material: link
   "reference":   { color: "#3f5e8f", label: "reference",
     svg: `<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>` },
@@ -957,7 +960,7 @@ const TYPE_ICON_FALLBACK = { color: "var(--faint)", label: "unknown",
    clicks override the default. Unknown types sort after reference, alpha by name. */
 const TYPE_ORDER = [
   "use-case", "principle", "requirement", "constraint",
-  "component", "decision", "guide", "reference",
+  "component", "heading", "decision", "guide", "reference",
 ];
 function typeRank(t) {
   const s = String(t || "");

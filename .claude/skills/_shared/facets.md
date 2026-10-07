@@ -187,7 +187,8 @@ outcome of the comparison.
 The verb differs by type — a goal is "reached," a use-case "supported," a
 requirement "met," a decision "in effect," a component "exists" (the table in
 `doc-types.md`). Only realizable types carry `realization`; principles,
-constraints, and guides exist whether or not any implementation follows them.
+constraints, guides, and headings exist whether or not any implementation
+follows them. A heading is a grouping, not a buildable thing.
 
 - **Realization is not status.** `status` says whether the doc is the current
   claim; `realization` says whether the implementation has caught up with it.

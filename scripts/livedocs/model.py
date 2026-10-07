@@ -24,7 +24,7 @@ from typing import Literal
 
 VALID_TYPES = {
     "type", "principle", "goal", "decision", "constraint",
-    "requirement", "use-case", "guide", "component", "reference",
+    "requirement", "use-case", "guide", "component", "heading", "reference",
 }
 # Lifecycle only. Deferral is `realization: deferred`; a current path coexisting
 # with its planned successor is `superseded_by` on the still-living doc.
@@ -105,6 +105,10 @@ TYPE_TABLE: dict[str, TypeSpec] = {
                          expected_requires=("principle", "constraint", "requirement")),
     "component": TypeSpec(realization="required", realization_verb="exists",
                           expected_requires=("decision", "requirement")),
+    # A heading asserts nothing but the grouping of its children. It is one
+    # kind of signpost, not the signpost role: any other type may still have
+    # children and still owes its why. Scope and domain stay optional.
+    "heading": TypeSpec(imposed_by="forbidden"),
     "guide": TypeSpec(force="required", expected_requires=("principle", "decision")),
     "reference": TypeSpec(intent="forbidden", imposed_by="forbidden"),
     "type": TypeSpec(),
