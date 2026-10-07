@@ -79,7 +79,6 @@ class TypeSpec:
     realization: Presence = "forbidden"
     realization_verb: str = ""
     imposed_by: Presence = "optional"
-    imposed_by_values: frozenset = frozenset(VALID_IMPOSITIONS)
     expected_requires: tuple = ()
 
 
@@ -92,10 +91,12 @@ TYPE_TABLE: dict[str, TypeSpec] = {
                          expected_requires=("goal",)),
     "principle": TypeSpec(force="required",
                           expected_requires=("goal", "use-case")),
-    # The decision/component a tradeoff follows from is checked off imposed_by
-    # itself (TRADEOFF_UPSTREAM), since it applies to any type that carries it.
-    "constraint": TypeSpec(force="required", imposed_by="required",
-                           imposed_by_values=frozenset({"environment", "tradeoff"})),
+    # What an imposed_by value expects upstream (TRADEOFF_UPSTREAM,
+    # CHOICE_UPSTREAM) is checked off imposed_by itself, since it applies to any
+    # type that carries it. A constraint admits every value: `environment` for an
+    # external one, `tradeoff` for a technical one, `choice` for an organizational
+    # one.
+    "constraint": TypeSpec(force="required", imposed_by="required"),
     "requirement": TypeSpec(force="required", realization="required",
                             realization_verb="is met",
                             expected_requires=("goal", "use-case")),
@@ -112,6 +113,10 @@ TYPE_TABLE: dict[str, TypeSpec] = {
 # A claim imposed by `tradeoff` follows from a choice recorded elsewhere, so it
 # must depend on the decision or component that made the choice.
 TRADEOFF_UPSTREAM = ("decision", "component")
+
+# A claim imposed by `choice` is set directly, so it should depend on the goal,
+# use-case, or principle that motivates it.
+CHOICE_UPSTREAM = ("goal", "use-case", "principle")
 
 # Every frontmatter field a facet owns. `realization_refs` and
 # `realization_verified` ride with `realization`; `intent_basis` rides with

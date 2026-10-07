@@ -32,7 +32,8 @@ Checks performed:
      intent requested/chosen without intent_basis, are errors
 14. facets and why-chain the type expects but the doc lacks (warnings, since existing
      docs are read loosely): realization, force, imposed_by, intent, a tradeoff
-     with no upstream decision/component, none of the expected `requires` types
+     with no upstream decision/component, a choice with no upstream
+     goal/use-case/principle, none of the expected `requires` types
 15. obsolete `level` key and retired `status: target` (warnings naming the migration)
  12. body [[id]] wikilinks not present in any edge field (prose-not-edged)
  13. malformed body wikilinks ([[id|label]], [[id]] (label)) — canonical form is bare [[id]]
@@ -56,7 +57,7 @@ from livedocs import (
     load_all, dangling_edges, dangling_references, doc_prefix,
     VALID_TYPES, VALID_STATUSES, RETIRED_STATUSES, VALID_REFERENCE_KINDS,
     VALID_INTENTS, VALID_FORCES, VALID_REALIZATIONS, VALID_IMPOSITIONS,
-    TYPE_TABLE, TRADEOFF_UPSTREAM, FACET_FIELDS,
+    TYPE_TABLE, TRADEOFF_UPSTREAM, CHOICE_UPSTREAM, FACET_FIELDS,
     facet_forbidden, facet_required, intent_needs_basis,
     is_archived,
 )
@@ -234,18 +235,11 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
                 f"{prefix}  a {doc_type} expects `realization` "
                 f"(whether it {spec.realization_verb})"
             )
-        if facet_required(doc_type, "imposed_by"):
-            if not doc.get("imposed_by"):
-                warnings.append(
-                    f"{prefix}  a {doc_type} expects `imposed_by` "
-                    f"({'|'.join(sorted(spec.imposed_by_values))})"
-                )
-            elif doc["imposed_by"] in VALID_IMPOSITIONS \
-                    and doc["imposed_by"] not in spec.imposed_by_values:
-                warnings.append(
-                    f"{prefix}  a {doc_type} expects `imposed_by` "
-                    f"{'|'.join(sorted(spec.imposed_by_values))}, not `{doc['imposed_by']}`"
-                )
+        if facet_required(doc_type, "imposed_by") and not doc.get("imposed_by"):
+            warnings.append(
+                f"{prefix}  a {doc_type} expects `imposed_by` "
+                f"({'|'.join(sorted(VALID_IMPOSITIONS))})"
+            )
 
         required_types = [(types or {}).get(t) for t in doc.get("requires", []) or []]
         if doc.get("imposed_by") == "tradeoff" \
@@ -253,6 +247,12 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
             warnings.append(
                 f"{prefix}  `imposed_by: tradeoff` but no `requires` edge to a "
                 f"{' or '.join(TRADEOFF_UPSTREAM)} it follows from"
+            )
+        if doc.get("imposed_by") == "choice" \
+                and not any(t in CHOICE_UPSTREAM for t in required_types):
+            warnings.append(
+                f"{prefix}  `imposed_by: choice` but no `requires` edge to a "
+                f"{' or '.join(CHOICE_UPSTREAM)} that motivates it"
             )
         if spec.expected_requires \
                 and not any(t in spec.expected_requires for t in required_types):

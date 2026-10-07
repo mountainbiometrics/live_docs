@@ -92,13 +92,6 @@ def _refuse_facet_violations(fm: dict, *, complete: bool) -> None:
             )
 
     if spec is not None:
-        if (fm.get("imposed_by") and spec.imposed_by == "required"
-                and fm["imposed_by"] in VALID_IMPOSITIONS
-                and fm["imposed_by"] not in spec.imposed_by_values):
-            problems.append(
-                f"a {doc_type} doc is imposed from outside or by a recorded choice: "
-                f"use --imposed-by {_choices(spec.imposed_by_values)}, not `{fm['imposed_by']}`"
-            )
         if complete:
             if facet_required(doc_type, "force"):
                 if not fm.get("force"):
@@ -114,7 +107,7 @@ def _refuse_facet_violations(fm: dict, *, complete: bool) -> None:
             if facet_required(doc_type, "imposed_by") and not fm.get("imposed_by"):
                 problems.append(
                     f"a {doc_type} must say what imposes it: add "
-                    f"--imposed-by {_choices(spec.imposed_by_values)}"
+                    f"--imposed-by {_choices(VALID_IMPOSITIONS)}"
                 )
 
     if intent_needs_basis(fm.get("intent")) and not fm.get("intent_basis"):

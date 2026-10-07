@@ -199,9 +199,10 @@ this section.
 | `choice` | we set it directly. | It **should** `requires` the goal, use-case, or principle that motivates it. |
 
 `imposed_by` is optional on every claim type and required on a constraint,
-which is `environment` or `tradeoff` by definition. The distinction is the
-one between a technical constraint (it follows from a trade-off accepted
-elsewhere), an organizational one (a standard we set), and an external one.
+which takes any of the three values. The distinction is the one between a
+technical constraint (`tradeoff`: it follows from a trade-off accepted
+elsewhere), an organizational one (`choice`: a standard we set), and an
+external one (`environment`).
 The edges are what make the difference useful: when the choice a `tradeoff`
 follows from changes, the `requires` edge is how cascade reaches the claim; a
 `choice` with nothing above it states a rule with no reason a reader can

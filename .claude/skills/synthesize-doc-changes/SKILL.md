@@ -143,7 +143,8 @@ decide each facet per claim before writing:
 - **Realization, force, imposed_by** — judged per claim by `facets.md`, with
   the caller's knob for realization (its orchestrator knobs section). A
   `tradeoff` claim also gets its `requires` edge to the decision or component
-  it follows from.
+  it follows from, and a `choice` claim its edge to the goal, use-case, or
+  principle that motivates it.
 - **Intent and basis** — the evidence rule below.
 - **Revisions** obey the permission table in `facets.md`: a doc whose intent is
   `requested`, `chosen`, or absent has its claim left as it is unless the

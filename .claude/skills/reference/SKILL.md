@@ -202,15 +202,14 @@ taxonomy collapses (it is already this store's most over-applied type). Ask
 **"what is this *most*?"** and pick the most specific:
 
 - `principle` bedrock value guiding many choices · `decision` one architectural
-  choice among alternatives (scope it) · `constraint` a force we did not set
-  directly · `requirement` property that must hold · `goal` outcome we're moving
+  choice among alternatives (scope it) · `constraint` a limit that must not be
+  crossed · `requirement` property that must hold · `goal` outcome we're moving
   toward · `use-case` workflow/scenario served · `component` a thing that exists
   (module / boundary / contract) · `guide` how to do or think · `reference`
   frozen source material · `type` defines a type (meta).
 
 Before typing anything `decision`: if it just says a thing *exists* →
-`component`; if it's *how to work* → `guide`; if it's *imposed, not set
-directly* → `constraint`; if it *must hold* → `requirement`/`goal`. Use `decision` only for a
+`component`; if it's *how to work* → `guide`; if it *bounds what may be done* → `constraint`; if it *must hold* → `requirement`/`goal`. Use `decision` only for a
 real choice among alternatives with a rationale — then **scope it** under the
 subtree it binds (no `belongs_to` = global, which is right only for genuinely
 cross-cutting decisions).

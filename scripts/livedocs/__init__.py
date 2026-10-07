@@ -27,7 +27,7 @@ _EXPORT_MAP = [
                    "VALID_INTENTS", "VALID_FORCES", "VALID_REALIZATIONS", "VALID_IMPOSITIONS",
                    "DocType", "DocStatus", "DocIntent", "DocForce", "DocRealization",
                    "DocImposition",
-                   "TypeSpec", "TYPE_TABLE", "TRADEOFF_UPSTREAM", "FACET_FIELDS",
+                   "TypeSpec", "TYPE_TABLE", "TRADEOFF_UPSTREAM", "CHOICE_UPSTREAM", "FACET_FIELDS",
                    "facet_forbidden", "facet_required", "intent_needs_basis",
                    "is_archived", "rank_key", "ARCHIVED_IMMUTABLE_MSG",
                    "generate_id", "generate_session_id", "session_start_iso",

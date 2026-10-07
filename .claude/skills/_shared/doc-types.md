@@ -19,8 +19,8 @@ Decision".
 | Type | Use it when the doc captures… | Not when… |
 |---|---|---|
 | `principle` | A **bedrock value or design truth** that guides *many* downstream choices; universal, not a single pick. | It's one specific choice → `decision`. |
-| `decision` | A **deliberate architectural choice among alternatives**, with a rationale, that future work shouldn't re-decide — scoped to the level it binds. | It merely says a thing *exists* → `component`; it's *how to work* → `guide`; it's *imposed, not set directly* → `constraint`. |
-| `constraint` | A **force that limits options** that we did not set directly — imposed by the world, or following from a choice recorded elsewhere — that the system must work *within*. | We set it directly → `decision` or `requirement`. |
+| `decision` | A **deliberate architectural choice among alternatives**, with a rationale, that future work shouldn't re-decide — scoped to the level it binds. | It merely says a thing *exists* → `component`; it's *how to work* → `guide`; it's a *limit*, not a pick → `constraint`. |
+| `constraint` | A **boundary the system must stay within** — something that cannot or must not be done — whoever set it: the world, a trade-off recorded elsewhere, or a standard we set (`imposed_by` records which). | It's a property the system must *have* → `requirement`; it's a pick among alternatives → `decision`. |
 | `requirement` | A **must-have property or behavior** the system has to satisfy. | It's the *choice of how* to satisfy it → `decision`. |
 | `use-case` | A **user story, workflow, or deployment scenario** the system serves. | It's a capability that serves the scenario → `component`. |
 | `goal` | A **desired end-state or outcome** the system is trying to reach. | It's a fixed property that must always hold → `requirement`. |
@@ -42,12 +42,14 @@ carries `force`).
 - Realizable + normative, not a choice (a property that must hold however we
   achieve it) → **`requirement`**.
 - Realizable, not normative → **`component`**.
-- Normative, not realizable → **`principle`**, or **`constraint`** when it is
-  imposed from outside. How to work with the system, rather than a claim about
+- Normative, not realizable → **`principle`**, or **`constraint`** when it bounds
+  what may be done rather than guiding choices. How to work with the system, rather than a claim about
   it → **`guide`**.
 
-A constraint is a requirement imposed from outside that binds as `must`; the
-type is kept because it is the word people use for that.
+A constraint binds as `must` and differs from a requirement in shape: a
+requirement names a property the system must have; a constraint names a limit
+it must not cross. `imposed_by` says who set the limit; it does not decide the
+type.
 
 ## The "is this really a decision?" ladder
 
@@ -58,9 +60,10 @@ Before typing anything `decision`, walk these in order and stop at the first yes
    named "module for X", not a decision.)
 2. Does it tell an actor **how to work** with the system (classify, place,
    run a workflow)? → **`guide`**.
-3. Is it a force the system must live **within**, that we did not set
-   directly (an upstream limit, a platform rule, a physical/legal bound, or a
-   consequence of a trade-off recorded elsewhere)? → **`constraint`**.
+3. Is it a boundary the system must live **within** — something that must not
+   be done or cannot be exceeded — whether an upstream limit, a platform rule,
+   a physical or legal bound, a consequence of a trade-off recorded elsewhere,
+   or a standard we set? → **`constraint`**.
 4. Is it a property that **must hold**, independent of how we achieve it? →
    **`requirement`** (or **`goal`** if it's an outcome we're moving toward).
 5. Is it a **universal value** guiding many choices, not a single pick? →
@@ -106,7 +109,7 @@ may be set when they are known. `intent` is required on every type except
 | `goal` | forbidden | required ("reached") | optional | none |
 | `use-case` | forbidden | required ("supported") | optional | a goal |
 | `principle` | required | forbidden | optional | a goal or use-case |
-| `constraint` | required | forbidden | required: `environment` or `tradeoff` | a decision or component, when `tradeoff` |
+| `constraint` | required | forbidden | required: `environment`, `tradeoff`, or `choice` | a decision or component, when `tradeoff`; a goal, use-case, or principle, when `choice` |
 | `requirement` | required | required ("met") | optional | a goal or use-case |
 | `decision` | required | required ("in effect") | optional | a principle, constraint, or requirement |
 | `component` | forbidden | required ("exists") | optional | a decision or requirement |

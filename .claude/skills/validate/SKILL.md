@@ -131,6 +131,7 @@ doc merely lacks is a warning, and everything keeps working.
 | `force`, `realization`, or `imposed_by` present on a type that forbids it (any facet, or `intent`, on a `reference`) | **ERROR** |
 | A required facet missing on an existing doc — e.g. a realizable doc with no `realization`, a constraint with no `imposed_by` | **WARNING** |
 | `imposed_by: tradeoff` with no `requires` edge to a decision or component | **WARNING** |
+| `imposed_by: choice` with no `requires` edge to a goal, use-case, or principle | **WARNING** |
 | An expected why-chain `requires` edge missing for the type (e.g. a principle that requires no goal or use-case) | **WARNING** |
 | Obsolete `level` key, or retired `status: target` | **WARNING**, naming the migration |
 
