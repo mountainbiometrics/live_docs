@@ -77,6 +77,8 @@ Each type decides which facets apply and which `requires` edges it should have: 
 ```bash
 ./install.sh     # puts the `ldoc` CLI on your PATH + installs the skills plugins
 ldoc map         # orient: the store's entry-point signposts, ranked, with summaries
+ldoc cite <ref>  # name a doc by its display line, linked to it in the viewer
+ldoc flag add <ref> --reason "…"   # note a badly written doc for gardening, and move on
 ldoc help        # the full command surface, grouped, with examples
 ```
 
@@ -93,13 +95,14 @@ Full setup — installing just one part, attaching another repo to a store, shar
 | A portable, store-agnostic quick-reference (CLI surface, schema, enums, edge model) | the **`reference` skill** — `/livedocs:reference`, or [`.claude/skills/reference/SKILL.md`](.claude/skills/reference/SKILL.md) |
 | To browse the design of live_docs itself | run `ldoc map`, then follow edges with `ldoc show <ref>` |
 | A read-only visual browser of a store | `ldoc viewer` builds a self-contained HTML view |
+| To cite a doc, or note that one is badly written without stopping to fix it | `ldoc cite <ref>`; `ldoc flag add <ref> --reason "…"`, worked later from `ldoc flag list` by `/garden` |
 | What's on the roadmap | **[WISH.md](WISH.md)** |
 
 ---
 
 ## Status & scope
 
-live_docs is **early and evolving**, developed in the open. Expect the schema and skills to move. It is deliberately narrow: it models a codebase's durable knowledge and keeps it consistent — it is *not* a retrieval stack or an agent harness, and it doesn't try to be. Those are meant to layer on top. The one exception is the optional MCP endpoint in [`server/`](server/README.md), which serves the `ldoc` read commands over the network and adds no surface of its own.
+live_docs is **early and evolving**, developed in the open. Expect the schema and skills to move. It is deliberately narrow: it models a codebase's durable knowledge and keeps it consistent — it is *not* a retrieval stack or an agent harness, and it doesn't try to be. Those are meant to layer on top. The one exception is the optional MCP endpoint in [`server/`](server/README.md), which serves the `ldoc` read commands, plus `flag`, over the network and adds no surface of its own.
 
 The `ldoc` CLI is Python-3 stdlib-only (no dependencies — the endpoint's dependencies live behind its own `mcp` extra, at [`server/`](server/README.md)); the skills target [Claude Code](https://claude.com/claude-code) but the store itself is just Markdown files you can read, grep, or open in any text or markdown reader.
 
@@ -109,9 +112,9 @@ The `ldoc` CLI is Python-3 stdlib-only (no dependencies — the endpoint's depen
 
 | Path | Contents |
 |------|----------|
-| `kb/` | the knowledge base — live_docs' own docs (`00-inbox/`, `01-raw/`, `02-docs/`, `reviews/`) |
+| `kb/` | the knowledge base — live_docs' own docs (`00-inbox/`, `01-raw/`, `02-docs/`, `reviews/`, and `flags/` once a doc is flagged) |
 | `scripts/` | the `ldoc` porcelain (`ldoc.py`) and the KB layer (`livedocs/`), packaged from the repo root as `livedocs` |
-| `server/` | the optional read-only MCP endpoint (`livedocs_mcp`), packaged with `scripts/livedocs` as the same distribution's `mcp` extra |
+| `server/` | the optional MCP endpoint (`livedocs_mcp`: the reads, plus `flag`), packaged with `scripts/livedocs` as the same distribution's `mcp` extra |
 | `.claude/skills/` | the agent skill definitions |
 | `.claude-plugin/`, `.cursor-plugin/` | package the shared skills for Claude Code and Cursor |
 | `bin/`, `install.sh`, `mise.toml` | tooling to put `ldoc` on your PATH and install the plugins |

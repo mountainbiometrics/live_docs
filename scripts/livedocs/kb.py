@@ -9,7 +9,7 @@ Stdlib only. No external dependencies.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from collections import Counter
 from pathlib import Path
 from typing import Any, Literal
 
@@ -33,9 +33,11 @@ from .model import (
     generate_id,
     intent_needs_basis,
     is_archived,
+    now_iso,
     rank_key,
     successor_displays,
 )
+from .flags import FlagLedger
 from .serialize import parse_doc, dump_doc, _yaml_str, build_raw_frontmatter, _unwrap_wikilink
 from .graph import (reverse_edges, reverse_requires, reverse_belongs_to,
                     referenced_by, forward_edges, relates_edges,
@@ -257,6 +259,19 @@ def load_all(docs_dir: Path | None = None) -> dict:
     return result
 
 
+def _first_hit(doc: dict, matches) -> tuple[str, str] | None:
+    """Where ``matches`` first holds in a doc, as (field, text), trying the fields
+    that say what the doc claims before its body; text is the field or body line."""
+    for field in ("title", "label", "summary"):
+        text = str(doc.get(field) or "")
+        if matches(text):
+            return field, text.strip()[:120]
+    for line in doc.get("body", "").splitlines():
+        if matches(line):
+            return "body", line.strip()[:120]
+    return None
+
+
 # ---------------------------------------------------------------------------
 # KB class — unified store API
 # ---------------------------------------------------------------------------
@@ -284,11 +299,14 @@ class KB:
         "resolve", "label", "orphans", "log", "count", "domains",
     )
 
-    def __init__(self, docs_dir: Path | None = None, session: str = ""):
+    def __init__(self, docs_dir: Path | None = None, session: str = "", *,
+                 flags_dir: Path | None = None):
+        """``flags_dir`` is the store's flag ledger; without it no doc reads as flagged."""
         if docs_dir is None:
             from .store import DOCS_DIR
             docs_dir = DOCS_DIR
         self.docs_dir = docs_dir
+        self.flags_dir = flags_dir
         # The editing session mutations are attributed to. The surface hands it
         # in — the CLI from its shell environment, a request-driven surface from
         # the request — so shared code never has to guess whose edit this is.
@@ -298,6 +316,13 @@ class KB:
     def _reload(self) -> None:
         """(Re)load all docs from disk."""
         self._docs = load_all(self.docs_dir)
+        self._flag_counts: Counter[str] | None = None
+
+    def _open_flag_counts(self) -> Counter[str]:
+        if self._flag_counts is None:
+            self._flag_counts = (FlagLedger(self.flags_dir).open_counts()
+                                 if self.flags_dir else Counter())
+        return self._flag_counts
 
     # -----------------------------------------------------------------------
     # Resolution
@@ -406,10 +431,11 @@ class KB:
         line itself, so nobody opens the doc to learn whether it matters.
 
         {id, label, display, type, status} always; `intent`, `force` and
-        `realization` when the doc carries them (a type forbids some); a
-        deprecated doc also carries `superseded_by` as [{id, display}] so its
-        line can point at the replacement. Every read builds its rows from this
-        so a new facet is added in one place.
+        `realization` when the doc carries them (a type forbids some);
+        `open_flags` when readers flagged the doc as badly written; a deprecated
+        doc also carries `superseded_by` as [{id, display}] so its line can point
+        at the replacement. Every read builds its rows from this so a new fact
+        about a doc is added in one place.
         """
         doc = self._docs.get(doc_id)
         if doc is None:
@@ -424,6 +450,8 @@ class KB:
         for facet in ("intent", "force", "realization"):
             if doc.get(facet):
                 rec[facet] = doc[facet]
+        if self._open_flag_counts()[doc_id]:
+            rec["open_flags"] = self._open_flag_counts()[doc_id]
         if rec["status"] == "deprecated":
             rec["superseded_by"] = successor_displays(doc, self._docs)
         return rec
@@ -580,9 +608,12 @@ class KB:
     ) -> list[dict[str, Any]]:
         """Search and filter docs. Multiple terms are AND by default.
 
-        Returns doc records plus `snippet`, reference/archived hits last.
+        Returns doc records plus `snippet_field` (title, label, summary or body:
+        where the query was found) and `snippet` (that field, or the body line),
+        reference/archived hits last. A title or label hit says what a doc
+        claims; a body hit only that it mentions it.
 
-        query       — single query string; matches title + label + body (case-insensitive).
+        query       — single query string; matches title + label + summary + body (case-insensitive).
         type        — restrict to one doc type.
         status      — restrict to one status.
         intent      — restrict to one intent (the ratification queue is `incidental`).
@@ -644,67 +675,28 @@ class KB:
             if domain and domain not in doc_domain:
                 continue
 
-            # Build searchable text fields
-            title_lower = doc.get("title", "").lower()
-            label_lower = doc.get("label", "").lower()
-            body_raw = doc.get("body", "")
-            body_lower = body_raw.lower()
+            hits = {t: _first_hit(doc, lambda text, t=t: t in text.lower()) for t in all_terms}
+            found = [t for t in all_terms if hits[t]]
+            if all_terms and len(found) < (1 if or_mode else len(all_terms)):
+                continue
+            if compiled_regex and not compiled_regex.search(
+                    f"{doc.get('title','')} {doc.get('label','')} {doc.get('body','')}"):
+                continue
 
-            def _first_snippet(term: str) -> str:
-                """Return first matching body line snippet for a term."""
-                for line in body_raw.splitlines():
-                    if term in line.lower():
-                        return line.strip()[:120]
-                return ""
-
-            snippet = ""
-
-            # Term matching
-            if all_terms:
-                def _term_hits(t: str) -> bool:
-                    return (
-                        t in title_lower
-                        or t in label_lower
-                        or t in body_lower
-                    )
-
-                if or_mode:
-                    if not any(_term_hits(t) for t in all_terms):
-                        continue
-                    for t in all_terms:
-                        if _term_hits(t):
-                            snippet = _first_snippet(t) or doc.get("title", "")[:120]
-                            break
-                else:
-                    # AND: every term must match somewhere
-                    if not all(_term_hits(t) for t in all_terms):
-                        continue
-                    snippet = _first_snippet(all_terms[0]) or doc.get("title", "")[:120]
-
-            # Regex matching
-            if compiled_regex:
-                combined = (
-                    f"{doc.get('title','')} {doc.get('label','')} "
-                    f"{body_raw}"
-                )
-                if not compiled_regex.search(combined):
-                    continue
-                # Extract snippet from first regex match in body
-                m = compiled_regex.search(body_raw)
-                if m and not snippet:
-                    start = max(0, m.start() - 20)
-                    snippet = body_raw[start:m.end() + 60].strip()[:120]
+            snippet_field = snippet = ""
+            if all_terms or compiled_regex:
+                hit = hits[found[0]] if found else _first_hit(doc, compiled_regex.search)
+                snippet_field, snippet = hit or ("title", doc.get("title", "")[:120])
 
             # Relevance only orders docs of equal rank: a hit in the title or label
             # says what the doc is about, a body hit only that it mentions it; and
             # more distinct terms matched beat fewer (only differs under --or).
-            heads = sum(1 for t in all_terms if t in title_lower or t in label_lower)
-            matched = sum(1 for t in all_terms if t in title_lower or t in label_lower
-                          or t in body_lower)
+            heads = sum(1 for t in found if hits[t][0] in ("title", "label"))
             results.append({
                 **self.doc_record(doc_id),
                 "snippet": snippet,
-                "_rank": (rank_key(doc), -heads, -matched),
+                "snippet_field": snippet_field,
+                "_rank": (rank_key(doc), -heads, -len(found)),
             })
 
         # `_rank` is ranking state, not part of the answer, so it goes no further
@@ -799,7 +791,7 @@ class KB:
         Mirrors the viewer's structural-signpost derivation (the retired `index`
         type, re-computed from topology). Read-only.
 
-        Returns {total, archived_omitted, signposts: [...], floating: [...]}.
+        Returns {total, archived_omitted, signposts: [...], floating: [...], open_flags}.
         """
         children = self._children_map()
 
@@ -887,6 +879,7 @@ class KB:
             "archived_omitted": archived_omitted,
             "signposts": signposts,
             "floating": floating,
+            "open_flags": sum(self._open_flag_counts().values()),
         }
 
     def ls(
@@ -1115,7 +1108,7 @@ class KB:
         # creation TIME is no longer stored as `created` — it is the timestamp of
         # the first history entry (an addition), written by the command layer via
         # record_addition (creation-is-recorded-history 20260701224958).
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = now_iso()
 
         # Resolve edge refs to ids
         edge_ids = {
@@ -1395,7 +1388,7 @@ class KB:
         _refuse_archived_mutation(self._docs[doc_id], ref)
         fm, body = self._load_doc_raw(doc_id)
 
-        at = at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        at = at or now_iso()
         if session is None:
             session = self.session
         entry = {"at": at, "summary": summary}
@@ -1658,16 +1651,16 @@ class KBCache:
     """
 
     def __init__(self) -> None:
-        self._entries: dict[Path, tuple[tuple[int, float], KB]] = {}
+        self._entries: dict[Path, tuple[tuple, KB]] = {}
 
-    def get(self, docs_dir: Path) -> KB:
-        """Return a KB over ``docs_dir``, freshly loaded if the files moved on."""
+    def get(self, docs_dir: Path, flags_dir: Path) -> KB:
+        """Return a KB over ``docs_dir``, freshly loaded if its docs or flags moved on."""
         docs_dir = Path(docs_dir)
-        fingerprint = docs_fingerprint(docs_dir)
+        fingerprint = (docs_fingerprint(docs_dir), docs_fingerprint(Path(flags_dir)))
         cached = self._entries.get(docs_dir)
         if cached is not None and cached[0] == fingerprint:
             return cached[1]
-        kb = KB(docs_dir)
+        kb = KB(docs_dir, flags_dir=flags_dir)
         self._entries[docs_dir] = (fingerprint, kb)
         return kb
 

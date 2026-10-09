@@ -48,20 +48,15 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .model import generate_session_id, change_types_for_fields
+from .model import generate_session_id, change_types_for_fields, now_iso
 from .serialize import _yaml_str, _parse_frontmatter_text
 
 
 _WAL_FENCE = "```json"
 _WAL_HEADING = "## Change log (WAL)"
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +169,7 @@ class SessionStore:
             raise ValueError(f"session record already exists: {session_id}")
         rec = {
             "id": session_id,
-            "opened_at": _now_iso(),
+            "opened_at": now_iso(),
             "status": "open",
             "summary": summary,
             "wal": [],
@@ -344,7 +339,7 @@ def record_doc_change(
 
     # WAL line (the sole in-flight record; history is materialized at close).
     entry = {
-        "at": _now_iso(),
+        "at": now_iso(),
         "op": "change",
         "ref": doc_id,
         "change_type": list(change_type),
@@ -382,7 +377,7 @@ def record_deletion(
     effective_note = note.strip() or auto_note.strip()
 
     entry = {
-        "at": _now_iso(),
+        "at": now_iso(),
         "op": "rm",
         "ref": doc_id,
         "change_type": ["deletion"],
@@ -415,7 +410,7 @@ def record_addition(
         _print_auto_session_notice(session_id)
 
     entry = {
-        "at": _now_iso(),
+        "at": now_iso(),
         "op": "new",
         "ref": doc_id,
         "change_type": ["addition"],

@@ -40,6 +40,7 @@ Checks performed:
      its why-chain. The body need not link them.
   15. body [[id]] wikilinks not present in any edge field (prose-not-edged)
   16. malformed body wikilinks ([[id|label]], [[id]] (label)) — canonical form is bare [[id]]
+  17. living doc body over its type's ceiling (warning)
 
 Note: empty edge fields and empty history are VALID (absent == empty).
 Human output always carries the label (and title), never a bare id.
@@ -64,6 +65,7 @@ from livedocs import (
     facet_forbidden, facet_required, intent_needs_basis,
     is_archived,
 )
+from livedocs.flags import FlagLedger
 from livedocs.lint import prose_links_not_edged, malformed_body_wikilinks
 from livedocs.store import cwd_store
 from livedocs.cli_entry import run_cli
@@ -90,6 +92,29 @@ FACET_ENUMS = {
 # family-tree edge whose genealogy effective-scope walks, so a cycle there would
 # make that walk non-terminating — hence a hard error.
 DAG_EDGE_FIELDS = ("belongs_to",)
+
+# Check 17 enforces the body ceilings in .claude/skills/_shared/doc-types.md, as
+# (paragraphs, words); a type absent here has no ceiling.
+BODY_CEILINGS: dict[str, tuple[int, int]] = {
+    **dict.fromkeys(
+        ("principle", "decision", "constraint", "requirement", "goal", "use-case"),
+        (8, 400)),
+    "component": (10, 600),
+    "heading": (12, 800),
+    "guide": (16, 1200),
+}
+
+_IMPLEMENTATION_HEADING_RE = re.compile(r"^## Implementation\b.*$", re.MULTILINE)
+
+
+def body_size(body: str) -> tuple[int, int]:
+    """The implementation section records where a claim lives in code, so it
+    does not count against the claim."""
+    m = _IMPLEMENTATION_HEADING_RE.search(body)
+    if m:
+        body = body[:m.start()]
+    paragraphs = [b for b in re.split(r"\n\s*\n", body) if b.strip()]
+    return len(paragraphs), len(body.split())
 
 
 def skip_content_advisories(doc: dict) -> bool:
@@ -339,6 +364,18 @@ def check_doc(doc: dict, all_ids: set, *, children_of: dict[str, set[str]] | Non
                     f"do not append a parenthetical label"
                 )
 
+        # 17. body over its type's ceiling: probably more than one concept
+        ceiling = BODY_CEILINGS.get(doc_type)
+        if ceiling and status == "living":
+            paragraphs, words = body_size(body)
+            max_paragraphs, max_words = ceiling
+            if paragraphs > max_paragraphs or words > max_words:
+                warnings.append(
+                    f"{prefix}  body is {paragraphs} paragraphs / {words} words; a "
+                    f"{doc_type} body's ceiling is {max_paragraphs} paragraphs / "
+                    f"{max_words} words — probably not atomic, see garden-decompose"
+                )
+
     # NOTE: empty edge lists and empty history are valid; no check here.
     #
     # The former "provenance rule" warning (a claimed level with no
@@ -511,8 +548,14 @@ def main() -> int:
                 f"`{edge_field}` cycle (must be acyclic): {chain}"
             )
 
+    # Flags belong to the store, so a bare docs directory has none.
+    flags_line = FlagLedger.footer(
+        0 if args.docs_dir else len(FlagLedger(cwd_store().flags).open()))
+
     if not all_errors and not all_warnings:
         print("All checks passed.")
+        if flags_line:
+            print(flags_line)
         return 0
 
     if all_errors:
@@ -528,6 +571,8 @@ def main() -> int:
         print()
 
     print(f"Summary: {len(all_errors)} errors, {len(all_warnings)} warnings")
+    if flags_line:
+        print(flags_line)
     return 1 if all_errors else 0
 
 

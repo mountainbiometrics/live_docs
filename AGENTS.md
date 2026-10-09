@@ -41,6 +41,7 @@ porcelain. Use `--include-reference` only when you deliberately want the archive
   - [History rules](#history-rules)
   - [Inbox pipeline: capture vs ingest](#inbox-pipeline-capture-vs-ingest)
   - [Deprecation protocol](#deprecation-protocol)
+  - [Flagging a badly written doc](#flagging-a-badly-written-doc)
   - [Validate and reindex checkpoints](#validate-and-reindex-checkpoints)
     - [When to validate](#when-to-validate)
     - [When to reindex](#when-to-reindex)
@@ -62,6 +63,8 @@ ldoc new ...            # create a doc
 ldoc set <ref> ...      # update frontmatter fields
 ldoc link / unlink ...  # add / remove edges
 ldoc history <ref> --add "..."   # append a history entry
+ldoc cite <ref>         # doc line linked to the viewer, for reports and chat
+ldoc flag add <ref> --reason "..."   # mark a badly written doc for gardening
 ldoc validate           # check integrity
 ldoc reindex            # rebuild .index/ artifacts
 ```
@@ -96,7 +99,7 @@ Skills are in `.claude/skills/*/SKILL.md`. Each skill owns a specific operating 
 | An existing doc needs to be edited, corrected, or updated | **revise-doc** |
 | You need to know whether the docs' claims are built — after a build, after migrating or ingesting, before trusting the `planned` backlog | **sync-realization** |
 | A doc was changed and you need to know what else is now stale | **cascade-check** |
-| The store feels cluttered; a doc has many history entries; cascade was wide; periodic maintenance | **garden** |
+| Open flags (`ldoc flag list`); the store feels cluttered; a doc has many history entries; cascade was wide; periodic maintenance | **garden** |
 | You want a structural integrity report (no fixes) | **validate** |
 | `kb/02-docs/.index/` may be stale after bulk changes | **reindex** |
 
@@ -170,8 +173,8 @@ of changes, and one review. Phases are never user-invocable directly.
 
 | Phase | Axis | Role |
 |-------|------|------|
-| `garden-cruft` | atomicity | excavate dead implementation off live decisions, retype, add-why, drop refactor-chore docs (runs first) |
-| `garden-decompose` | atomicity | split overloaded docs |
+| `garden-cruft` | atomicity | excavate dead implementation off live decisions, strip existence claims, rewrite changelog-shaped bodies, retype, add-why, drop refactor-chore docs and replaced stop-gaps (runs first) |
+| `garden-decompose` | atomicity | split overloaded docs, including bodies past their type's ceiling |
 | `garden-collapse` | atomicity | merge duplicates / fold cruft |
 | `garden-hierarchy` | structure | orphans, grouping, scope anchors, re-scoping (replaces `curate-grouping`) |
 | `garden-summarize` | structure | signpost orientation guides |
@@ -180,7 +183,8 @@ of changes, and one review. Phases are never user-invocable directly.
 | `garden-refine` | form | sampling QA: titles, summaries, schema drift |
 | `garden-integrity` | form | mechanical repair (`validate` fixes) |
 
-Invoke `/garden` (triage), `/garden <intent>`, or `/garden all`. Staleness detection
+Invoke `/garden` (triage), `/garden <intent>`, or `/garden all`. Triage drains open
+flags before any other signal ([Flagging a badly written doc](#flagging-a-badly-written-doc)). Staleness detection
 is a dispatcher triage signal only — `cascade-check` owns stale writes.
 
 Garden applies judgment directly; correctness is caught post-hoc by the review
@@ -355,6 +359,20 @@ After deprecation, run `cascade-check` from the deprecated doc: all `requires`/`
 
 ---
 
+## Flagging a badly written doc
+
+Any agent that notices a badly written doc while doing something else flags it with a reason and continues its task. It does not rewrite the doc mid-task: the rewrite is a governed change, and `/garden` drains open flags before any other triage signal. The signs of a badly written doc are listed in the `reference` skill (reading and citing the store mid-task).
+
+```bash
+ldoc flag add <ref> --reason "<the sign you saw>"
+ldoc flag list [--all] [--doc <ref>]    # open flags; --all adds resolved ones
+ldoc flag resolve <flag-id> --note "<what was done to the doc>"
+```
+
+A flag is resolved with a note naming what was done to the doc. A flag is a quality failure, not a proposal, so there is no keeping the doc as it was; when the flag was mistaken, the note names the standard the doc meets and how. `ldoc map` and `ldoc validate` end with the open-flag count, and a flagged doc's line ends with ` · flagged`.
+
+---
+
 ## Validate and reindex checkpoints
 
 ### When to validate
@@ -383,6 +401,8 @@ Reindex is always idempotent. The `.index/` artifacts are safe to commit.
 ---
 
 ## Review summaries
+
+Reports, review summaries, and chat cite a doc as its doc line linked to the viewer, the output of `ldoc cite <ref>`: never by a phrase of your own, and never by its id alone in prose.
 
 Each skill episode produces exactly one review summary via `ldoc review new --since "$START"`. Reviews are:
 

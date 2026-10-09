@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from livedocs._paths import HOME_CONFIG
+from livedocs.flags import FlagLedger
 from livedocs.kb import KB, KBCache
 from livedocs.lexicon import LexiconStore
 from livedocs.reviews import ReviewLedger
@@ -28,7 +29,7 @@ from livedocs.store import (
 # The classes whose reads this endpoint publishes, in the order their tools are
 # registered. Each one declares its own READ_METHODS; this list is only which
 # classes are served.
-READ_OWNERS = (KB, LexiconStore, ReviewLedger)
+READ_OWNERS = (KB, LexiconStore, ReviewLedger, FlagLedger)
 
 
 @dataclass(frozen=True)
@@ -76,11 +77,13 @@ class StoreSet:
                 f"{paths.docs} is missing. Restore the checkout on the host, or "
                 f"restart the endpoint without it."
             )
-        kb = self._cache.get(paths.docs)
+        kb = self._cache.get(paths.docs, paths.flags)
         if owner is KB:
             return kb
         if owner is LexiconStore:
             return LexiconStore(paths.lexicon)
+        if owner is FlagLedger:
+            return FlagLedger(paths.flags)
         # The KB already holds the store parsed, and a read creates nothing.
         return ReviewLedger(
             reviews_dir=paths.reviews, docs_dir=paths.docs,

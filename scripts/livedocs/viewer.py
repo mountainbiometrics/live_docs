@@ -85,7 +85,10 @@ def _section_link_ids(body: str, headings: tuple[str, ...]) -> set[str]:
         stripped = line.lstrip()
         if not stripped.startswith("- "):
             continue
-        for m in _WIKILINK_RE.finditer(line):
+        # The leading link names the doc the item is about; later links belong
+        # to its note ("superseded by [[...]]") and are not docs of this section.
+        m = _WIKILINK_RE.search(line)
+        if m:
             ids.add(m.group(1))
     return ids
 
@@ -102,14 +105,20 @@ def _review_stats(body: str, integration: dict | None = None) -> dict:
     visible = strip_wal_archive(body)
     summary = _extract_body_section(visible, ("Summary",)).strip()
     new_docs = _section_link_ids(visible, ("Additions",))
-    touched_docs = _section_link_ids(visible, ("Revisions", "Restructure"))
-    minor_docs = _section_link_ids(visible, ("Minor Alterations", "Organizational"))
+    revised_docs = _section_link_ids(visible, ("Revisions",))
+    # Each existing doc is filed once, under its dominant change type, so the
+    # union over those sections is every existing doc the session changed.
+    existing_docs = revised_docs.union(
+        _section_link_ids(visible, ("Restructure",)),
+        _section_link_ids(visible, ("Minor Alterations", "Organizational")),
+        _section_link_ids(visible, ("Deletions",)),
+    )
     reference_docs = _section_link_ids(visible, ("Reference files",))
 
     stats = {
         "new_docs": len(new_docs),
-        "touched_docs": len(touched_docs),
-        "minor_docs": len(minor_docs),
+        "existing_docs": len(existing_docs),
+        "revised_docs": len(revised_docs),
         "reference_docs": len(reference_docs),
         "summary": summary,
     }
@@ -211,9 +220,9 @@ def _load_viewer_config() -> dict:
     return out
 
 
-def _read_viewer_table() -> dict:
+def _read_viewer_table(store_root: Path = STORE_ROOT) -> dict:
     """Return the raw ``[viewer]`` table from the store config, or ``{}``."""
-    cfg_path = STORE_ROOT / CONFIG_FILENAME
+    cfg_path = store_root / CONFIG_FILENAME
     if not cfg_path.is_file():
         return {}
     try:
@@ -224,31 +233,36 @@ def _read_viewer_table() -> dict:
     return viewer if isinstance(viewer, dict) else {}
 
 
-def resolve_viewer_build_path() -> Path:
-    """Resolve ``[viewer] build_path`` under ``STORE_ROOT``.
+def resolve_viewer_build_path(store_root: Path = STORE_ROOT) -> Path:
+    """Resolve ``[viewer] build_path`` under the store root.
 
     Default is ``build/viewer.html``. Absolute paths, ``~``-prefixed paths, and
-    any resolution that escapes ``STORE_ROOT`` raise ``ValueError`` (fail loud).
+    any resolution that escapes the store root raise ``ValueError`` (fail loud).
     """
     raw = DEFAULT_BUILD_PATH
-    val = _read_viewer_table().get("build_path")
+    val = _read_viewer_table(store_root).get("build_path")
     if isinstance(val, str) and val.strip():
         raw = val.strip()
 
     if raw.startswith("~") or Path(raw).is_absolute():
         raise ValueError(
-            f"[viewer] build_path must be relative to STORE_ROOT; got {raw!r}"
+            f"[viewer] build_path must be relative to the store root; got {raw!r}"
         )
 
-    store = STORE_ROOT.resolve()
+    store = store_root.resolve()
     dest = (store / raw).resolve()
     try:
         dest.relative_to(store)
     except ValueError as exc:
         raise ValueError(
-            f"[viewer] build_path resolves outside STORE_ROOT: {raw!r} -> {dest}"
+            f"[viewer] build_path resolves outside the store root: {raw!r} -> {dest}"
         ) from exc
     return dest
+
+
+def doc_url(store_root: Path, doc_id: str) -> str:
+    """A doc's address in the store's built viewer, for linking to it from outside."""
+    return f"{resolve_viewer_build_path(store_root).as_uri()}#/{doc_id}"
 
 
 def _load_lexicon() -> tuple[list[dict], dict[str, dict]]:

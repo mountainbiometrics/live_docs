@@ -193,7 +193,7 @@ Why this is not just "proceeding with your request":
   <one or two sentences: what is surprising>
 
 Surprising / out-of-scope impact:
-  <id>  "<title>"  verdict: <…>  — <why this looks unintended>
+  [<Intent> <type>: <Title>](<url>)  verdict: <…>  — <why this looks unintended>
 
 Expected impact (informational, not a gate): N docs will be revised/created
 as the coherent consequence of the request.
@@ -253,12 +253,12 @@ Concepts identified: N
   "<concept>"  type: <type>  →  <action taken>
 
 Docs changed:
-  <id>  "<title>"  deprecated  — superseded by <REPLACEMENT_ID>
-  <id>  "<title>"  revised     — <one-line: what changed>
-  <id>  "<title>"  created     — new doc for concept "<concept>"
+  [<Intent> <type>: <Title>](<url>)  deprecated  — superseded by [<Intent> <type>: <Title>](<replacement url>)
+  [<Intent> <type>: <Title>](<url>)  revised     — <one-line: what changed>
+  [<Intent> <type>: <Title>](<url>)  created     — new doc for concept "<concept>"
 
 Unchanged docs (compatible / inconsequential):
-  <id>  "<title>"
+  [<Intent> <type>: <Title>](<url>)
 
 Validation: <N docs scanned — clean | N errors, N warnings>
 ```

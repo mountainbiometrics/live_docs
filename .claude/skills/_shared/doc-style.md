@@ -133,6 +133,22 @@ known not to be the durable design. Record it as a `decision` with
   doc using deferral language to say so (the honesty comes from calling it a
   stop-gap once, not from hedging every sentence).
 
+## Existence is a facet, not prose
+
+A claim body never says what is or is not built. Whether a claim is built is
+the `realization` facet, and how it is built is the `## Implementation`
+section (`facets.md`). A sentence such as "no eviction policy exists yet" goes
+false when the code changes, nothing re-checks it, and a reader takes it for
+part of the doc's claim.
+
+## The body is not a changelog
+
+A doc states its current claim. When the claim changes, the body, summary, and
+title are rewritten to say the new thing, and every sentence that became false
+is removed. Appending an update or correction paragraph under an opening that
+is now false leaves the old claim as the first thing a reader meets, with the
+summary still pointing at it. What changed goes in the mutation's `--note`.
+
 ## The `## Implementation` section is exempt
 
 A body may carry a `## Implementation` section describing how the claim is

@@ -85,6 +85,11 @@ affects it:
 ldoc show <neighbor-id>
 ```
 
+Judge an upstream neighbor (`requires`/`belongs_to`) by its title and summary,
+not only its body: the title and summary are the claim its dependents read.
+When the new intent extends or contradicts them, the verdict is
+`cascade-extend` or `cascade-full`, and the revision covers the title.
+
 Enqueue neighbors whose verdict is `cascade-extend`, `cascade-full`, or
 `conflict-unresolved` for further traversal (to collect *their* neighbors too).
 Do not enqueue `inconsequential` neighbors.
@@ -98,7 +103,7 @@ Emit exactly one verdict per neighbor:
 | Verdict | When |
 |---|---|
 | `inconsequential` | Neighbor's claim is unaffected by the new intent. The norm. |
-| `cascade-extend` | Neighbor is downstream of a changed doc; its content is now stale or misleading and needs revision. |
+| `cascade-extend` | Neighbor is downstream of a changed doc, or upstream with a title or summary the new intent extends or contradicts; its content is now stale or misleading and needs revision. |
 | `cascade-full` | Neighbor's entire claim is rendered obsolete by the changed upstream. |
 | `conflict-unresolved` | The neighbor states the same claim at a higher intent than the change carries, or is frozen — apply `_shared/conflict-test.md` first. Its assertion is left and the new claim is written beside it. A neighbor that only records the prior design is `cascade-extend` / `cascade-full`. |
 
@@ -124,7 +129,7 @@ verdict, before any write occurs:
 
 ```
 Impact set (pre-write)
-  <id>  "<title>"  verdict: <full-supersession | cascade-full | partial-supersession | cascade-extend | conflict-unresolved | inconsequential>
+  [<Intent> <type>: <Title>](<url>)  verdict: <full-supersession | cascade-full | partial-supersession | cascade-extend | conflict-unresolved | inconsequential>
       Reason: <one sentence>
   ...
 Counts: full/cascade-full: N   partial/cascade-extend: N   conflict-unresolved: N   inconsequential: N

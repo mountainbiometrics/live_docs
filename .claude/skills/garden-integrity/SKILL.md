@@ -55,7 +55,7 @@ with the fix.
 garden — phase: integrity
 Scanned: N docs (validate + orphans)
 Findings:
-  <id>  — <issue>
+  [<Intent> <type>: <Title>](<url>)  — <issue>
 Actions:
   [1] …
 Applied: [list]

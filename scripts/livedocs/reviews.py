@@ -37,12 +37,11 @@ Stdlib only. No external dependencies.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .model import (
-    facet_tags, generate_id, is_archived, ref_token, render_ref_token,
+    facet_tags, generate_id, is_archived, now_iso, ref_token, render_ref_token,
     session_start_iso, successor_displays, WIKILINK_RE,
 )
 
@@ -500,7 +499,7 @@ class ReviewLedger:
         Returns (review_id, path_str).
         """
         docs = self._load_docs()
-        created_now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        created_now = now_iso()
         review_id = generate_id(self.reviews_dir)
 
         touched: list[str] = []
@@ -940,7 +939,7 @@ class ReviewLedger:
         rec = records[rec_id]
         body = rec.pop("body", "")
 
-        at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        at = now_iso()
         signoffs = rec.get("signoffs", [])
         signoffs.append({"who": who, "at": at})
         rec["signoffs"] = signoffs

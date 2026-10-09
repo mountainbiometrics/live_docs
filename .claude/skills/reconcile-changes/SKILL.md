@@ -303,14 +303,14 @@ Concepts identified: N   (abstract/why-priority)
   "<concept>"  type: <type>  →  <action taken>
 
 Docs changed:
-  <id>  "<title>"  created     — born living, <realization>; new doc for concept "<concept>"
-  <id>  "<title>"  revised     — <one-line: what changed>
-  <id>  "<title>"  deprecated  — superseded by <REPLACEMENT_ID>
+  [<Intent> <type>: <Title>](<url>)  created     — born living, <realization>; new doc for concept "<concept>"
+  [<Intent> <type>: <Title>](<url>)  revised     — <one-line: what changed>
+  [<Intent> <type>: <Title>](<url>)  deprecated  — superseded by [<Intent> <type>: <Title>](<replacement url>)
 
 Unchanged docs (compatible / inconsequential):
-  <id>  "<title>"
+  [<Intent> <type>: <Title>](<url>)
 
-Cascade summary: <N neighbors evaluated — list each id: verdict>
+Cascade summary: <N neighbors evaluated — each cited, with its verdict>
 Validation: <N docs scanned — clean | N errors, N warnings>
 Self-check: <type-mix / labels / intent / source — ok or what you fixed>
 ```

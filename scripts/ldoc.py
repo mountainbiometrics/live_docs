@@ -17,6 +17,7 @@ Subcommands (grouped):
     show <ref> [<ref2> ...]  [--json] [--plain]
     resolve <ref> [<ref2> ...]
     label <ref> [<ref2> ...]
+    cite <ref> [<ref2> ...] [--json]   # markdown link: display line -> viewer
     neighbors <ref> [<ref2> ...]
         [--kind requires|belongs_to|relates|provenance|superseded_by|required_by|children|dependents|provenance_of|all]
         [--json]
@@ -71,6 +72,11 @@ Subcommands (grouped):
     raw children <ref>
     raw mark-ingested <ref>
 
+  ── Flags (a reader's note that a doc is badly written) ──
+    flag add <ref> --reason "<what is wrong with how it is written>"
+    flag list [--all] [--doc <ref>] [--json]
+    flag resolve <flag-id> --note "<what was done, or why it was kept>"
+
   ── Maintenance ──
     validate [--include-reference]   # non-reference corpus by default
     reindex
@@ -103,6 +109,7 @@ from livedocs import (
 )
 from livedocs import ReviewLedger, generate_id, build_raw_frontmatter
 from livedocs.cli_entry import run_cli
+from livedocs.flags import FlagLedger
 from livedocs.kb import churn_count, field_values
 from livedocs.model import change_types_for_fields, facet_tags
 from livedocs.store import StoreEntry
@@ -182,7 +189,7 @@ def _print_result(r: dict, fields: list[str] | None, plain: bool, snippet: bool 
     else:
         print(_doc_line(r, plain))
     if snippet and r.get("snippet") and not fields:
-        print(f"  {r['snippet']}")
+        print(f"  {r['snippet_field']}: {r['snippet']}")
 
 
 def _kb(fn, *a, **kw) -> bool:
@@ -337,6 +344,15 @@ def _batch_output(items: list, render_fn, sep: str = _BATCH_SEP) -> int:
     return 0
 
 
+def _print_open_flags(kb: KB, r: dict, indent: str = "") -> None:
+    # A store read through its host has no ledger here; its line still ends `flagged`.
+    if not r.get("open_flags") or getattr(kb, "flags_dir", None) is None:
+        return
+    for f in FlagLedger(kb.flags_dir).open():
+        if f["doc"] == r["id"]:
+            print(f"{indent}flagged {f['id']}: {f['reason']}")
+
+
 # ---------------------------------------------------------------------------
 # Subcommand handlers
 # ---------------------------------------------------------------------------
@@ -388,6 +404,7 @@ def cmd_get(kb: KB, args) -> int:
             print(f"history: {len(hist)} entries ({churn} churn)")
         else:
             print(f"history: {len(hist)} entries")
+        _print_open_flags(kb, result)
 
     if args.json and len(refs) > 1:
         results = []
@@ -466,6 +483,7 @@ def cmd_show(kb: KB, args) -> int:
         print(f"  domain: {fm.get('domain',[])}  scope: {own_scope}")
         print(f"  effective scope: {eff_scope}")
         print(f"  created: {fm.get('created','')}")
+        _print_open_flags(kb, result, "  ")
         print(f"{'='*60}")
         print()
 
@@ -661,6 +679,8 @@ def cmd_map(kb: KB, args) -> int:
     if not signposts and not floating:
         print("(empty store)")
 
+    if footer := FlagLedger.footer(overview.get("open_flags", 0)):
+        print(footer)
     return 0
 
 
@@ -692,6 +712,57 @@ def cmd_label(kb: KB, args) -> int:
             _err(str(e))
             return 1
 
+    return 0
+
+
+def cmd_cite(kb: KB, args) -> int:
+    from livedocs.store import STORE_ROOT
+    from livedocs.viewer import doc_url
+
+    rows = []
+    for ref in _resolve_refs(kb, args.refs):
+        try:
+            doc_id = kb.resolve(ref)
+            rows.append({"id": doc_id, "display": kb.label(doc_id),
+                         "url": doc_url(STORE_ROOT, doc_id)})
+        except ValueError as e:
+            _err(str(e))
+            return 1
+    if args.json:
+        _json(rows)
+        return 0
+    for r in rows:
+        print(f"[{r['display']}]({r['url']})")
+    return 0
+
+
+def cmd_flag(kb: KB, args) -> int:
+    ledger = FlagLedger(kb.flags_dir)
+    try:
+        if args.flag_verb == "add":
+            f = ledger.add(kb.resolve(args.ref), args.reason, kb.session)
+            print(f"flagged {f['id']}  {kb.display_label(f['doc'])}")
+            return 0
+        if args.flag_verb == "resolve":
+            f = ledger.resolve(args.flag_id, args.note)
+            print(f"resolved {f['id']}  {kb.display_label(f['doc'])}")
+            return 0
+        doc_id = kb.resolve(args.doc) if args.doc else None
+    except ValueError as e:
+        _err(str(e))
+        return 1
+    rows = [{**kb.doc_record(f["doc"]), "flag": f} for f in ledger.list(args.all)
+            if doc_id is None or f["doc"] == doc_id]
+    if args.json:
+        _json(rows)
+        return 0
+    if not rows:
+        print("(no flags)" if args.all else "(no open flags)")
+    for r in rows:
+        f = r["flag"]
+        print(f"{f['id']}  {_doc_line(r)}  — {f['reason']}")
+        if "resolved_at" in f:
+            print(f"    resolved {f['resolved_at']}: {f['resolution']}")
     return 0
 
 
@@ -2663,6 +2734,7 @@ def cmd_help(kb: KB, args) -> int:
   ldoc show porcelain-roadmap --plain      # bare id/label format
   ldoc resolve "Batch Operations"
   ldoc label porcelain-roadmap batch-operations
+  ldoc cite porcelain-roadmap             # [<Intent> <type>: <Title>](file://…/viewer.html#/<id>)
   ldoc neighbors porcelain-roadmap --kind requires
   ldoc neighbors porcelain-roadmap --kind required_by
   ldoc neighbors porcelain-roadmap --kind children
@@ -2708,6 +2780,12 @@ def cmd_help(kb: KB, args) -> int:
   ldoc promote --all                     # drain entire inbox
   # gate 2: raw → docs via ingest-reference skill
   # (for an item already in raw, promote will print this guidance)
+
+  # Flags: note a badly written doc and move on; gardening works the list
+  ldoc flag add porcelain-roadmap --reason "body is a changelog of past states"
+  ldoc flag list                          # open flags; --all adds resolved ones
+  ldoc flag list --doc porcelain-roadmap --json
+  ldoc flag resolve <flag-id> --note "rewrote the body to the current state"
 
   # Maintenance
   ldoc validate
@@ -2946,6 +3024,31 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("label", help="Print '<Intent> <type>: <Title>' for ref(s).")
     p.add_argument("refs", nargs="+", metavar="ref",
                    help="id | label | title; or '-' to read from stdin.")
+
+    # --- cite ---
+    p = sub.add_parser("cite", help="Print a markdown link per doc: its display line, "
+                                    "linked to the doc in the built viewer.")
+    p.add_argument("refs", nargs="+", metavar="ref",
+                   help="id | label | title; or '-' to read from stdin.")
+    p.add_argument("--json", action="store_true")
+
+    # --- flag ---
+    p_flag = sub.add_parser("flag", help="Flag a badly written doc for gardening, list flags, "
+                                         "or resolve one. Never edits the doc.")
+    flag_sub = p_flag.add_subparsers(dest="flag_verb", metavar="verb")
+    flag_sub.required = True
+    p_fa = flag_sub.add_parser("add", help="Flag a doc as badly written.")
+    p_fa.add_argument("ref", help="id | label | title of the doc.")
+    p_fa.add_argument("--reason", required=True,
+                      help="What is wrong with how the doc is written.")
+    p_fl = flag_sub.add_parser("list", help="List open flags, oldest first.")
+    p_fl.add_argument("--all", action="store_true", help="Include resolved flags.")
+    p_fl.add_argument("--doc", default="", help="Only flags on this doc ref.")
+    p_fl.add_argument("--json", action="store_true")
+    p_fr = flag_sub.add_parser("resolve", help="Resolve a flag.")
+    p_fr.add_argument("flag_id", help="The flag's id, as `flag list` prints it.")
+    p_fr.add_argument("--note", required=True,
+                      help="What was done, or why the doc was kept.")
 
     # --- neighbors ---
     p = sub.add_parser("neighbors", help="Show neighbors of one or more docs.")
@@ -3491,6 +3594,8 @@ COMMANDS = {
     "map": (cmd_map, READ),
     "resolve": (cmd_resolve, READ),
     "label": (cmd_label, READ),
+    "cite": (cmd_cite, READ),
+    "flag": (cmd_flag, {"add": WRITE, "list": READ, "resolve": WRITE}),
     "neighbors": (cmd_neighbors, READ),
     "graph": (cmd_graph, READ),
     "log": (cmd_log, READ),
@@ -3563,6 +3668,13 @@ def _read_surface(store, kb: "KB | None", subcommand: str):
     from livedocs import endpoint_client
 
     remote = isinstance(store, StoreEntry)
+    if subcommand == "flag" and remote:
+        from livedocs.store import LivedocsConfigError
+        raise LivedocsConfigError(
+            f"`ldoc flag list` joins the flag ledger with the docs it flags, "
+            f"which needs a checkout of store '{store.name}'. Through the "
+            f"endpoint at {store.url}, call its `flag_list` tool instead."
+        )
     if subcommand == "term":
         return (endpoint_client.reader(store, LexiconStore) if remote
                 else LexiconStore(store.lexicon))
@@ -3626,7 +3738,7 @@ def _run() -> int:
 
     # The CLI finds its editing session in the shell environment and hands it in;
     # the shared mutators never consult the environment themselves.
-    kb = KB(store.docs, session=resolve_open_session())
+    kb = KB(store.docs, session=resolve_open_session(), flags_dir=store.flags)
     rc = handler(
         _read_surface(store, kb, args.subcommand) if access is READ else kb, args,
     )

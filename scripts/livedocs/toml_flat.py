@@ -14,8 +14,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-STORE_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "lexicon", "index")
-BOX_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "lexicon")
+STORE_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "flags", "lexicon", "index")
+BOX_KEYS = ("inbox", "raw", "docs", "reviews", "sessions", "flags", "lexicon")
 STORE_CONFIG_KEYS = ("base", *STORE_KEYS)
 
 # A consumer marker points at an external store with ``store`` — either a path
@@ -41,6 +41,7 @@ BASE_DEFAULT_SUBDIRS: dict[str, str] = {
     "docs": "02-docs",
     "reviews": "reviews",
     "sessions": "sessions",
+    "flags": "flags",
     "lexicon": "lexicon",
 }
 

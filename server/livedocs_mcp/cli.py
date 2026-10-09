@@ -31,7 +31,16 @@ INSTRUCTIONS = (
     "`map`, search with `find`, read a doc with `show` or `body`, and walk the "
     "dependency graph with `neighbors` or `graph`. Every ref argument accepts an "
     "id, a label, a title, or a unique substring of either. Call `store_list` "
-    "for the stores this endpoint serves."
+    "for the stores this endpoint serves. Read a doc's `display` line before its "
+    "body: `<Intent> <type>: <Title>`, with force and realization as trailing "
+    "tags. An `incidental` doc records an agent's proposal, not the person's "
+    "decision. A doc's claim is its title and summary, not a sentence in its "
+    "body, and whether something is built is its `realization` facet, not its "
+    "prose. Cite a doc by its `display` line; with a checkout of the store, "
+    "`ldoc cite` adds the viewer link. A doc whose line ends `flagged` has been "
+    "reported as badly written. Do not rewrite a badly written doc mid-task: with "
+    "a checkout, run `ldoc flag add <ref> --reason`; otherwise name the doc and "
+    "what is wrong in your report. This endpoint writes nothing."
 )
 
 

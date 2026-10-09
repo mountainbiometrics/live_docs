@@ -60,9 +60,9 @@ Cascade-sensitive: re-run whenever a member changes substantively (see
 
 ```
 garden — phase: summarize
-Scanned: 1 signpost (<parent-id>), N members
+Scanned: 1 signpost ([<Intent> <type>: <Title>](<url>)), N members
 Findings:
   …
-Applied: synthesized <parent-id>
+Applied: synthesized [<Intent> <type>: <Title>](<url>)
 Changed-ids: [<parent-id>]
 ```

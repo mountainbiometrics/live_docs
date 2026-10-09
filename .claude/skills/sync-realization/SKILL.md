@@ -141,7 +141,7 @@ they are the first thing a sync drains.
 For each doc, in order, decide and record a verdict:
 
 ```
-<id>  <Intent> <type>: <title>   [force]
+[<Intent> <type>: <Title>](<url>) · <force>
   realization: <previous> → <new>      (or "not settled: <why>")
   refs:        <complete anchor list>
   verified:    <stamp>
@@ -242,15 +242,15 @@ sync-realization — complete
 Code roots: <name> <path> @ <commit|date> ...   Scope: <scope>   Since: <since|—>
 
 Realization changes:
-  <id>  "<title>"  <previous> → <new>   — <evidence>   refs: <anchors>
-Re-verified, unchanged: <N>  (<ids>)
-Not settled: <id> — <why>
+  [<Intent> <type>: <Title>](<url>)  <previous> → <new>   — <evidence>   refs: <anchors>
+Re-verified, unchanged: <N>  (each cited)
+Not settled: [<Intent> <type>: <Title>](<url>) — <why>
 
 Drift:
-  Backlog (planned, living):            <id> "<title>" ...
-  Regressions (realized → not):         <id> "<title>" — <what is missing>
-  Claims the code contradicts:          <id> <Intent> <type> [force] — <what the code does instead>
-  Successor realized, deprecation due:  <id> → <successor id>   (hand to revise-doc)
+  Backlog (planned, living):            [<Intent> <type>: <Title>](<url>) ...
+  Regressions (realized → not):         [<Intent> <type>: <Title>](<url>) — <what is missing>
+  Claims the code contradicts:          [<Intent> <type>: <Title>](<url>) · <force> — <what the code does instead>
+  Successor realized, deprecation due:  [<Intent> <type>: <Title>](<url>) → [<Intent> <type>: <Title>](<successor url>)   (hand to revise-doc)
 
 Built, no doc — hand to reconcile-changes:
   <anchors> — <what it is, why it looks durable>

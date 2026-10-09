@@ -143,12 +143,12 @@ rule with no recorded purpose" — so the person can state the goal or use-case.
 garden — phase: densify
 Scanned: N docs
 Findings:
-  <id>  "<title>"  — <n> prose wikilinks unmaterialized; <m> missing deps; <k> why-chain gaps
-  <id>  "<title>"  — rule with no recorded purpose (no goal/use-case exists to require)
+  [<Intent> <type>: <Title>](<url>)  — <n> prose wikilinks unmaterialized; <m> missing deps; <k> why-chain gaps
+  [<Intent> <type>: <Title>](<url>)  — rule with no recorded purpose (no goal/use-case exists to require)
 Actions:
-  [1] LINK <id> --requires <target> — existential dep; cascade now reaches it
-  [2] LINK <id> --belongs-to <parent> — prose named the parent; materialized
-  [3] LINK <id> --relates <target> — see-also from body
+  [1] LINK [<Intent> <type>: <Title>](<url>) requires [<Intent> <type>: <Title>](<target url>) — existential dep; cascade now reaches it
+  [2] LINK [<Intent> <type>: <Title>](<url>) belongs to [<Intent> <type>: <Title>](<parent url>) — prose named the parent; materialized
+  [3] LINK [<Intent> <type>: <Title>](<url>) relates to [<Intent> <type>: <Title>](<target url>) — see-also from body
 Applied: [list]
 Changed-ids: [id, …]
 ```

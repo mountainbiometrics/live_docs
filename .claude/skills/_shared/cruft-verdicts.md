@@ -37,6 +37,23 @@ that. In a scan, the signals that surface it (each routes to a verdict below):
   subsystem it touches.
 - **Mis-clustered survivor** — belongs under a different parent than its current,
   cruft-driven cluster.
+- **An existence claim about the code** in a claim body — "no X exists", "X is
+  not built yet", "X is implemented in Y". Whether a claim is built is
+  `realization` (`doc-style.md`, existence is a facet) → EXCAVATE: strip the
+  sentence; a still-true anchor moves to `realization_refs`.
+- **Interim language whose interim has ended** — "for now", "until the policy
+  is specified", on a doc whose stop-gap was replaced or whose open question
+  was settled → REWRITE to the settled state, or REMOVE when the interim was
+  the doc's whole content.
+- **Negative-space or deferral language** — what the thing is not, what was
+  ruled out, what is "not yet" planned (`doc-style.md`) → REWRITE as the
+  positive claim.
+- **A changelog-shaped body** — update or correction paragraphs, in the order
+  they were added, under an opening that is now false (`doc-style.md`, the body
+  is not a changelog) → REWRITE.
+- **A stop-gap decision whose stop-gap has been replaced** → REMOVE, or
+  deprecate when the stop-gap is worth keeping as overturned history
+  (calibration 3).
 
 **Detail that is incidental vs. detail that is the subject.** Not all
 implementation-shaped language is cruft. A doc drifts into implementation
@@ -76,12 +93,19 @@ step carries a durable decision the plan doc lacks, EXCAVATE it instead.
 
 Assign each doc exactly one verdict (the compounds below are the only stacks).
 
+**A signal decides the verdict.** A doc that shows a signal from the lens gets
+the verdict that signal routes to, with no justification beyond the signal.
+KEEP on such a doc says the signal was wrong, and names the standard the doc
+meets and how. A signal is a quality failure, not a proposal; a doc left as it
+is with no such finding is cruft the next pass meets again.
+
 | Verdict | Apply when | Action |
 |---|---|---|
-| **KEEP** | Current, well-typed, carries its why. | Nothing. |
+| **KEEP** | Current, well-typed, carries its why. On a doc that showed a signal, only with a stated reason. | Nothing. |
 | **EXCAVATE** | The architectural decision is **still current** but the doc is buried under removed/renamed implementation detail. | Strip the dead *what*; keep the *why*; move still-true detail to `realization_refs` or `## Implementation`. **Status was never wrong** — do not deprecate. |
 | **EXCAVATE(rename)** | Sub-case of EXCAVATE: the doc's subject is named after a class / function / module that was renamed or never built. | Strip the dead symbol noun-phrase; keep the decision. Status was never wrong. |
 | **RECLASSIFY→type** | The doc is the wrong type (e.g. a "have a module that does X" decision is really a `component` named "module for X"). | Re-type per `doc-types.md` and its "is this really a decision?" ladder, and set the facets the new type's row requires while dropping the ones it forbids (a decision retyped as a component loses `force`). |
+| **REWRITE** | The claim is current, but the body narrates its own history (correction or update paragraphs under a false opening), keeps interim language whose interim has ended, or states the claim through negative-space or deferral language. | Rewrite the body, summary, and title (when the claim it names changed) to the current state; delete every sentence that is no longer true. |
 | **ADD-WHY** | A doc that is not a **heading** states a *what* with no *why*. | Add the why (may cite its provenance doc); every claim must carry its why. A heading is the allowed exception. A parent of any other type still owes a why. |
 | **REMOVE** | No durable content not already captured elsewhere. | `ldoc rm` — deletion is the default retirement path when content is fully captured elsewhere. **Especially:** a doc that is a step in a *completed* refactor plan whose durable why already lives in the plan's `reference` doc → default REMOVE. |
 | **MERGE→id** | Folds wholly into a sibling/target. | Port unique content into the target, deprecate or `ldoc rm` the loser. |
@@ -105,6 +129,7 @@ No new CLI flags — every action uses `ldoc set` / `rm` / `link` / `unlink`:
 - **EXCAVATE / EXCAVATE(rename) / ADD-WHY** — rewrite the body via
   `ldoc set <id> --body - --note "garden-cruft: excavated — stripped <dead what>, kept the why"`
   (and `--summary` to match).
+- **REWRITE** — `ldoc set <id> --body - --summary "..." [--title "..."] --note "garden-cruft: rewrote to current state — <what was removed>"`.
 - **RECLASSIFY** — `ldoc set <id> --type <type> <facet flags for the new type> --note "garden-cruft: reclassified type"`.
 - **REMOVE** — `ldoc rm <id>`; rewire any inbound edges first.
 - **MERGE→id / EXCAVATE→MERGE→id** — port into the target via

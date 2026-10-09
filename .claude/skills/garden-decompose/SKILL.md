@@ -79,9 +79,9 @@ cascades once at episode close.
 garden — phase: decompose
 Scanned: N docs
 Findings:
-  <id>  "<title>"  — <why split candidate>
+  [<Intent> <type>: <Title>](<url>)  — <why split candidate>
 Actions:
-  [1] Split <id> into <A-id> + <B-id> …
+  [1] Split [<Intent> <type>: <Title>](<url>) into [<Intent> <type>: <Title>](<A url>) + [<Intent> <type>: <Title>](<B url>) …
 Applied: [list]
 Changed-ids: [id, …]
 ```

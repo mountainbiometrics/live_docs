@@ -250,12 +250,12 @@ session and writes nothing extra here.
 Print a summary table:
 
 ```
-cascade-check session — changed: [<ids>]
+cascade-check session — changed: <each changed doc, cited>
 ─────────────────────────────────────────────────────
-neighbor id    direction    verdict            action taken
-20260615...    downstream   cascade            updated body
-20260615...    upstream     inconsequential    no change
-20260615...    downstream   incompatible       left standing — <reason>
+neighbor                            direction    verdict            action taken
+[<Intent> <type>: <Title>](<url>)   downstream   cascade            updated body
+[<Intent> <type>: <Title>](<url>)   upstream     inconsequential    no change
+[<Intent> <type>: <Title>](<url>)   downstream   incompatible       left standing — <reason>
 ─────────────────────────────────────────────────────
 Total evaluated: N   Cascaded: N   Inconsequential: N   Left standing: N
 ```

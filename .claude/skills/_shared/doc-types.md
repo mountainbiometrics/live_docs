@@ -124,6 +124,21 @@ may be set when they are known. `intent` is required on every type except
 There is no `tier` field: which layer of the why-chain a doc sits on is a
 property of its type, read from this table.
 
+## Body ceilings per type
+
+A doc carries one claim, so a body past its type's ceiling usually carries
+several, or narrates history. `ldoc validate` warns when a body passes either
+limit, and the route is `garden-decompose`. The body is measured without its
+`## Implementation` section.
+
+| Type | Paragraphs | Words |
+|---|---|---|
+| `principle`, `decision`, `constraint`, `requirement`, `goal`, `use-case` | 8 | 400 |
+| `component` | 10 | 600 |
+| `heading` | 12 | 800 |
+| `guide` | 16 | 1200 |
+| `reference`, `type` | none | none |
+
 ## The why-chain
 
 The expected `requires` edges form one chain, read bottom-up: **shapes rest on

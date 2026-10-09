@@ -2383,7 +2383,8 @@ function reviewMetric(num, unit, title) {
 
 function reviewMetricsHtml(r) {
   const s = r.stats || {};
-  const existingDocs = (s.touched_docs || 0) + (s.minor_docs || 0);
+  const existingDocs = s.existing_docs || 0;
+  const revisedDocs = s.revised_docs || 0;
   const newDocs = s.new_docs || 0;
   const refDocs = s.reference_docs || 0;
   const hasInt = !!s.has_integration;
@@ -2409,12 +2410,17 @@ function reviewMetricsHtml(r) {
 
   if (existingDocs || (hasInt && edgesOnExisting) || fallbackTouched) {
     const bits = [];
-    bits.push(reviewMetric(existingDocs || fallbackTouched, "docs", "Docs revised in this session"));
+    bits.push(reviewMetric(existingDocs || fallbackTouched, "touched", "Existing docs changed in any way in this session"));
+    // A review with no change-type sections only knows its touched list.
+    if (!fallbackTouched) {
+      bits.push(`<span class="rev-gsep">·</span>`);
+      bits.push(reviewMetric(revisedDocs, "revised", "Existing docs whose claims changed (title, summary or body)"));
+    }
     if (hasInt) {
       bits.push(`<span class="rev-gsep">·</span>`);
       bits.push(reviewMetric(edgesOnExisting, "edges", "New edges added on existing docs"));
     }
-    groups.push(`<div class="rev-group"><span class="rev-glabel">Revised</span>${bits.join(" ")}</div>`);
+    groups.push(`<div class="rev-group"><span class="rev-glabel">Existing</span>${bits.join(" ")}</div>`);
   }
 
   if (refDocs) {

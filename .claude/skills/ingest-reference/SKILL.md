@@ -354,15 +354,15 @@ RAW_ID:  <id>   raw/<id>.md   — verbatim, immutable (NOT in graph)
 NORM_ID: <id>   docs/<id>.md  — normalized reference (graph node)
 
 Extracted docs:
-  <id>  type: principle   title: "<title>"
-  <id>  type: decision    title: "<title>"
+  [<Intent> principle: <Title>](<url>)
+  [<Intent> decision: <Title>](<url>)
 
 Corrected existing docs (primary outputs):
-  <id>  "<existing doc title>" — revised: <one-line summary of what changed>
-  <id>  "<existing doc title>" — deprecated: added Correction section + superseded_by
+  [<Intent> <type>: <Title>](<url>) — revised: <one-line summary of what changed>
+  [<Intent> <type>: <Title>](<url>) — deprecated: added Correction section + superseded_by
 
 Linked to existing docs (provenance only):
-  <id>  "<existing doc title>" — added <NORM_ID> to provenance
+  [<Intent> <type>: <Title>](<url>) — added <NORM_ID> to provenance
 ```
 
 Then close the session, minting the single review for the entire ingest episode.

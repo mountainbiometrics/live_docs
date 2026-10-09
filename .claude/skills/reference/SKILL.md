@@ -10,7 +10,11 @@ description: >
   need to read or write docs — it replaces rediscovering the system from
   `ldoc --help`. For WHICH skill to run for a given task, and the operating
   discipline, this points you on to the task skills (apply-to-docs, ingest-
-  reference, revise-doc, garden, cascade-check, validate).
+  reference, revise-doc, garden, cascade-check, validate). Also read it
+  whenever you consult, search, quote, or cite a live_docs store while working
+  on something else — answering a question, planning code, reviewing a change:
+  it says how to read a doc line, what a doc claims, how to cite a doc, and how
+  to flag a badly written one.
 ---
 
 # reference — How to operate a live_docs store
@@ -70,7 +74,71 @@ delete and re-ingest if wrong.
 
 ---
 
-## 1. The ldoc command surface
+## 1. Reading and citing the store mid-task
+
+These rules are for an agent that reads or cites the store while its task lies
+elsewhere. They hold whatever the task, because a report built on a misread doc
+passes the misreading to the person who acts on it.
+
+**Read the doc line before the body.** The doc line is `<Intent> <type>:
+<Title>` with force and realization tags. The facets, not the body, say whether
+and how far a doc binds (`.claude/skills/_shared/facets.md`). An `incidental`
+doc records an agent's proposal or a stop-gap; never present it as the person's
+decision.
+
+**A doc's claim is its title and summary.** When you report what a doc decides,
+records, or requires, quote or paraphrase its title or summary. When only a
+body sentence supports your statement, say that it is one sentence in the
+doc's body, because body sentences drift from the claim the doc is about.
+
+**Cite with `ldoc cite <ref>`.** It prints the doc line linked to the viewer.
+Name every doc in a report or in chat this way, so the reader sees the facets
+and can open the doc. Never name a doc by a phrase of your own, and never by
+its id alone in prose. Every report template in these skills uses this form,
+`[<Intent> <type>: <Title>](<url>)`, with ` · <force>` or ` · <realization>`
+trailing where the template needs a tag.
+
+**Whether a claim is built is `realization`.** A body sentence saying something
+exists, or does not exist yet, goes stale without anyone editing the doc. Treat
+it as `unassessed` and check the code.
+
+**A `find` hit in the body is a mention.** `ldoc find` matches substrings in
+title, label, and body, and each snippet names the field it came from
+(`title:`, `body:`, ...). Search with the vocabulary of the mechanism that
+exists as well as the vocabulary of the change you are proposing, and walk
+`ldoc neighbors` of each hit before concluding what the store says.
+
+**A doc that records the current design does not conflict with a new
+request.** It becomes stale when the request lands. Report what is stale and
+what the fix is; never hand the person a question the facets already answer.
+The full rule is `.claude/skills/_shared/conflict-test.md`.
+
+**Code and docs answer different questions.** The code says what the system
+does; the docs say why. Neither outranks the other. Report a disagreement
+between them as a finding, naming the cited doc and the code location.
+
+**Flag a badly written doc and return to your task.** Run `ldoc flag add <ref>
+--reason "<the sign you saw>"`. Do not rewrite the doc mid-task: a rewrite is a
+governed change (revise-doc), and `/garden` drains open flags. The endpoint
+writes nothing, so with no checkout of the store, name the doc and the sign you
+saw in your report instead. The signs:
+
+- not atomic: several claims, or a body past its type's ceiling
+  (`.claude/skills/_shared/doc-types.md`);
+- implementation state in a why doc;
+- deferral or "not yet" language;
+- negative-space language, stating what the thing is not;
+- a body shaped like a changelog: update or correction paragraphs appended
+  under an opening that is now false;
+- a title that states a thesis instead of naming a topic.
+
+**Write nothing else unasked.** The flag is the one write a reader makes. Any
+other change waits until the person asks for it, and then runs through the
+matching skill (§7).
+
+---
+
+## 2. The ldoc command surface
 
 All ref arguments accept `id | label | title` (exact, or a unique
 case-insensitive substring). Most read verbs take several refs; pass `-` as the
@@ -92,6 +160,7 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 | `ldoc body <ref...>` | Body only |
 | `ldoc neighbors <ref> --kind requires\|belongs_to\|relates\|provenance\|superseded_by\|dependents\|provenance_of\|all` | Edges in/out |
 | `ldoc graph <ref> [--depth N] [--direction up\|down\|both]` | BFS over cascade-hard edges |
+| `ldoc cite <ref>` | The doc line linked to the viewer: `[<Intent> <type>: <Title>](file://<viewer>#/<id>)`. The form for naming a doc in a report or chat |
 
 **Mutate** (write only — pair with the skill that owns the judgment)
 
@@ -113,7 +182,9 @@ sole ref to read refs from stdin. Run `ldoc help` for the full banner, or
 |---|---|
 | `ldoc inbox add (--from-file P\|--body T\|-) [--title T] [--source S]` | Gate 0: capture verbatim, no processing |
 | `ldoc inbox list` / `ldoc promote <ref> [--all]` | List / Gate 1: inbox → raw |
-| `ldoc validate [--include-reference]` | Structural integrity on the non-reference corpus by default; `--include-reference` opts into archive checks (not a requirement) |
+| `ldoc validate [--include-reference]` | Structural integrity on the non-reference corpus by default; `--include-reference` opts into archive checks (not a requirement). Warns on bodies past their type's ceiling; ends with the open-flag count |
+| `ldoc flag add <ref> --reason "..."` | Mark a badly written doc for gardening; the doc line gains ` · flagged` and `ldoc map` ends with the open-flag count |
+| `ldoc flag list [--all] [--doc <ref>]` / `ldoc flag resolve <id> --note "..."` | Open flags (`--all` adds resolved ones) / close a flag with what was done to the doc, or the standard it meets when the flag was mistaken |
 | `ldoc reindex` | Rebuild `<docs>/.index/` derived caches |
 | `ldoc viewer [--out PATH]` | Build the read-only HTML viewer (default path: `[viewer] build_path`, else `build/viewer.html`) |
 | `ldoc session start\|close\|list\|summary\|resume\|merge ...` | Editing-session lifecycle; every mutation runs in a session, `close` mints one review (see `.claude/skills/_shared/session-lifecycle.md`) |
@@ -132,7 +203,7 @@ register its root, or run the command where the store lives. Set
 
 ---
 
-## 2. Frontmatter schema
+## 3. Frontmatter schema
 
 ### Canonical field order (the serializer enforces it — you don't hand-order)
 
@@ -223,7 +294,7 @@ the why-chain are **`.claude/skills/_shared/doc-types.md`** — the source
 
 ---
 
-## 3. Edge model
+## 4. Edge model
 
 Edges are stored as quoted wikilinks (`["[[<id>]]"]`); `ldoc` unwraps them to
 bare ids for you. There are five outbound edge types:
@@ -256,7 +327,7 @@ breadth-at-a-glance against depth-to-detail. Operative placement rules + sizing:
 
 ---
 
-## 4. scope vs domain — two orthogonal facets
+## 5. scope vs domain — two orthogonal facets
 
 Both are optional tags, but they answer different questions and behave
 differently:
@@ -290,7 +361,7 @@ ldoc find --domain "Area One"
 
 ---
 
-## 5. Creating a doc with full metadata in one call
+## 6. Creating a doc with full metadata in one call
 
 ```bash
 ldoc new \
@@ -318,7 +389,7 @@ ldoc new \
 
 ---
 
-## 6. Don't substitute raw ldoc for the skills
+## 7. Don't substitute raw ldoc for the skills
 
 `ldoc` mutators carry no judgment. For substantive work, run the skill that owns
 the procedure — it handles concept extraction, blast-radius, cascade, history,
@@ -334,7 +405,7 @@ and the post-hoc review summary:
 | Know what else went stale after a change | **cascade-check** |
 | Tidy navigation, orphans, grouping, tree structure | **garden** (or `/garden find homes for orphans`) |
 | Refresh a signpost orientation guide | **garden** or **garden-summarize** |
-| Periodic cleanup, decomposition, drift repair | **garden** |
+| Periodic cleanup, decomposition, drift repair; work the open flags | **garden** |
 | Structural integrity report (no fixes) | **validate** |
 | Rebuild `.index/` caches | **reindex** |
 

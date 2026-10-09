@@ -3,10 +3,11 @@ name: garden
 description: >
   Periodic maintenance: thin dispatcher over garden-* phase sub-skills
   (atomicity, structure, form). Owns the episode — one START, routing, one
-  cascade over the union of changes, one review. Use for decomposition, drift
-  repair, orphan homes, duplicate cleanup, surface-quality sampling, or on a
-  schedule. Invoke with natural-language intent (/garden clean up duplicates) or
-  /garden all for a full sweep.
+  cascade over the union of changes, one review. Use for working the open
+  flags (`ldoc flag list`), decomposition, drift repair, orphan homes,
+  duplicate cleanup, surface-quality sampling, or on a schedule. Invoke with
+  natural-language intent (/garden clean up duplicates) or /garden all for a
+  full sweep.
 ---
 
 # garden — Dispatcher over gardening phases
@@ -46,6 +47,8 @@ sample 1–2 maintenance phases.
 
 | Signal | Route |
 |--------|-------|
+| Open flags (`ldoc flag list`) — the highest priority; drain them before any other signal | The phase each flag's reason matches (below) |
+| `ldoc validate` warns a body is past its type's ceiling | `garden-decompose` |
 | `ldoc orphans` count high (living atomic orphans) | `garden-hierarchy` |
 | Signpost with ≳12 direct children | `garden-hierarchy` (re-scope) |
 | `ldoc validate` errors | `garden-integrity` |
@@ -58,6 +61,21 @@ sample 1–2 maintenance phases.
 | Staleness (dependency updated after dependent) | **signal only** — note for user; cascade-check owns writes |
 | else | random 1–2 of `{refine, domains, decompose}` |
 
+**Routing a flag.** Read each open flag's reason and route the flagged doc to
+the phase that owns that sign:
+
+- several claims, or a body past its type's ceiling → `garden-decompose`;
+- implementation state or an existence claim in a why doc, deferral or "not
+  yet" language, negative-space language, a changelog-shaped body, a replaced
+  stop-gap → `garden-cruft`;
+- a thesis title, a weak summary → `garden-refine`;
+- a duplicate of another doc → `garden-collapse`;
+- a wrong home → `garden-hierarchy`; a missing edge → `garden-densify`.
+
+Decide the route yourself for a reason this list does not name. A reason no
+phase owns stays open; say so in the report. Every flag the episode acts on
+is resolved at episode close.
+
 ### `/garden <natural-language intent>`
 
 The dispatcher **reasons** from arbitrary natural-language intent to the
@@ -66,6 +84,7 @@ not listed here still has a nearest phase; infer it. When intent spans axes,
 chain the relevant phases; still one episode.
 
 Illustrative examples:
+- "work the flags" / "fix the flagged docs" → the open-flags triage row
 - "clean up duplicates" / "merge duplicates" → `garden-collapse`
 - "remove cruft" / "excavate dead implementation" / "strip stale symbol names" / "drop refactor-chore docs" → `garden-cruft`
 - "find homes for orphans" / "grouping" / "hierarchy" → `garden-hierarchy`
@@ -134,6 +153,11 @@ these into `SIGNPOSTS_TO_SUMMARIZE` for the pre-cascade summarize pass.
 
 **Union** all changed ids across phases into `EPISODE_CHANGED`.
 
+Hand each phase the flagged docs routed to it ahead of the rest of its
+candidate set, whatever the route (`/garden`, an intent, or `all`). Record in
+`FLAGS_TOUCHED` each flag whose doc a phase changed or judged, with what the
+phase did, or the standard the doc meets when the phase rejected the flag.
+
 Phases must **not** open or close a session (no `session start`/`session close`)
 and must **not** run cascade; episode ownership — opening the session and closing
 it into one review, plus the single cascade over the union of changes — belongs
@@ -141,9 +165,17 @@ to this dispatcher.
 
 ---
 
-## Episode close (only if anything wrote)
+## Episode close
 
-If `EPISODE_CHANGED` is empty, emit **no review** and stop.
+Every flag in `FLAGS_TOUCHED` is resolved with a note, because an open flag
+on a doc already judged sends the next episode back to it:
+
+```bash
+ldoc flag resolve <flag-id> --note "<what was done to the doc, or: meets <standard>: <how>>"
+```
+
+If `EPISODE_CHANGED` is empty, resolve the touched flags, emit **no review**,
+and stop.
 
 Otherwise:
 
@@ -158,11 +190,13 @@ Otherwise:
    ```bash
    ldoc validate
    ```
-4. **One review** — close the session:
+4. **Resolve flags** — every flag in `FLAGS_TOUCHED`, as above.
+5. **One review** — close the session:
    ```bash
    ldoc session close --summary "<one-line agent recap of the episode>"
    ```
-5. Report review id. Note if `hierarchy.md` needs `ldoc reindex`.
+6. Report review id, the flags resolved, and the flags left open with why.
+   Note if `hierarchy.md` needs `ldoc reindex`.
 
 Review is post-hoc and non-gating: every change is blessed on creation; the review layer challenges changes after the fact, not before.
 

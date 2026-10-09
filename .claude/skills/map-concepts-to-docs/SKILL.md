@@ -163,7 +163,7 @@ Emit a labeled verdict map:
 Concept: "<short noun phrase>"
   Asserts: "<new claim>"
   Matches:
-    <id>  <Intent> <type>: "<existing title>" [<force>]  — <compatible | partial-supersession | full-supersession | conflict-unresolved>
+    [<Intent> <type>: <Title>](<url>) · <force>  — <compatible | partial-supersession | full-supersession | conflict-unresolved>
       Reason: <one sentence>
   Action planned: <revise | deprecate | link-provenance | create-new>
 ```

@@ -420,6 +420,7 @@ _DEFAULT_PATHS = {
     "raw": "raw",
     "reviews": "reviews",
     "sessions": "sessions",
+    "flags": "flags",
     "lexicon": "lexicon",
     "inbox": "inbox",
     "index": None,  # None → derived as <docs>/.index
@@ -432,6 +433,7 @@ _ENV_VARS = {
     "raw": "LIVEDOCS_RAW_DIR",
     "reviews": "LIVEDOCS_REVIEWS_DIR",
     "sessions": "LIVEDOCS_SESSIONS_DIR",
+    "flags": "LIVEDOCS_FLAGS_DIR",
     "lexicon": "LIVEDOCS_LEXICON_DIR",
     "inbox": "LIVEDOCS_INBOX_DIR",
 }
@@ -457,6 +459,7 @@ class StorePaths:
     raw: Path
     reviews: Path
     sessions: Path
+    flags: Path
     lexicon: Path
     inbox: Path
     index: Path

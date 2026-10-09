@@ -306,6 +306,10 @@ def generate_id(target_dir: Path) -> str:
     return str(ts)
 
 
+def now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def generate_session_id() -> str:
     """Return a sortable, collision-resistant session id: ``<YYYYMMDDHHMMSS>-<hex>``.
 
@@ -416,13 +420,12 @@ def display_label(doc: dict) -> str:
 
 
 def facet_tags(doc: dict) -> str:
-    """The ' · must · planned' tail naming how hard a doc binds and whether it exists.
-
-    Empty when the doc carries neither, so the facets a type forbids never show.
-    Takes any mapping with `force` / `realization` keys, so a record and a parsed
-    doc render the same tail.
-    """
-    return "".join(f" · {v}" for v in (doc.get("force"), doc.get("realization")) if v)
+    """The ' · must · planned · flagged' tail: how hard a doc binds, whether it
+    exists, and whether a reader flagged it as badly written."""
+    tags = [v for v in (doc.get("force"), doc.get("realization")) if v]
+    if doc.get("open_flags"):
+        tags.append("flagged")
+    return "".join(f" · {v}" for v in tags)
 
 
 # A stored reference is a bare wiki-link to a doc id: [[20260616181719]].

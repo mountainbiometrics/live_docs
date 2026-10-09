@@ -141,6 +141,16 @@ ldoc link <id> --superseded-by <new-id>
 # body-text changes: edit docs/<id>.md directly (no ldoc verb for body in-place)
 ```
 
+**Rewrite the doc to its new state.** After the edit the doc reads as if it had
+always said the new thing. A sentence that became false is removed or replaced
+where it stands, and the title and summary are revised with the body whenever
+the claim they name changed. Never append an update or correction paragraph
+under the old opening: a correction that leaves the false sentence standing is
+not a correction, because readers take the opening, title, and summary as the
+doc's claim (`.claude/skills/_shared/doc-style.md`, the body is not a
+changelog). What changed goes in the `--note`; a `## Correction` section
+belongs only on a doc being deprecated.
+
 No gratuitous reformatting, no refactoring beyond scope. For a deprecation or a
 wider rewrite that affects several docs at once, hand the plan to
 `synthesize-doc-changes` rather than hand-writing each doc — it owns the
@@ -239,7 +249,7 @@ Emit a concise summary:
 
 ```
 revise-doc — complete
-Target: <id>  "<title>"
+Target: [<Intent> <type>: <Title>](<url>)
 Change type: substantive | provenance-only
 
 What changed:
@@ -248,7 +258,7 @@ What changed:
 History entry added: <yes / no>
   (if yes) at: <date>  summary: "<text>"
 
-Cascade summary: <N neighbors evaluated — list each id: verdict>
+Cascade summary: <N neighbors evaluated — each cited, with its verdict>
   (or "skipped — provenance-only change")
 
 Validation: <N docs scanned — clean | N errors, N warnings>

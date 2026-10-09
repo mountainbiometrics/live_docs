@@ -238,6 +238,11 @@ not leave a stated root only as prose inside the decision body. When no
 upstream doc exists and the source does not state one, leave the edge missing
 rather than invent one; validate's warning is the gardening signal.
 
+**Revise what a new doc's `requires` points at.** When a new doc `requires` an
+existing doc and extends or contradicts that doc's title or summary, revise
+the existing doc in this same pass, title included. Otherwise the upstream
+doc's line keeps stating the old claim while its new dependent states another.
+
 **Dedup shortcut**: if a concept merely DUPLICATES or STRENGTHENS an existing
 living doc, do NOT create a new doc — instead link the anchor to that doc's
 provenance:
@@ -271,8 +276,8 @@ Emit a labeled list of the writes performed:
 
 ```
 Synthesized writes
-  <id>  "<title>"  deprecated  — superseded by <REPLACEMENT_ID>
-  <id>  "<title>"  revised     — <one-line: what changed>
-  <id>  "<title>"  created     — new doc for concept "<concept>"  (provenance <anchor>)
-  <id>  "<title>"  provenance-linked — added <anchor>
+  [<Intent> <type>: <Title>](<url>)  deprecated  — superseded by [<Intent> <type>: <Title>](<replacement url>)
+  [<Intent> <type>: <Title>](<url>)  revised     — <one-line: what changed>
+  [<Intent> <type>: <Title>](<url>)  created     — new doc for concept "<concept>"  (provenance <anchor>)
+  [<Intent> <type>: <Title>](<url>)  provenance-linked — added <anchor>
 ```
