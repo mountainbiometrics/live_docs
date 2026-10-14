@@ -42,3 +42,11 @@ root-over-decision (reconcile had a soft bias that still failed).
    be implemented land `status: living`. `target` requires explicit deferral
    (weeks+/migration/external deps), mainly on decision/component — not
    principle/constraint/goal/requirement. See `_shared/status-living-vs-target.md`.
+
+## Newly discovered good-output properties (2026-10-14)
+
+10. **Questions carry a consideration.** Anything the reply asks or flags
+    names a reason, cost, constraint, or use-case the request did not account
+    for, in the subject's terms. Contradicted implementation wording is
+    stripped and reasonless stale intent rewritten without asking; genuine
+    competing intent is still named, stated as the intent and its reason.

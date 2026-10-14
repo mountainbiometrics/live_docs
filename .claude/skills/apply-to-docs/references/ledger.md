@@ -2,6 +2,50 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-10-14 — Implementation wording escalated as a question (Class A)
+
+**Failure:** A 2026-10-13 run recorded a settled design and ended its report
+by asking the owner whether an unclear phrase of theirs referred to a sentence
+in a requirement doc about how much slack a size check leaves, saying the
+sentence "needs your call". The sentence was implementation wording inside a
+requirement; the raw material already said the check should carry no such
+slack, and the run had already raised that requirement's intent on those
+words. Owner: the store catches conflicting intent and does not dictate
+implementation; contradicted implementation wording is purged; an opposing
+doc is checked for a reason, fluff is deleted, and only a reason the new
+material did not consider is raised, as the consideration, never as "the
+store says X".
+
+**Class:** A. No text told the executor to judge what kind of statement a
+contradicted sentence is, and nothing said what an owner-facing question must
+contain. Step 5 governs pausing only, so the report was an unguarded channel:
+uncertainty about the owner's referent became a question. Not B: no sentence
+licensed the question; not a pause-gate failure as such.
+
+**Diff:** Step 8 gains "What may go to the person" (judgment): a question or
+flag must carry a consideration the request did not account for, in the
+subject's terms, with what it would change; doc wording and "needs your call"
+on classifiable text never qualify; triage per synthesize-doc-changes Step 2;
+survey-time unconsidered reasons weighed under the existing Step 5 test;
+`conflict-unresolved` entries still named, stated as competing intent and its
+reason; ask about the person's words only when their meaning changes recorded
+intent. Step 9 self-check gains a "questions" line. Paired edit in
+synthesize-doc-changes Step 2 (see its ledger).
+
+**Declined:** a new Step 5 pause trigger (would widen the gate the 07-23 entry
+narrowed); edits to map-concepts-to-docs (its verdicts are doc-level and the
+run reached synthesis with the right `partial-supersession`; its bias rule is
+already tempered by `_shared/conflict-test.md`); edits to conflict-test.md
+(shared by cascade-check, revise-doc, garden; its "stale, not in conflict"
+rule already fits; the gap was sentence-level triage at write time).
+
+**Regression answers:** 1 identify-then-synthesize — yes, unchanged. 2
+archive — unchanged. 3 pause gate — yes, no trigger added; real conflicts
+still named. 4, 5, 6, 8 — unchanged. 7 large updates proceed — yes. 9
+settled cruft cleaned in-pass — reinforced: contradicted implementation
+wording is that cruft even when the owner's referent is unclear.
+
+
 ## 2026-08-25 — Settled-authority contradictions punted to owner (Class B)
 
 **Failure:** During an apply-to-docs episode, the survey turned up a June doc

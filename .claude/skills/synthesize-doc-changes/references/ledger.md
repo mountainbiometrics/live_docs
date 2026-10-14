@@ -2,6 +2,165 @@
 
 Edit history for skill refinements. Newest first.
 
+## 2026-10-14 — Mechanism narrated as doctrine (Class A)
+
+**Failure:** An apply-to-docs batch wrote token-issuance choreography into a
+principle (identity apart from proof), a constraint (carrier is the
+transport's), and a component (the auth context), each from its own vantage:
+"the transport then issues its own token" / "the proof context only issues
+tokens" / "it issues and resolves user tokens … the transport then mints its
+own token". No decision recorded who constructs a token. An audit reported
+the drift as a contradiction and proposed a passing version that picked a
+mechanism; the orchestrator then asked the owner to settle a second
+mechanism question (which credential kinds MCP write tools accept) that no
+doc's claim decided. Owner: the store catches conflicting design decisions
+and does not dictate implementation; indicative mechanism sentences and
+commanding prose are read downstream as doctrine, and the owner has to
+re-explain this to every agent.
+
+**Class:** A. cruft-verdicts' incidental-detail test and doc-types'
+why-not-what covered stripping a dead or incidental name, but no text said
+that a mechanism sentence in a claim body is read as a decision, that drift
+between docs on an unowned mechanism is over-specification rather than a
+conflict, or that body prose carries no modal force beyond the `force`
+facet. conflict-test.md covers same-claim-at-which-intent and did not reach
+"not a claim at all".
+
+**Diff:** New `_shared/doc-style.md` section "Mechanism is not the claim":
+mechanism belongs to the implementation (or `## Implementation`); the two
+failure shapes (doctrine downstream, false conflict across docs); unowned
+disagreement is removed from each doc, never arbitrated or asked; the
+survival test points at cruft-verdicts; `force` is the only binding
+strength. audit-docs gained the matching checks and the rule that such a
+disagreement never becomes a Consideration (its own ledger).
+
+**Amended same day (owner-flagged under-correction):** the section as
+first written kept a survival test ("mechanism stated inside claims that do
+not need it"), which leaves the decision to the writer. Owner: not "if the
+claim does not need it" but ever; the only doc that names a mechanism is a
+decision whose claim is that mechanism, chosen and not merely built, and
+nothing outside a doc's own claim is stated as fact, because that reaches
+outside its responsibility. By the register test this is an invariant (two
+writers differing on whether a mechanism sentence stays is the bug).
+Rewritten: the rule leads, the responsibility boundary generalizes it to
+any fact outside the claim, the why follows. cruft-verdicts' subject test
+now asks whether the doc is the decision for the name, not whether the
+sentence survives without it.
+
+**Tested (blind, same day):** a Sonnet executor given only the revise-doc
+skill path and the three doc ids, with doc-style read in full (verified in
+its transcript). Caught: the deferral wording in all three, the principle's
+"transport then issues its own token", the constraint's per-transport
+carrier list. Missed: it resolved the disagreement by keeping "the proof
+context issues tokens" in the component and the constraint (the constraint's
+title names that mechanism, so it treated the constraint as the owner under
+the owned-claims rule and removed the other side); the component still
+states "issues and resolves user tokens", "calls the accounts context, never
+the reverse", and "writes … to the audit context". Diagnosis: the executor
+removed the sentence the section quotes as an example and little else; a
+non-decision doc's title naming a mechanism read as ownership; nothing said
+what a component's claim is as against its mechanism. Amended: descriptors
+are under the rule and confer no ownership; a component's claim is its
+responsibility and why, not what it issues, calls, or writes to; the rule
+applies to every sentence, not to those resembling the examples.
+
+**Re-tested after the amendment (same executor tier, same brief):** the
+component now states its responsibility and its why, with the dependency
+direction, what it writes to, and "issues and resolves" gone; the principle
+is clean; the constraint keeps "the proof context issues tokens and checks a
+presented token" in body and summary. The inter-doc disagreement is gone, but
+one non-decision doc still names the mechanism. Left as is for the owner to
+weigh: a third tightening aimed at that phrase would be correcting toward the
+last failure.
+
+**Declined:** editing conflict-test.md (its subject is same-claim intent
+comparison; the new section says when there is no claim to compare) and
+cruft-verdicts.md (the incidental-detail test already serves as the
+survival test; the register point belongs in doc-style).
+
+**Regression answers:** 6 body states claim and why — reinforced (the why
+survives; mechanism does not). 12 plain register — consistent: describing
+who does what applies to the claim, not to the code. Detail that is a doc's
+subject (a contract's field names) still survives the incidental-detail
+test. Others unchanged.
+
+
+## 2026-10-14 — Contradicted sentence: implementation wording or intent (Class A)
+
+**Failure:** see apply-to-docs ledger, same date. The revision raised a
+requirement's intent from the owner's words yet left a sentence in it about
+how much slack a check leaves, which those words opposed, because the
+executor could not tell whether the owner's phrase referred to it; the
+orchestrator then asked the owner about the sentence.
+
+**Class:** A. Step 2 and the cardinal rule say not to leave contradictions
+coexisting, but give no test for a sentence whose contradiction is uncertain,
+and no distinction between implementation wording (not the store's to own)
+and a statement of intent (check for its reason).
+
+**Diff:** Step 2 gains a judgment block: implementation wording the claim does
+not need (cruft-verdicts incidental-detail test) is stripped, not moved to
+`## Implementation`, and doubt about the person's referent is no reason to
+keep it; a statement of intent is checked for its reason — none, or already
+answered, means stale and rewritten; an unconsidered reason is handed to the
+caller as the consideration itself. Output template gains an optional
+"Unconsidered reasons" block.
+
+**Declined:** changing cruft-verdicts' "current implementation detail has a
+place" (still right for detail the change does not override); changing the
+verdict-driven write behavior for a found reason (the write still follows the
+verdict; raising is the orchestrator's call).
+
+**Regression answers:** 1 coherent state — reinforced. 2–5, 7–11 — unchanged.
+6 body states claim and why — reinforced. 12 plain register — unchanged.
+Detail that is a doc's subject (a contract's field names) still survives the
+incidental-detail test.
+
+
+## 2026-10-14 — Clarification shortens a doc (Class B, with an A consideration)
+
+**Failure:** A 2026-10-13 run folding a settled design into four existing docs
+grew each one. A signpost already past its paragraph ceiling gained a context
+paragraph linking four new docs; a decision's shared-mechanics list was
+extended by one more item; an example paragraph was removed only because it
+described superseded behavior. Owner: docs should get simpler as their subject
+gets clearer; agents "add on" where they should "revise, clarify, and clean up."
+
+**Class:** B. Every rewrite trigger on the write path keyed on falseness and
+scoped the rewrite narrowly: Step 2 "Rewrite the affected portion ... If the
+prior text would now be misleading"; revise-doc Step 3 "Make the minimum
+change" and "no refactoring beyond scope"; doc-style "every sentence that
+became false is removed." True-but-redundant, hedged, or historical text had
+no license to go, so new material could only be appended. The A part: no text
+said a clearer subject usually means a shorter doc.
+
+**Diff:** New `_shared/doc-style.md` section "Clarification shortens a doc"
+(judgment: whole-body reread, redundant/hedged/historical as cut reasons,
+examples/lists/context earn their place, past-ceiling bodies come out shorter
+or split, signposts rewrite orientation instead of a paragraph per arrival,
+selection not compaction; survives: the why, rejected-alternative contrast,
+subject detail, history entries, edges, Correction, Implementation section).
+One invariant: a revision whose body grew says why in its `--note`
+(verifiable; the owner's own "growth needs a reason"). This skill: cardinal
+rule gains one sentence; Step 2 reads the whole body and points at the shared
+section. revise-doc Step 3 disambiguated (see its ledger).
+
+**Declined:** a word or percentage limit (owner asked for judgment); edits to
+cascade-check (its "minimum change that restores consistency" scopes neighbor
+churn, and it already applies doc-style to rewritten text); garden-cruft
+(gardening repairs after the fact; the failure is at write time); revise-doc's
+substantive/provenance classification (it decides cascade and history, not
+prose).
+
+**Regression answers:** 1 coherent state — reinforced. 2 provenance edge, 3/7
+incidental, 4/8 labels and vocabulary, 5 belongs_to vs requires, 11 status
+living — untouched. 6 claim and why — kept explicitly in "what survives." 10
+owned claims — reinforced (list growth prompts a link to the owner). 12 plain
+register — consistent: shortening is selection, compaction is named as the
+wrong form. No ping-pong: no earlier entry argued for keeping redundant text.
+
+---
+
 ## 2026-08-24 (third iteration) — Argument stance, not shape (Class A, continued)
 
 **Failure:** After the shape-level fix (below), the batch still read as

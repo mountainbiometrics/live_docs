@@ -120,7 +120,7 @@ If neither duplication nor conflict is found, proceed.
 
 ## Step 3 — Apply the edit
 
-Make the minimum change that satisfies the caller's intent. Prefer `ldoc` verbs
+Make the change the caller's intent calls for, and no unrelated change. Prefer `ldoc` verbs
 for all mutations; fall back to direct file editing only for body-text changes:
 
 ```bash
@@ -151,7 +151,14 @@ doc's claim (`.claude/skills/_shared/doc-style.md`, the body is not a
 changelog). What changed goes in the `--note`; a `## Correction` section
 belongs only on a doc being deprecated.
 
-No gratuitous reformatting, no refactoring beyond scope. For a deprecation or a
+Falseness is not the only reason to cut. When the change clarifies or narrows
+what the doc is about, rewrite the doc to that clearer understanding and
+remove what it makes redundant, hedged, or merely historical, so the doc
+usually comes out shorter; if it comes out longer, the `--note` says why
+(`.claude/skills/_shared/doc-style.md`, clarification shortens a doc).
+
+No gratuitous reformatting, and no restyling of text the change does not bear
+on; removing text the change made unnecessary is in scope, not refactoring. For a deprecation or a
 wider rewrite that affects several docs at once, hand the plan to
 `synthesize-doc-changes` rather than hand-writing each doc — it owns the
 coherent-batch write discipline. Single-field edits stay inline here.

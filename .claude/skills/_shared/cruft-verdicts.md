@@ -63,9 +63,12 @@ the literal name of one function's retry-count parameter to make its point.
 But when a doc's entire subject IS a decision about a concrete interface —
 what a public contract's fields are called, what an enum's values are, what a
 wire format looks like — naming those specifics is the decision, not detail
-leaking in. Test: strip the specific name and ask whether the doc's claim
-still makes sense. If yes, the name was incidental — strip it (this is
-EXCAVATE below). If no, the name is what's being decided — keep it.
+leaking in. Test: is the doc a `decision` whose claim is that name or shape,
+chosen among alternatives for a reason? If not, the name is incidental —
+strip it (this is EXCAVATE below), however much it helps the sentence. If so,
+the name is what's being decided — keep it. A name that is in the doc because
+the code was built that way is never the subject (`doc-style.md`, mechanism
+is not the claim).
 
 **Current implementation detail has a place.** Detail that is incidental to
 the claim but still true of the code is not cruft once it is out of the

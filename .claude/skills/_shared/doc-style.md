@@ -141,6 +141,49 @@ section (`facets.md`). A sentence such as "no eviction policy exists yet" goes
 false when the code changes, nothing re-checks it, and a reader takes it for
 part of the doc's claim.
 
+## Mechanism is not the claim
+
+A claim body states its own claim and the reason for it. It does not state
+how the code achieves the claim: which module constructs a value, which
+function receives it first, which layer calls which, what a field, table, or
+function is called. The one doc that names a mechanism is a `decision` whose
+claim is that mechanism, chosen among alternatives for a reason. A mechanism
+that exists because someone built it that way is not a decision and gets no
+sentence in any claim body; its place, when it is worth recording, is the
+`## Implementation` section (`facets.md`). That the claim reads more
+concretely with the mechanism in it is not an exception.
+
+The descriptors are under the same rule. A title, label, or summary that
+names a mechanism is the same defect, and it does not make the doc the owner
+of that mechanism: only a decision owns one. A non-decision doc whose title
+names a mechanism is retitled to its claim, and the owned-claims rule below
+applies to claims, never to mechanisms. For a `component`, the claim is what
+the thing is responsible for and why it exists. What it issues, what it
+calls, what it writes to, and which direction its dependencies run are
+mechanism, or the claim of the principle or decision that set them, and are
+not in its body. The rule is applied to every sentence, not to the ones that
+resemble the examples here.
+
+The rule is a boundary of responsibility, and it covers more than code: a
+body states as fact only what its own claim asserts. What another doc claims
+is reached by a link to that doc, never restated here as fact (owned claims,
+below). What the code does is the `realization` facet and the Implementation
+section. What a neighboring context, transport, or component does is that
+doc's claim. A sentence stating a fact the doc is not responsible for reaches
+outside it, and goes.
+
+Why the rule is strict: downstream, an agent reads an indicative sentence
+("the transport then issues the token", "every context function takes the
+scope first") as a settled decision and builds to it, when the store exists
+to surface conflicting design intent and does not dictate implementation.
+Across docs, two bodies narrating the same mechanism from their own vantage
+drift apart, and the drift reads as a design conflict where there is none:
+each claim is still true, and one implementation satisfies all of them.
+When docs disagree on a mechanism no decision records, remove it from each;
+do not arbitrate, and do not ask the person which is right. The claim's
+binding strength is its `force` facet; prose that commands ("must",
+"never", "only") adds nothing a reader can act on and is read as doctrine.
+
 ## The body is not a changelog
 
 A doc states its current claim. When the claim changes, the body, summary, and
@@ -148,6 +191,56 @@ title are rewritten to say the new thing, and every sentence that became false
 is removed. Appending an update or correction paragraph under an opening that
 is now false leaves the old claim as the first thing a reader meets, with the
 summary still pointing at it. What changed goes in the mutation's `--note`.
+
+## Clarification shortens a doc
+
+When a revision folds in material that clarifies or narrows what a doc is
+about, rewrite the doc to the clearer understanding instead of adding the new
+material to the old text. The clearer understanding usually needs fewer words:
+sentences that hedged around a question now settled, drew a distinction the
+settled design no longer needs, walked through an example the plain claim now
+makes obvious, or recorded how the understanding was reached lose their reason
+to exist. A doc that grows every time its subject gets clearer has been
+appended to, not revised. Growth is legitimate when the subject itself gained
+something (a new reason, a case the claim now covers), and it is the exception.
+
+Weigh, as you rewrite (a judgment, not a length target):
+
+- Read the whole body against the new understanding, not only the part the new
+  material touches. A sentence can be true and still be redundant (the new
+  statement covers it), hedged (it qualifies against an alternative now ruled
+  out), or merely historical (it says how the view developed). Remove those;
+  falseness is not the only reason to cut.
+- Examples, lists, and context paragraphs stay for what a reader needs to
+  understand the claim now. An example that propped up a vague claim can go
+  once the claim is stated plainly. A list about to gain another item is a
+  prompt to ask whether the clearer understanding states it as one rule, or
+  whether another doc owns the list and this one should link it (owned claims,
+  below).
+- A body already past its type's ceiling (`doc-types.md`) should come out of a
+  revision shorter, or be split; adding to it needs a reason the doc cannot do
+  without. A signpost reaches new members through their `belongs_to` edges:
+  rewrite its orientation to cover them rather than adding a paragraph per
+  arrival.
+- Shorter means selection, not compaction: drop the sentences the new
+  understanding makes unnecessary, and do not squeeze the remaining claims into
+  denser clauses (plain register, above).
+
+What survives the cut:
+
+- The why: the reason, constraint, or purpose the claim rests on, and a
+  rejected alternative when it is the direct contrast that explains the choice.
+  A rationale that still holds stays even when it is long.
+- Detail that is the doc's subject (`cruft-verdicts.md`, incidental vs. the
+  subject).
+- What records where the doc came from and what it connects to: `history`
+  entries (append-only), provenance and other edges, a deprecated doc's
+  `## Correction` section, and the `## Implementation` section, which is
+  refreshed on its own terms (`facets.md`).
+
+When a revised body comes out longer than it went in, the mutation's `--note`
+says what the doc gained that needed the length, so a reviewer can tell an
+added claim from accretion.
 
 ## The `## Implementation` section is exempt
 

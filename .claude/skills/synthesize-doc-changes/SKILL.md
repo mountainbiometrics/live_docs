@@ -60,7 +60,9 @@ You hold the complete picture. For each doc, ask: **given everything the new
 intent asserts, what is the single correct current state of this doc?** Write
 that state directly. If prior text would now be misleading, rewrite it for
 correctness rather than qualifying it — do not leave contradictory statements
-coexisting. The target is a coherent snapshot, not an annotated history.
+coexisting. The target is a coherent snapshot, not an annotated history. When
+the new intent clarifies or narrows a doc's subject, its correct state is
+usually shorter than its current one, not longer.
 
 **Write order**: deprecations first (so they create `superseded_by` targets),
 then revisions, then new docs. Within each category, work upstream → downstream
@@ -103,13 +105,39 @@ For each doc with verdict `partial-supersession`, `cascade-extend`, or a planned
    ```bash
    ldoc show <id>
    ```
-2. Rewrite the affected portion to its correct current state. If the prior text
-   would now be misleading, rewrite it — do not add qualifiers or exception
-   clauses that leave contradictory statements coexisting. Pass the author note
-   inline on the write so it is atomic with the revision:
+2. Rewrite the doc to its correct current state, reading the whole body against
+   the new intent rather than only the portion the plan names. If the prior
+   text would now be misleading, rewrite it — do not add qualifiers or
+   exception clauses that leave contradictory statements coexisting. When the
+   new intent clarifies or narrows the doc's subject, rewrite to that clearer
+   understanding and cut what it makes redundant, hedged, or merely historical
+   instead of appending to the old text
+   (`.claude/skills/_shared/doc-style.md`, clarification shortens a doc).
+   Pass the author note inline on the write so it is atomic with the revision;
+   if the body grew, the note says why:
    ```bash
    ldoc set <id> --body - --note "synthesize-doc-changes: revised — <one sentence: what changed and why>"
    ```
+
+**A sentence the new material opposes — judge what kind of statement it is.**
+The store records intent so that conflicting intent gets caught; it does not
+dictate implementation. So when a sentence in a doc you are revising runs
+against the new material, decide what the sentence is before treating it as a
+conflict:
+
+- **Implementation wording** — how much, which mechanism, what parameter or
+  allowance — that the doc's claim does not need (the incidental-detail test
+  in `.claude/skills/_shared/cruft-verdicts.md`) is not the store's to keep.
+  Strip it from the claim in this revision; detail the new material overrides
+  is not a still-true anchor to move into `## Implementation`. You need not be
+  sure the person's words pointed at that exact sentence: it fails on its own
+  terms, so doubt about what their words referred to is no reason to leave it.
+- **A statement of intent** — look for its reason, in the doc and along its
+  `requires` chain. No reason, or one the new material already answers: it is
+  stale; rewrite it like any other superseded text. A reason the new material
+  did not take into account: write per the verdict, and hand the caller that
+  reason — the consideration itself, not the sentence that carried it — for
+  its reply.
 
 ---
 
@@ -280,4 +308,6 @@ Synthesized writes
   [<Intent> <type>: <Title>](<url>)  revised     — <one-line: what changed>
   [<Intent> <type>: <Title>](<url>)  created     — new doc for concept "<concept>"  (provenance <anchor>)
   [<Intent> <type>: <Title>](<url>)  provenance-linked — added <anchor>
+Unconsidered reasons (only when Step 2 found one)
+  <the reason, in the subject's own terms> — <what it would change about the new intent>
 ```

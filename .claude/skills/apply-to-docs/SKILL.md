@@ -263,6 +263,25 @@ Unchanged docs (compatible / inconsequential):
 Validation: <N docs scanned — clean | N errors, N warnings>
 ```
 
+**What may go to the person.** Anything the reply asks of the person, or flags
+for them, spends their attention, so it must carry something only they can
+weigh: a consideration — a reason, cost, constraint, or use-case — that the
+request did not take into account, stated in the subject's own terms, with
+what it would change about the request. "Doc X says Y", a sentence's
+wording, or "this needs your call" on text the pass could classify itself
+carries none of that: what a doc currently says is not a reason. Before
+raising anything, judge it as `synthesize-doc-changes` Step 2 does:
+implementation wording is stripped, a statement of intent with no reason (or
+one the request already answers) is rewritten, and neither is raised. The
+unconsidered reasons that step hands back are what this section is for, and
+they go in this report. One the survey in Steps 3–4 already surfaced, and
+that would plausibly change what the person asked for, is weighed at Step 5
+as a surprise they have not had a chance to catch. A `conflict-unresolved`
+entry is still named (Step 5), stated the same way: the competing intent and
+its reason, not the doc's wording. Ask about the person's own
+words only when their meaning changes what intent gets recorded, never to
+decide what happens to a doc sentence that can be judged on its own.
+
 ---
 
 ## Step 9 — Close the session (FINAL step)
@@ -280,6 +299,8 @@ request — process smells, not a truth oracle:
 - **Realization:** any new `deferred` doc without explicit deferral in the
   request → `planned`; any `unassessed` doc → assess it (`unassessed` is only
   for migrated or ingested material).
+- **Questions:** each thing the reply asks or flags names a consideration the
+  request did not account for (Step 8) — not a doc's wording awaiting a call.
 
 apply-to-docs owns the episode: close the session, which mints the single review
 over everything the episode touched (the nested sub-skills never open or close
@@ -295,7 +316,7 @@ review id to the user:
 
 ```
 Review summary created: <id>   (reviews/<id>.md)
-Self-check: <type-mix / labels / intent / source / realization — ok or what you fixed>
+Self-check: <type-mix / labels / intent / source / realization / questions — ok or what you fixed>
 ```
 
 Review is **post-hoc and non-gating** (see `review-is-post-hoc`): this records

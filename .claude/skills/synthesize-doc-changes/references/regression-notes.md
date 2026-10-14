@@ -68,3 +68,18 @@ provenance edge," which never happens when every new doc gets `--provenance`.
     description). Watch for: role-jargon and epistemic vocabulary replacing
     mechanism, and abstract claims that cannot be checked against neighbor
     docs — the argument register concealed a real content error once.
+
+## Newly discovered good-output properties (2026-10-14)
+
+13. **Clarification shortens.** When folded-in material clarifies or narrows
+    a doc's subject, the revised doc is rewritten to the clearer understanding
+    and is usually shorter; true-but-redundant, hedged, and merely historical
+    sentences go. The why, history entries, and edges stay. Growth carries its
+    reason in the `--note`.
+
+## Newly discovered good-output properties (2026-10-14)
+
+13. **Contradicted sentences are triaged, not deferred.** Implementation
+    wording the claim does not need is stripped even when it is unclear
+    whether the person's words targeted it; a statement of intent is checked
+    for its reason, and only an unconsidered reason is handed back.
