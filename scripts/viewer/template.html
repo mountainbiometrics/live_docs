@@ -210,6 +210,7 @@
   .graph-panel .gwrap { flex: 1; display: flex; flex-direction: column; min-height: 0; padding-bottom: 8px; }
   .graph-panel svg.graph { flex: 1; min-height: 200px; height: auto; max-height: none; }
   .content h1.doctitle { font-size: 22px; margin: 0 0 2px; }
+  .content .doc-title { font-size: 15.5px; line-height: 1.4; margin: 1px 0 10px; }
   .meta-line { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
   .docid { font-family: var(--mono); font-size: 11.5px; color: var(--faint); font-weight: 400; }
   .meta-line .docid, #tooltip .docid { font-size: 11px; }
@@ -376,6 +377,7 @@
     display: none;
   }
   #tooltip .tt-label { font-weight: 700; margin-bottom: 3px; }
+  #tooltip .tt-title { font-weight: 400; margin: 1px 0 5px; color: #f2f2f2; }
   #tooltip .tt-meta { color: #b9c2d0; font-size: 11px; margin-bottom: 5px; }
   #tooltip .tt-sum { color: #ddd; }
 
@@ -393,6 +395,7 @@
     padding: 12px 14px; border-bottom: 1px solid var(--line); background: #fafaf8;
   }
   #preview-drawer .sp-head .sp-title { flex: 1; font-size: 14px; font-weight: 600; line-height: 1.35; }
+  #preview-drawer .sp-head .doc-title { font-size: 13px; font-weight: 400; line-height: 1.35; margin: 3px 0 0; }
   #preview-drawer .sp-head .sp-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
   #preview-drawer .sp-close {
     background: var(--accent-soft); color: var(--accent); border: none;
@@ -435,6 +438,7 @@
   <div class="sp-head">
     <div>
       <div class="sp-title" id="sp-title"></div>
+      <div class="doc-title" id="sp-doctitle" hidden></div>
       <div class="sp-meta" id="sp-meta"></div>
     </div>
     <button type="button" class="sp-close" id="sp-close" title="Close preview">✕</button>
@@ -578,6 +582,22 @@ function labelOf(id) {
   const d = byId.get(String(id));
   if (!d) return null;
   return d.label || d.title || d.id;
+}
+
+// Title elaborates the label and, when omitted, is stored as a copy of it.
+// Show that elaboration only where a doc is read in full — reader, peek,
+// tooltip — and only when it says more than the label. Lists and the catalog
+// keep the label; the catalog omits title on purpose.
+function distinctTitle(d) {
+  if (!d) return "";
+  const title = String(d.title || "").trim();
+  if (!title || title === String(d.label || "").trim()) return "";
+  return title;
+}
+
+function titleHtml(d) {
+  const title = distinctTitle(d);
+  return title ? `<div class="doc-title">${escapeHtml(title)}</div>` : "";
 }
 
 /* ===== STRUCTURAL SIGNPOSTS (the retired `index` type, re-derived) =====
@@ -1127,8 +1147,10 @@ function showTip(el) {
   const count = edgeBadge(d.id);
   const facets = facetDisplay(d.id);
   // type icon before the label; the type name still reads in the meta line
+  const elaborated = distinctTitle(d);
   tooltip.innerHTML =
     `<div class="tt-label">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || id)}${successorsHtml(d)} ${idBadge(id)}</div>` +
+    (elaborated ? `<div class="tt-title">${escapeHtml(elaborated)}</div>` : "") +
     `<div class="tt-meta">${escapeHtml(kindLabel(d))} ${status} ${escapeHtml(facetTags(d))} ${facets} ${count}</div>` +
     `<div class="tt-sum">${escapeHtml(d.summary || "(no summary)")}</div>`;
   tooltip.style.display = "block";
@@ -1184,6 +1206,7 @@ document.addEventListener("dblclick", e => {
 
 const previewDrawer = document.getElementById("preview-drawer");
 const spTitle = document.getElementById("sp-title");
+const spDocTitle = document.getElementById("sp-doctitle");
 const spMeta = document.getElementById("sp-meta");
 const spPreview = document.getElementById("sp-preview");
 let expandId = null;
@@ -1223,6 +1246,9 @@ function openSidepanel(id) {
   if (!d) return;
   expandId = String(id);
   spTitle.innerHTML = `${typeIcon(d.type)}${nameHtml(d, d.label || d.title || id)}${successorsHtml(d)} ${idBadge(id)}`;
+  const elaborated = distinctTitle(d);
+  spDocTitle.textContent = elaborated;
+  spDocTitle.hidden = !elaborated;
   spMeta.innerHTML = [kindLabel(d),
     d.status ? `<span class="pill ${d.status}">${enumDisplay("status", d.status)}</span>` : "",
     escapeHtml(facetTags(d)), facetDisplay(id)].filter(Boolean).join(" · ");
@@ -1609,6 +1635,7 @@ function renderFocusDoc(content, id) {
   if (!d) { content.innerHTML = `<div class="sub">No doc with id ${escapeHtml(id)}.</div>`; return; }
 
   let html = `<h1 class="doctitle">${typeIcon(d.type)}${nameHtml(d, d.label || d.title || id)}${successorsHtml(d)}</h1>`;
+  html += titleHtml(d);
   html += `<div class="meta-line">${metaLine(d)}</div>`;
   if (d.summary) html += `<div class="doc-summary">${escapeHtml(d.summary)}</div>`;
 
@@ -1633,6 +1660,7 @@ function renderFocusDoc(content, id) {
         const md = byId.get(mid);
         if (!md) return;
         m += `<div class="member-sec"><h2 class="mtitle">${linkHtml(mid, null, {icon:1})} ${facetDisplay(mid)} ${edgeBadge(mid)}</h2>`;
+        m += titleHtml(md);
         m += `<div class="md">${renderMarkdown(md.body)}</div>`;
         m += connectionsHtml(md);   // backlinks/next-hops visible in compose too
         m += `</div>`;
